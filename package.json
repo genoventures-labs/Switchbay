@@ -1,0 +1,24 @@
+{
+  "name": "oricli-tui",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/react": "^19.2.14"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@types/ws": "^8.18.1",
+    "commander": "^14.0.3",
+    "ink": "^7.0.0",
+    "ink-text-input": "^6.0.0",
+    "react": "^19.2.5",
+    "react-devtools-core": "^7.0.1",
+    "react-reconciler": "^0.33.0",
+    "ws": "^8.20.0",
+    "yoga-layout-prebuilt": "^1.10.0"
+  }
+}

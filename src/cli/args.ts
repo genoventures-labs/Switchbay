@@ -14,17 +14,8 @@ export function parseCliArgs(argv: string[]): CliOptions {
   const subcommand = argv[2];
 
   if (subcommand === "update") {
-    console.log("Updating ori-code...");
-    const result = spawnSync(
-      "bun",
-      ["install", "-g", "github:cassianwolfe/ori-code#main"],
-      { stdio: "inherit" },
-    );
-    if (result.status !== 0) {
-      console.error("Update failed. Run manually: bun install -g github:cassianwolfe/ori-code#main");
-      process.exit(1);
-    }
-    console.log("ori-code updated.");
+    console.log("Run this to update ori-code:\n");
+    console.log("  bun remove -g ori-code && bun install -g github:cassianwolfe/ori-code#main\n");
     process.exit(0);
   }
 

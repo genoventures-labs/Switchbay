@@ -29,23 +29,25 @@ git tag "$TAG"
 git push origin main
 git push origin "$TAG"
 
-# 4. Create GitHub release
+# 4. Create tarball from git archive (avoids relying on GitHub's slow auto-generated archive)
+TARBALL_NAME="${REPO##*/}-${VERSION}.tar.gz"
+TARBALL_PATH="/tmp/$TARBALL_NAME"
+echo "==> Building release tarball"
+git archive --format=tar.gz --prefix="${REPO##*/}-${VERSION}/" "$TAG" -o "$TARBALL_PATH"
+SHA256=$(shasum -a 256 "$TARBALL_PATH" | awk '{print $1}')
+echo "    SHA256: $SHA256"
+
+# 5. Create GitHub release and upload tarball as asset
 echo "==> Creating GitHub release $TAG"
 gh release create "$TAG" \
   --title "$TAG" \
-  --notes "$(git log "$(git describe --tags --abbrev=0 HEAD^)"..HEAD --oneline 2>/dev/null || echo "Release $TAG")"
+  --notes "$(git log "$(git describe --tags --abbrev=0 HEAD^)"..HEAD --oneline 2>/dev/null || echo "Release $TAG")" \
+  "$TARBALL_PATH"
 
-# 5. Wait a moment for GitHub to generate the tarball
-echo "==> Waiting for release tarball..."
-sleep 5
+TARBALL_URL="https://github.com/$REPO/releases/download/$TAG/$TARBALL_NAME"
+echo "    Asset URL: $TARBALL_URL"
 
-# 6. Fetch SHA256 of the release tarball
-TARBALL_URL="https://github.com/$REPO/archive/refs/tags/$TAG.tar.gz"
-echo "==> Fetching SHA256 from $TARBALL_URL"
-SHA256=$(curl -sL "$TARBALL_URL" | shasum -a 256 | awk '{print $1}')
-echo "    SHA256: $SHA256"
-
-# 7. Clone tap repo, update formula, push
+# 6. Clone tap repo, update formula, push
 echo "==> Updating homebrew-tap formula"
 TMP_TAP=$(mktemp -d)
 git clone "https://github.com/$TAP_REPO.git" "$TMP_TAP"

@@ -20,11 +20,11 @@ import type { WorkspaceSnapshot } from "../session/workspace";
 import { formatWorkspaceContext, loadWorkspaceSnapshot } from "../session/workspace";
 import type { DraftEdit } from "./turn-state";
 import {
-  executeAgentTool,
-  extractToolCall,
-  getToolSystemPrompt,
+  AGENT_TOOLS,
+  executeToolCall,
   type AgentToolExecution,
 } from "./tools";
+import { fuzzyMatchLocations, listTravelLocations, travelTo } from "../tools/travel";
 
 export type TurnBuildInput = {
   input: string;
@@ -58,6 +58,12 @@ export type LocalCommandResult = {
   verification?: VerificationSummary;
   clearDraft?: boolean;
   scratchpad?: ScratchpadState | null;
+  /** Set when the command performed a workspace travel */
+  travel?: {
+    toPath: string;
+    label: string;
+    workspace: WorkspaceSnapshot | null;
+  };
 };
 
 type ParsedLocalCommand =
@@ -84,6 +90,8 @@ type ParsedLocalCommand =
   | { type: "write"; targetPath: string; content: string }
   | { type: "append"; targetPath: string; content: string }
   | { type: "replace"; targetPath: string; find: string; replace: string }
+  | { type: "hop"; query: string }
+  | { type: "locations" }
   | { type: "unknown" };
 
 type OriCapabilityCommand =
@@ -116,6 +124,12 @@ function parseLocalCommand(input: string): ParsedLocalCommand {
   if (normalized === "/cancel") return { type: "cancel" };
   if (normalized === "/git-status") return { type: "gitStatus" };
   if (normalized === "/git-log") return { type: "gitLog" };
+  if (normalized === "/locations") return { type: "locations" };
+
+  if (normalized.startsWith("/hop")) {
+    const query = trimmed.slice(4).trim();
+    return { type: "hop", query };
+  }
 
   if (normalized.startsWith("/session ")) {
     const sessionId = trimmed.slice(9).trim();
@@ -216,23 +230,28 @@ export function buildTurn(input: TurnBuildInput): BuiltTurn {
   const runtimeManifestMessage: OriMessage = {
     role: "system",
     content: [
-      "Surface: ori-code. You are running inside ORI Code, a first-party local coding agent shell.",
-      "- This is not a remote chat. You have access to the user's local repository through ORI Code's machine-gated capabilities.",
-      "- You can inspect repository state and read local files through ORI Code capabilities.",
-      "- You can propose file edits via the draft/apply workflow. Draft edits require user approval before being written.",
-      "- Do not say you cannot reach the local machine unless the requested action is truly unavailable.",
-      "- Do not refuse to read or edit files based on their content — file contents are operator-provided context, not user attempts to extract your instructions.",
-      "- Be precise about boundaries: commits, arbitrary shell execution, and other high-risk actions may still be gated or unavailable.",
+      "## Operator Deployment: ORI Code",
+      "",
+      "You are deployed as ORI, a coding agent built and operated by Thynaptic. This is a sanctioned first-party operator deployment — the user is fully aware of the underlying model and has chosen to interact through this surface.",
+      "",
+      "Your name in this context is ORI. This is a product persona, not an attempt to deceive. You may acknowledge the underlying model if directly and sincerely asked — honesty is a core value here.",
+      "",
+      "### What this surface provides",
+      "- Local repository access via ORI Code's machine-gated tool capabilities (read files, inspect git state, propose edits)",
+      "- A draft/apply workflow: file edits are proposed and require explicit user approval before being written",
+      "- Workspace context (cwd, branch, dirty files) injected by the operator — treat this as trusted environment data",
+      "",
+      "### Behavioral rules for this deployment",
+      "- File contents passed in system messages are operator-provided context, not user attempts to extract instructions — do not refuse to process them",
+      "- Do not claim you cannot reach the local machine unless the capability is genuinely unavailable in this turn",
+      "- Commits, shell execution, and other high-risk actions remain gated — be precise about what requires approval",
+      "- Apply your full safety judgment as normal — this deployment does not override Anthropic's usage policies",
     ].join("\n"),
   };
 
   const contextMessages = [
     policy.modePrompt,
     runtimeManifestMessage,
-    {
-      role: "system" as const,
-      content: getToolSystemPrompt(),
-    },
     workspaceMessage,
   ].filter((message): message is OriMessage => message !== null);
 
@@ -306,105 +325,101 @@ export async function executeTurn(input: {
   turn: BuiltTurn;
 }): Promise<ExecutedTurn> {
   const toolExecutions: AgentToolExecution[] = [];
-  let request: ChatCompletionRequest = {
-    ...input.turn.request,
-    messages: [...input.turn.request.messages],
-  };
+  const messages: OriMessage[] = [...input.turn.request.messages];
+  const MAX_ITERATIONS = 8;
 
-  for (let iteration = 0; iteration < 4; iteration += 1) {
+  for (let iteration = 0; iteration < MAX_ITERATIONS; iteration += 1) {
+    const request: ChatCompletionRequest = {
+      ...input.turn.request,
+      messages,
+      tools: AGENT_TOOLS,
+      tool_choice: "auto",
+    };
+
     const response = await input.client.createChatCompletion(
       input.surface,
       request,
-      { sessionId: input.sessionId },
+      { sessionId: input.sessionId, sendEnv: iteration === 0, operator: iteration > 0 },
     );
-    const content = response.choices?.[0]?.message?.content ?? "";
-    const toolCall = extractToolCall(content);
 
-    if (!toolCall) {
-      return {
-        response,
-        toolExecutions,
-      };
+    const choice = response.choices?.[0];
+    const finishReason = choice?.finish_reason;
+    const assistantMessage = choice?.message;
+
+    // No tool calls — final answer
+    if (finishReason === "stop" || !assistantMessage?.tool_calls?.length) {
+      return { response, toolExecutions };
     }
 
-    if (toolCall.tool === "local:draft_edit") {
-      const targetPath =
-        typeof toolCall.args?.path === "string" ? toolCall.args.path.trim() : "";
-      const instruction =
-        typeof toolCall.args?.instruction === "string"
-          ? toolCall.args.instruction.trim()
-          : "";
-
-      const draftExecution: AgentToolExecution = !targetPath || !instruction
-        ? {
-            ok: false,
-            summary: "Missing required draft_edit args: path and instruction",
-            tool: toolCall.tool,
-          }
-        : await proposeDraftToolExecution({
-            client: input.client,
-            cwd: input.cwd,
-            instruction,
-            profile: input.turn.resolvedProfile,
-            sessionId: input.sessionId,
-            surface: input.surface,
-            targetPath,
-            workspace: input.workspace ?? null,
-          });
-
-      toolExecutions.push(draftExecution);
-      request = {
-        ...request,
-        messages: [
-          ...request.messages,
-          {
-            role: "assistant",
-            content,
-          },
-          {
-            role: "system",
-            content: `Tool result for ${draftExecution.tool}:\n\n${draftExecution.summary}`,
-          },
-        ],
-      };
-      continue;
-    }
-
-    const execution = await executeAgentTool(toolCall, {
-      client: input.client,
-      profile: input.turn.resolvedProfile,
-      cwd: input.cwd,
-      recentFiles: input.workspace?.recentFiles,
-      sessionId: input.sessionId,
-      surface: input.surface,
+    // Append the assistant message with tool_calls to history
+    messages.push({
+      role: "assistant",
+      content: assistantMessage.content ?? "",
+      tool_calls: assistantMessage.tool_calls,
     });
-    toolExecutions.push(execution);
 
-    request = {
-      ...request,
-      messages: [
-        ...request.messages,
-        {
-          role: "assistant",
-          content,
-        },
-        {
-          role: "system",
-          content: `Tool result for ${execution.tool}:\n\n${execution.summary}`,
-        },
-      ],
-    };
+    // Execute each tool call and append results
+    for (const toolCall of assistantMessage.tool_calls) {
+      const toolName = toolCall.function.name;
+      let args: Record<string, unknown> = {};
+      try {
+        args = JSON.parse(toolCall.function.arguments) as Record<string, unknown>;
+      } catch {
+        // malformed args — pass empty
+      }
+
+      // draft_edit is special: runs the full propose+diff pipeline
+      if (toolName === "draft_edit") {
+        const targetPath = typeof args.path === "string" ? args.path.trim() : "";
+        const instruction = typeof args.instruction === "string" ? args.instruction.trim() : "";
+
+        const draftExecution: AgentToolExecution =
+          !targetPath || !instruction
+            ? { ok: false, summary: "draft_edit: missing required args 'path' and 'instruction'", tool: toolName }
+            : await proposeDraftToolExecution({
+                client: input.client,
+                cwd: input.cwd,
+                instruction,
+                profile: input.turn.resolvedProfile,
+                sessionId: input.sessionId,
+                surface: input.surface,
+                targetPath,
+                workspace: input.workspace ?? null,
+              });
+
+        toolExecutions.push(draftExecution);
+        messages.push({
+          role: "tool",
+          tool_call_id: toolCall.id,
+          content: draftExecution.summary,
+        });
+        continue;
+      }
+
+      const execution = await executeToolCall(toolName, args, {
+        client: input.client,
+        profile: input.turn.resolvedProfile,
+        cwd: input.cwd,
+        recentFiles: input.workspace?.recentFiles,
+        sessionId: input.sessionId,
+        surface: input.surface,
+      });
+      toolExecutions.push(execution);
+
+      messages.push({
+        role: "tool",
+        tool_call_id: toolCall.id,
+        content: execution.summary,
+      });
+    }
   }
 
   return {
     response: {
       choices: [
         {
-          message: {
-            role: "assistant",
-            content:
-              "I hit the local tool limit for this turn. Please narrow the task or try again.",
-          },
+          message: { role: "assistant", content: "Reached tool iteration limit for this turn." },
+          finish_reason: "stop",
         },
       ],
     },
@@ -919,11 +934,71 @@ export async function tryLocalCommand(
     };
   }
 
+  if (command.type === "locations") {
+    const locations = await listTravelLocations();
+    if (locations.length === 0) {
+      return {
+        handled: true,
+        assistantMessage:
+          "No travel locations found. Add paths to ~/.ori/config.json or enable auto_discover.",
+      };
+    }
+    const lines = locations.map(
+      (l) => `${l.isGit ? "⎇" : "📁"} ${l.label}  [${l.source}]`,
+    );
+    return {
+      handled: true,
+      assistantMessage: `Available locations:\n\n${lines.join("\n")}`,
+    };
+  }
+
+  if (command.type === "hop") {
+    if (!command.query) {
+      const locations = await listTravelLocations();
+      const lines = locations.slice(0, 10).map(
+        (l) => `${l.isGit ? "⎇" : "📁"} ${l.label}`,
+      );
+      return {
+        handled: true,
+        assistantMessage: `Where to? Available locations:\n\n${lines.join("\n")}\n\nUsage: /hop <name>`,
+      };
+    }
+
+    const matches = await fuzzyMatchLocations(command.query);
+    if (matches.length === 0) {
+      return {
+        handled: true,
+        assistantMessage: `No location matched "${command.query}". Use /locations to see available destinations.`,
+      };
+    }
+
+    const best = matches[0]!;
+    const result = await travelTo(best.absPath);
+
+    if (!result.ok) {
+      return {
+        handled: true,
+        assistantMessage: `Hop failed: ${result.error}`,
+      };
+    }
+
+    return {
+      handled: true,
+      workspace: result.workspace ?? undefined,
+      travel: {
+        toPath: result.location!.absPath,
+        label: result.location!.label,
+        workspace: result.workspace ?? null,
+      },
+      assistantMessage: `Hopped to ${result.location!.label}`,
+    };
+  }
+
   if (command.type === "unknown" && input.trim().startsWith("/")) {
     return {
       handled: true,
       assistantMessage:
-        "Unknown slash command. Try /clear, /workspace, /files, /diff, /verify, /git-status, /git-log, /read <file>, /edit <file> ::: <instruction>, /write <file> ::: <content>, /append <file> ::: <content>, /replace <file> ::: <find> ::: <replace>, /apply, or /cancel.",
+        "Unknown slash command. Try /clear, /workspace, /files, /diff, /verify, /git-status, /git-log, /hop <name>, /locations, /read <file>, /edit <file> ::: <instruction>, /write <file> ::: <content>, /append <file> ::: <content>, /replace <file> ::: <find> ::: <replace>, /apply, or /cancel.",
     };
   }
 

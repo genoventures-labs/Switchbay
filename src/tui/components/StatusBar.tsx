@@ -11,11 +11,11 @@ type StatusBarProps = {
 };
 
 function getStatusColor(status: SessionStatus) {
-  if (status === "READY" || status === "CONNECTED") {
+  if (status === "READY" || status === "CONNECTED" || status === "DISCONNECTED") {
     return "green";
   }
 
-  if (status === "ERROR" || status === "DISCONNECTED") {
+  if (status === "ERROR") {
     return "red";
   }
 
@@ -32,7 +32,7 @@ export function StatusBar({ activeCapability, currentThought, scratchpad, status
       <Box>
         <Text color="gray">status </Text>
         <Text color={getStatusColor(status)} bold>
-          {status}
+          {status === "DISCONNECTED" ? "READY" : status}
         </Text>
         <Text color="gray">
           {activeCapability ? "  active " : "  idle "}

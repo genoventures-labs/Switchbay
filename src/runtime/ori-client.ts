@@ -41,12 +41,15 @@ export class OriClient {
   async createChatCompletion(
     surface: string,
     request: ChatCompletionRequest,
-    options: { sessionId?: string; operator?: boolean } = {},
+    options: { sessionId?: string; operator?: boolean; sendEnv?: boolean } = {},
   ): Promise<ChatCompletionResponse> {
     const response = await this.fetchImpl(`${this.apiBase}/chat/completions`, {
       method: "POST",
       headers: {
-        ...this.buildHeaders(surface, options.sessionId, { operator: options.operator }),
+        ...this.buildHeaders(surface, options.sessionId, {
+          operator: options.operator,
+          sendEnv: options.sendEnv,
+        }),
         "X-ORI-Include-Scratchpad": "true",
       },
       body: JSON.stringify({
@@ -253,7 +256,7 @@ export class OriClient {
   private buildHeaders(
     surface: string,
     sessionId?: string,
-    options: { operator?: boolean } = {},
+    options: { operator?: boolean; sendEnv?: boolean } = {},
   ): Record<string, string> {
     if (!this.apiKey) {
       throw new Error("Missing ORI_API_KEY");
@@ -263,11 +266,15 @@ export class OriClient {
       "Content-Type": "application/json",
       Authorization: `Bearer ${this.apiKey}`,
       "X-Ori-Context": surface,
-      "X-Env-OS": this.environment.os,
-      "X-Env-PWD": this.environment.pwd,
-      "X-Env-Project": this.environment.project,
-      "X-Env-Shell": this.environment.shell,
     };
+
+    // Only send workspace context on user-initiated turns, not internal tool-loop calls
+    if (options.sendEnv) {
+      headers["X-Env-OS"] = this.environment.os;
+      headers["X-Env-PWD"] = this.environment.pwd;
+      headers["X-Env-Project"] = this.environment.project;
+      headers["X-Env-Shell"] = this.environment.shell;
+    }
 
     if (sessionId) {
       headers["X-Session-ID"] = sessionId;

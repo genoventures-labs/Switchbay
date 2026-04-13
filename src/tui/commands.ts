@@ -14,6 +14,18 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     category: "workspace",
+    command: "/hop",
+    description: "Travel to a whitelisted workspace directory.",
+    example: "/hop vuln.ai",
+  },
+  {
+    category: "workspace",
+    command: "/locations",
+    description: "List all whitelisted and auto-discovered travel locations.",
+    example: "/locations",
+  },
+  {
+    category: "workspace",
     command: "/workspace",
     description: "Refresh and show repo, branch, and dirty-file context.",
     example: "/workspace",

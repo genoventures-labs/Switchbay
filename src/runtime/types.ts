@@ -1,8 +1,30 @@
-export type OriRole = "system" | "user" | "assistant";
+export type OriRole = "system" | "user" | "assistant" | "tool";
 
 export type OriMessage = {
   role: OriRole;
   content: string;
+  tool_call_id?: string;
+  tool_calls?: ToolCall[];
+};
+
+export type ToolFunction = {
+  name: string;
+  description?: string;
+  parameters?: Record<string, unknown>;
+};
+
+export type ToolDefinition = {
+  type: "function";
+  function: ToolFunction;
+};
+
+export type ToolCall = {
+  id: string;
+  type: "function";
+  function: {
+    name: string;
+    arguments: string;
+  };
 };
 
 export type ChatCompletionRequest = {
@@ -10,11 +32,13 @@ export type ChatCompletionRequest = {
   messages: OriMessage[];
   profile?: string;
   stream?: boolean;
+  tools?: ToolDefinition[];
+  tool_choice?: "auto" | "none" | { type: "function"; function: { name: string } };
 };
 
 export type ChatCompletionChoice = {
-  message?: OriMessage;
-  finish_reason?: string;
+  message?: OriMessage & { tool_calls?: ToolCall[] };
+  finish_reason?: "stop" | "tool_calls" | string;
 };
 
 export type ChatCompletionResponse = {

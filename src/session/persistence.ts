@@ -5,7 +5,11 @@ import {
   type SessionState,
 } from "../agent/turn-state";
 
-const SESSION_DIR = path.join(process.cwd(), ".ori");
+const SESSION_DIR = path.join(
+  Bun.env.HOME ?? process.env.HOME ?? process.cwd(),
+  ".ori",
+  "sessions",
+);
 const SESSION_PATH = path.join(SESSION_DIR, "session.json");
 
 export async function loadPersistedSession(): Promise<SessionState | null> {
@@ -41,13 +45,20 @@ function normalizeSessionState(parsed: Partial<SessionState>): SessionState {
     surface: parsed.surface ?? "dev",
   });
 
+  const cleanTranscript = (parsed.transcript ?? fallback.transcript).filter(
+    (entry) => !(entry.kind === "tool" && entry.tone === "error"),
+  );
+  const cleanActivity = (parsed.recentActivity ?? fallback.recentActivity).filter(
+    (event) => event.kind !== "error",
+  );
+
   return {
     ...fallback,
     ...parsed,
     sessionId: parsed.sessionId ?? fallback.sessionId,
     conversation: parsed.conversation ?? fallback.conversation,
-    transcript: parsed.transcript ?? fallback.transcript,
-    recentActivity: parsed.recentActivity ?? fallback.recentActivity,
+    transcript: cleanTranscript,
+    recentActivity: cleanActivity,
     pendingPlan: parsed.pendingPlan ?? fallback.pendingPlan,
     changedFiles: parsed.changedFiles ?? fallback.changedFiles,
     thoughts:

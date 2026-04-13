@@ -43,7 +43,8 @@ export type SessionAction =
   | { type: "turn/failed"; error: string }
   | { type: "assistant/appended"; message: string }
   | { type: "thought/add"; kind: "goal" | "plan" | "inspect" | "capability" | "result" | "warning"; summary: string }
-  | { type: "activity/add"; kind: "info" | "tool" | "status" | "error"; message: string };
+  | { type: "activity/add"; kind: "info" | "tool" | "status" | "error"; message: string }
+  | { type: "travel/completed"; toPath: string; label: string; workspace: WorkspaceSnapshot | null };
 
 function appendActivity(
   state: SessionState,
@@ -398,6 +399,25 @@ export function sessionReducer(
       return appendActivity(state, action.kind, action.message);
     case "thought/add":
       return appendThought(state, action.kind, action.summary);
+    case "travel/completed": {
+      const travelEntry = createTranscriptEntry({
+        kind: "tool",
+        title: `Hopped to ${action.label}`,
+        body: `Now operating in ${action.toPath}`,
+        tone: "info",
+      });
+      // Inject a system note into conversation so ORI knows the workspace changed
+      const systemNote: OriMessage = {
+        role: "system",
+        content: `[LOCATION CHANGE] ORI has traveled to a new workspace.\nPath: ${action.toPath}\nLabel: ${action.label}\nAll subsequent file operations and context apply to this new location.`,
+      };
+      return {
+        ...state,
+        workspace: action.workspace,
+        transcript: [...state.transcript, travelEntry],
+        conversation: [...state.conversation, systemNote],
+      };
+    }
     default:
       return state;
   }

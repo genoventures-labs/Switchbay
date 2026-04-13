@@ -1,8 +1,11 @@
 {
-  "name": "oricli-tui",
+  "name": "ori-code",
   "module": "index.ts",
   "type": "module",
   "private": true,
+  "bin": {
+    "ori-code": "./bin/ori-code"
+  },
   "devDependencies": {
     "@types/bun": "latest",
     "@types/react": "^19.2.14"

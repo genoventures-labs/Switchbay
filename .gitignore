@@ -1,1 +1,5 @@
-node_modules\n.DS_Store\n*.local
+node_modules/
+
+.DS_Store
+
+*.tsbuildinfo

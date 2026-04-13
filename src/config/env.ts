@@ -1,0 +1,28 @@
+import { DEFAULTS } from "./defaults";
+import path from "node:path";
+
+function readEnv(key: string): string | undefined {
+  const value = Bun.env[key]?.trim();
+  return value ? value : undefined;
+}
+
+export function getApiBase(): string {
+  return readEnv("ORI_API_BASE") ?? DEFAULTS.apiBase;
+}
+
+export function getWebSocketBase(): string {
+  return readEnv("ORI_WS_BASE") ?? DEFAULTS.wsBase;
+}
+
+export function getApiKey(): string | undefined {
+  return readEnv("ORI_API_KEY");
+}
+
+export function getRuntimeEnvironmentHeaders(cwd = process.cwd()) {
+  return {
+    os: readEnv("ORI_ENV_OS") ?? process.platform,
+    pwd: readEnv("ORI_ENV_PWD") ?? cwd,
+    project: readEnv("ORI_ENV_PROJECT") ?? path.basename(cwd),
+    shell: readEnv("ORI_ENV_SHELL") ?? Bun.env.SHELL ?? "unknown",
+  };
+}

@@ -31,5 +31,30 @@ bun install
 bun run index.tsx
 ```
 
+## Install As A Command
+
+To run it as `ori-code` from anywhere on your Mac:
+
+```bash
+cd /Users/cass/Documents/GitHub/ori-code
+bun install
+chmod +x ./bin/ori-code
+bun link
+```
+
+Then you can launch it with:
+
+```bash
+ori-code
+```
+
+You can still pass normal arguments:
+
+```bash
+ori-code --mode build
+ori-code --surface dev
+ori-code "summarize this repo"
+```
+
 ---
 *Built in the Shadowlab for the Sovereign Agent OS.*

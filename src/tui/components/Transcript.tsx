@@ -36,7 +36,7 @@ export function Transcript({
       </Box>
 
       {entries.length === 0 && !streamingText ? (
-        <Text color="gray">Transcript is empty. Ask ORI Code to do something.</Text>
+        <Text color="gray" italic>Starting up...</Text>
       ) : null}
 
       {entries.map((entry) => (

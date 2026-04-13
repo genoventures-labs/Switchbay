@@ -524,6 +524,11 @@ export function OriApp({
   useEffect(() => {
     if (initialQuery) {
       void handleSubmit(initialQuery);
+    } else {
+      dispatch({
+        type: "assistant/appended",
+        message: "Online. What are we building?",
+      });
     }
   }, []);
 

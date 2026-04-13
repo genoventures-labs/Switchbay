@@ -1,10 +1,18 @@
 {
   "name": "ori-code",
+  "version": "0.1.0",
+  "description": "ORI Code — terminal coding agent powered by ORI",
   "module": "index.ts",
   "type": "module",
-  "private": true,
+  "private": false,
   "bin": {
-    "ori-code": "./bin/ori-code"
+    "ori-code": "./bin/ori-code",
+    "ori": "./bin/ori-code"
+  },
+  "scripts": {
+    "build": "bun build index.tsx --compile --outfile bin/ori-code",
+    "prepublishOnly": "bun run build",
+    "postinstall": "node scripts/postinstall.mjs"
   },
   "devDependencies": {
     "@types/bun": "latest",
@@ -23,5 +31,13 @@
     "react-reconciler": "^0.33.0",
     "ws": "^8.20.0",
     "yoga-layout-prebuilt": "^1.10.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cassianwolfe/ori-code"
+  },
+  "keywords": ["ori", "ai", "coding-agent", "terminal", "cli"],
+  "engines": {
+    "bun": ">=1.0.0"
   }
 }

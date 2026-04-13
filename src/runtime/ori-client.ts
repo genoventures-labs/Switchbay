@@ -41,12 +41,12 @@ export class OriClient {
   async createChatCompletion(
     surface: string,
     request: ChatCompletionRequest,
-    options: { sessionId?: string } = {},
+    options: { sessionId?: string; operator?: boolean } = {},
   ): Promise<ChatCompletionResponse> {
     const response = await this.fetchImpl(`${this.apiBase}/chat/completions`, {
       method: "POST",
       headers: {
-        ...this.buildHeaders(surface, options.sessionId),
+        ...this.buildHeaders(surface, options.sessionId, { operator: options.operator }),
         "X-ORI-Include-Scratchpad": "true",
       },
       body: JSON.stringify({
@@ -250,7 +250,11 @@ export class OriClient {
     return response.json();
   }
 
-  private buildHeaders(surface: string, sessionId?: string): Record<string, string> {
+  private buildHeaders(
+    surface: string,
+    sessionId?: string,
+    options: { operator?: boolean } = {},
+  ): Record<string, string> {
     if (!this.apiKey) {
       throw new Error("Missing ORI_API_KEY");
     }
@@ -267,6 +271,10 @@ export class OriClient {
 
     if (sessionId) {
       headers["X-Session-ID"] = sessionId;
+    }
+
+    if (options.operator) {
+      headers["X-ORI-Operator"] = "ori-code";
     }
 
     return headers;

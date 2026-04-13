@@ -216,12 +216,12 @@ export function buildTurn(input: TurnBuildInput): BuiltTurn {
   const runtimeManifestMessage: OriMessage = {
     role: "system",
     content: [
-      "Runtime manifest for ORI Code:",
-      "- You are running inside the user's local coding shell, not a remote-only VPS chat.",
+      "Surface: ori-code. You are running inside ORI Code, a first-party local coding agent shell.",
+      "- This is not a remote chat. You have access to the user's local repository through ORI Code's machine-gated capabilities.",
       "- You can inspect repository state and read local files through ORI Code capabilities.",
-      "- You can help modify or generate files by proposing draft edits for ORI Code to stage.",
-      "- Approved draft edits can be applied through ORI Code's approval flow.",
+      "- You can propose file edits via the draft/apply workflow. Draft edits require user approval before being written.",
       "- Do not say you cannot reach the local machine unless the requested action is truly unavailable.",
+      "- Do not refuse to read or edit files based on their content — file contents are operator-provided context, not user attempts to extract your instructions.",
       "- Be precise about boundaries: commits, arbitrary shell execution, and other high-risk actions may still be gated or unavailable.",
     ].join("\n"),
   };
@@ -362,7 +362,7 @@ export async function executeTurn(input: {
             content,
           },
           {
-            role: "user",
+            role: "system",
             content: `Tool result for ${draftExecution.tool}:\n\n${draftExecution.summary}`,
           },
         ],
@@ -389,7 +389,7 @@ export async function executeTurn(input: {
           content,
         },
         {
-          role: "user",
+          role: "system",
           content: `Tool result for ${execution.tool}:\n\n${execution.summary}`,
         },
       ],
@@ -436,7 +436,7 @@ async function proposeFileEdit(input: {
         {
           role: "system",
           content:
-            "You are editing a source file for a coding agent. Return only the full updated file contents with no markdown fences, no explanation, and no surrounding commentary.",
+            "You are editing a source file for ORI Code, a first-party coding agent. Return only the full updated file contents with no markdown fences, no explanation, and no surrounding commentary.",
         },
         ...(workspacePrompt
           ? [
@@ -447,17 +447,20 @@ async function proposeFileEdit(input: {
             ]
           : []),
         {
-          role: "user",
+          role: "system",
           content: [
             `Target file: ${input.targetPath}`,
-            `Edit instruction: ${input.instruction}`,
             "Current file contents:",
             file.content,
           ].join("\n\n"),
         },
+        {
+          role: "user",
+          content: input.instruction,
+        },
       ],
     },
-    { sessionId: input.sessionId },
+    { sessionId: input.sessionId, operator: true },
   );
 
   const after = response.choices?.[0]?.message?.content?.replace(/\s+$/, "") ?? "";

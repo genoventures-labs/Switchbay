@@ -1,5 +1,19 @@
+# dependencies
 node_modules/
 
-.DS_Store
+# environment & secrets
+.env
+.env.*
 
+# ORI session scratchpad
+.ori/
+
+# build output
+dist/
+bin/ori-code
+
+# system & editor
+.DS_Store
 *.tsbuildinfo
+*.log
+ori-mac

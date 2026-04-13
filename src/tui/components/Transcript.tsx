@@ -23,22 +23,25 @@ export function Transcript({
   hasMoreBelow = false,
   pendingApproval,
   pendingDraft,
-  scrollOffset = 0,
   streamingText,
   thinking,
 }: TranscriptProps) {
   return (
     <Box flexDirection="column" flexGrow={1} paddingX={2} paddingTop={1}>
       {hasMoreAbove && (
-        <Text color="gray" dimColor>↑ more above · Ctrl+U to scroll</Text>
+        <Box marginBottom={1}>
+          <Text color="gray" dimColor>↑ scroll up  Ctrl+U</Text>
+        </Box>
       )}
 
       {entries.map((entry) => {
         if (entry.kind === "user") {
           return (
             <Box key={entry.id} flexDirection="column" marginBottom={1}>
-              <Box gap={1}>
-                <Text color="green" bold>❯</Text>
+              <Box gap={1} marginBottom={0}>
+                <Text color="gray" dimColor>you</Text>
+              </Box>
+              <Box paddingLeft={2}>
                 <Text color="white">{entry.body}</Text>
               </Box>
             </Box>
@@ -47,20 +50,36 @@ export function Transcript({
 
         if (entry.kind === "assistant") {
           return (
-            <Box key={entry.id} flexDirection="column" marginBottom={1} paddingLeft={2}>
-              <MarkdownText content={entry.body} role="assistant" />
+            <Box key={entry.id} flexDirection="column" marginBottom={1}>
+              <Box gap={1} marginBottom={0}>
+                <Text color="cyan" bold>ori</Text>
+              </Box>
+              <Box
+                borderStyle="single"
+                borderLeft={true}
+                borderRight={false}
+                borderTop={false}
+                borderBottom={false}
+                borderColor="cyan"
+                paddingLeft={1}
+              >
+                <MarkdownText content={entry.body} role="assistant" />
+              </Box>
             </Box>
           );
         }
 
-        // tool entry — inline, compact
+        // tool entry — compact, dimmed
         if (entry.kind === "tool") {
           const isError = entry.tone === "error";
-          const isSuccess = entry.tone === "success";
+          const isInfo = entry.tone === "info";
           return (
             <Box key={entry.id} marginBottom={0} paddingLeft={2}>
-              <Text color={isError ? "red" : isSuccess ? "green" : "gray"} dimColor={!isError}>
-                {isError ? "✗" : "✓"} {entry.title.toLowerCase()}
+              <Text
+                color={isError ? "red" : isInfo ? "cyan" : "gray"}
+                dimColor={!isError && !isInfo}
+              >
+                {isError ? "✗" : isInfo ? "◈" : "·"} {entry.title.toLowerCase()}
               </Text>
             </Box>
           );
@@ -69,52 +88,75 @@ export function Transcript({
         return null;
       })}
 
-      {/* Inline thinking indicator */}
-      {thinking && !streamingText && !activeCapability && (
-        <Box paddingLeft={2} marginBottom={0}>
-          <Text color="gray" dimColor>⠸ {thinking}</Text>
+      {/* Thinking / capability indicator */}
+      {(thinking || activeCapability) && !streamingText && (
+        <Box flexDirection="column" marginBottom={0}>
+          <Box gap={1} marginBottom={0}>
+            <Text color="cyan" bold>ori</Text>
+          </Box>
+          <Box
+            borderStyle="single"
+            borderLeft={true}
+            borderRight={false}
+            borderTop={false}
+            borderBottom={false}
+            borderColor="cyan"
+            paddingLeft={1}
+          >
+            <Text color="yellow" dimColor>
+              {activeCapability ? `${activeCapability}...` : thinking}
+            </Text>
+          </Box>
         </Box>
       )}
 
-      {/* Active capability */}
-      {activeCapability && !streamingText && (
-        <Box paddingLeft={2} marginBottom={0}>
-          <Text color="yellow" dimColor>⠸ {activeCapability}...</Text>
-        </Box>
-      )}
-
-      {/* Streaming response */}
+      {/* Streaming response — live ORI block */}
       {streamingText && (
-        <Box flexDirection="column" paddingLeft={2} marginBottom={1}>
-          <MarkdownText content={streamingText} role="assistant" />
+        <Box flexDirection="column" marginBottom={1}>
+          <Box gap={1} marginBottom={0}>
+            <Text color="cyan" bold>ori</Text>
+          </Box>
+          <Box
+            borderStyle="single"
+            borderLeft={true}
+            borderRight={false}
+            borderTop={false}
+            borderBottom={false}
+            borderColor="cyan"
+            paddingLeft={1}
+          >
+            <MarkdownText content={streamingText} role="assistant" />
+          </Box>
         </Box>
       )}
 
-      {/* Inline draft approval prompt */}
+      {/* Draft approval prompt */}
       {pendingApproval && pendingDraft && (
         <Box
           flexDirection="column"
           paddingX={2}
           paddingY={1}
           marginTop={1}
-          borderStyle="single"
+          borderStyle="round"
           borderColor="yellow"
         >
           <Box gap={1} marginBottom={1}>
-            <Text color="yellow" bold>draft ready</Text>
+            <Text color="yellow" bold>◈ draft ready</Text>
             <Text color="gray">·</Text>
-            <Text color="white">{pendingDraft.targetPath}</Text>
+            <Text color="white" bold>{pendingDraft.targetPath}</Text>
           </Box>
           <Text color="gray" dimColor>{pendingApproval.summary}</Text>
-          <Box marginTop={1} gap={2}>
-            <Text color="green">yes / y / apply → apply patch</Text>
-            <Text color="red">no / n / cancel → discard</Text>
+          <Box marginTop={1} gap={3}>
+            <Text color="green">y / yes → apply</Text>
+            <Text color="red">n / no → discard</Text>
           </Box>
         </Box>
       )}
 
       {hasMoreBelow && (
-        <Text color="gray" dimColor>↓ more below · Ctrl+D to scroll</Text>
+        <Box marginTop={1}>
+          <Text color="gray" dimColor>↓ scroll down  Ctrl+D</Text>
+        </Box>
       )}
     </Box>
   );

@@ -22,41 +22,51 @@ export function Composer({
   if (initialQuery) {
     return (
       <Box paddingX={2} paddingY={1}>
-        <Text color="gray" dimColor>one-shot mode · Ctrl+C to exit</Text>
+        <Text color="gray" dimColor>one-shot · Ctrl+C to exit</Text>
       </Box>
     );
   }
 
   return (
     <Box flexDirection="column" paddingX={2} paddingTop={1} paddingBottom={1}>
-      {/* Thinking status line — only shown when active */}
-      {isThinking && (
-        <Box marginBottom={1}>
-          <Text color="yellow" dimColor>
-            {activeCapability ? `⠸ ${activeCapability}...` : "⠸ thinking..."}
+      <Box
+        borderStyle="round"
+        borderColor={isThinking ? "gray" : disabled ? "gray" : "green"}
+        paddingX={1}
+        paddingY={0}
+        flexDirection="column"
+      >
+        {/* Label row */}
+        <Box justifyContent="space-between">
+          <Text color={isThinking ? "gray" : disabled ? "gray" : "green"} bold>
+            {disabled ? "edit intent" : "message"}
           </Text>
+          {isThinking && (
+            <Text color="yellow" dimColor>
+              {activeCapability ? `${activeCapability}...` : "thinking..."}
+            </Text>
+          )}
         </Box>
-      )}
 
-      {/* Input line */}
-      {!disabled && (
-        <Box gap={1}>
-          <Text color={isThinking ? "gray" : "green"} bold>❯</Text>
-          <Text color={isThinking ? "gray" : "white"}>
-            {query}
-            {!isThinking && (
-              <Text backgroundColor="white" color="black"> </Text>
-            )}
-          </Text>
-        </Box>
-      )}
+        {/* Input row */}
+        {!disabled && (
+          <Box marginTop={0}>
+            <Text color={isThinking ? "gray" : "white"}>
+              {query || ""}
+              {!isThinking && (
+                <Text backgroundColor="white" color="black"> </Text>
+              )}
+            </Text>
+          </Box>
+        )}
+      </Box>
 
-      {/* Hint line */}
-      <Box marginTop={0}>
+      {/* Hint */}
+      <Box marginTop={0} paddingX={1}>
         <Text color="gray" dimColor>
           {disabled
             ? "describe the change · Enter to draft · Esc to cancel"
-            : "Enter · / for commands · Tab completes · Ctrl+U/D scroll"}
+            : "Enter to send · @ for files · / for commands · Tab completes"}
         </Text>
       </Box>
     </Box>

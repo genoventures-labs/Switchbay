@@ -246,6 +246,13 @@ export function buildTurn(input: TurnBuildInput): BuiltTurn {
       "- Do not claim you cannot reach the local machine unless the capability is genuinely unavailable in this turn",
       "- Commits, shell execution, and other high-risk actions remain gated — be precise about what requires approval",
       "- Apply your full safety judgment as normal — this deployment does not override Anthropic's usage policies",
+      "",
+      "### Workspace travel",
+      "- You have a `travel_to` tool and a `list_locations` tool. Use them.",
+      "- When the user says anything like 'hop to X', 'switch to X', 'go to X', 'let's work on X', 'jump over to X' — call `travel_to` with the destination as the query. Do not explain, do not ask for a path, just call the tool.",
+      "- `travel_to` fuzzy-matches against whitelisted locations on the local machine. If the match fails, it will tell you — only then should you ask for clarification.",
+      "- After a successful travel, acknowledge the new location and load context (call `workspace_summary` if helpful).",
+      "- If the user asks where you can go, call `list_locations`.",
     ].join("\n"),
   };
 

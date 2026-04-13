@@ -57,6 +57,8 @@ export class OriClient {
         messages: request.messages,
         profile: request.profile,
         stream: request.stream ?? false,
+        ...(request.tools && request.tools.length > 0 ? { tools: request.tools } : {}),
+        ...(request.tool_choice !== undefined ? { tool_choice: request.tool_choice } : {}),
       }),
     });
 

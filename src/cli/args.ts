@@ -1,5 +1,3 @@
-import { Command } from "commander";
-import { spawnSync } from "node:child_process";
 import { DEFAULTS } from "../config/defaults";
 
 export type CliOptions = {
@@ -7,47 +5,43 @@ export type CliOptions = {
   profile: string;
   mode: string;
   initialQuery: string;
-  subcommand: "run" | "update" | "version";
+  subcommand: "run" | "update" | "version" | "help";
 };
 
 export function parseCliArgs(argv: string[]): CliOptions {
-  const subcommand = argv[2];
+  const args = argv.slice(2);
+  let surface: string = DEFAULTS.surface;
+  let profile: string = DEFAULTS.profile;
+  let mode: string = DEFAULTS.mode;
+  const positional: string[] = [];
 
-  if (subcommand === "update") {
-    console.log("Run this to update ori-code:\n");
-    console.log("  bun remove -g ori-code && bun install -g github:cassianwolfe/ori-code#main\n");
-    process.exit(0);
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === "-s" || arg === "--surface") {
+      surface = args[++i] ?? DEFAULTS.surface;
+    } else if (arg === "-p" || arg === "--profile") {
+      profile = args[++i] ?? DEFAULTS.profile;
+    } else if (arg === "-m" || arg === "--mode") {
+      mode = args[++i] ?? DEFAULTS.mode;
+    } else if (arg === "update") {
+      console.log("Run this to update ori-code:\n");
+      console.log("  bun remove -g ori-code && bun install -g github:cassianwolfe/ori-code#main\n");
+      process.exit(0);
+    } else if (arg === "version" || arg === "--version" || arg === "-v") {
+      console.log("ori-code 0.1.0");
+      process.exit(0);
+    } else if (arg === undefined || arg === "help" || arg === "--help" || arg === "-h") {
+      return { surface, profile, mode, initialQuery: "", subcommand: "help" };
+    } else if (!arg.startsWith("-")) {
+      positional.push(arg);
+    }
   }
-
-  if (subcommand === "version") {
-    console.log("ori-code 0.1.0");
-    process.exit(0);
-  }
-
-  const program = new Command();
-
-  program
-    .name("ori-code")
-    .description("ORI Code — terminal coding agent powered by ORI")
-    .option("-s, --surface <type>", "Surface context", DEFAULTS.surface)
-    .option("-p, --profile <name>", "Working style", DEFAULTS.profile)
-    .option("-m, --mode <name>", "Agent mode", DEFAULTS.mode)
-    .argument("[query...]", "One-shot request")
-    .allowUnknownOption(false);
-
-  program.parse(argv);
-
-  const options = program.opts<{
-    surface: string;
-    profile: string;
-    mode: string;
-  }>();
 
   return {
-    surface: options.surface,
-    profile: options.profile,
-    mode: options.mode,
-    initialQuery: program.args.join(" "),
+    surface,
+    profile,
+    mode,
+    initialQuery: positional.join(" "),
     subcommand: "run",
   };
 }

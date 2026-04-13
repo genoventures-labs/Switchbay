@@ -10,7 +10,6 @@ node_modules/
 
 # build output
 dist/
-bin/ori-code
 
 # system & editor
 .DS_Store

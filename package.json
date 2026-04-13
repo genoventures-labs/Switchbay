@@ -10,8 +10,7 @@
     "ori": "./bin/ori-code"
   },
   "scripts": {
-    "build": "bun build index.tsx --compile --outfile bin/ori-code",
-    "prepublishOnly": "bun run build",
+    "build": "bun build index.tsx --compile --outfile bin/ori-code-native",
     "postinstall": "node scripts/postinstall.mjs"
   },
   "devDependencies": {

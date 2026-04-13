@@ -267,47 +267,69 @@ export function OriApp({
       dispatch({ type: "workspace/updated", workspace });
     });
 
-    const ws = new WebSocket(getWebSocketBase());
+    let ws: WebSocket | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let reconnectDelay = 2000;
+    let destroyed = false;
 
-    ws.addEventListener("open", () => {
-      dispatch({ type: "connection/opened" });
-    });
+    function connect() {
+      if (destroyed) return;
+      ws = new WebSocket(getWebSocketBase());
 
-    ws.addEventListener("message", (event) => {
-      try {
-        const payload =
-          typeof event.data === "string" ? event.data : event.data.toString();
-        const streamEvent = JSON.parse(payload) as StreamEvent;
+      ws.addEventListener("open", () => {
+        reconnectDelay = 2000;
+        dispatch({ type: "connection/opened" });
+      });
 
-        if (streamEvent.type === "agent_dispatch") {
-          dispatch({
-            type: "turn/capability",
-            capability: streamEvent.action ?? "Thinking",
-          });
-          return;
+      ws.addEventListener("message", (event) => {
+        try {
+          const payload =
+            typeof event.data === "string" ? event.data : event.data.toString();
+          const streamEvent = JSON.parse(payload) as StreamEvent;
+
+          if (streamEvent.type === "agent_dispatch") {
+            dispatch({
+              type: "turn/capability",
+              capability: streamEvent.action ?? "Thinking",
+            });
+            return;
+          }
+
+          if (streamEvent.type === "token") {
+            dispatch({
+              type: "turn/token",
+              token: streamEvent.content ?? "",
+            });
+            return;
+          }
+
+          if (streamEvent.type === "done") {
+            dispatch({ type: "turn/completed" });
+          }
+        } catch {
+          // Ignore malformed stream events.
         }
+      });
 
-        if (streamEvent.type === "token") {
-          dispatch({
-            type: "turn/token",
-            token: streamEvent.content ?? "",
-          });
-          return;
-        }
+      ws.addEventListener("close", () => {
+        if (destroyed) return;
+        // Reconnect silently with exponential backoff, cap at 30s.
+        reconnectDelay = Math.min(reconnectDelay * 2, 30000);
+        reconnectTimer = setTimeout(connect, reconnectDelay);
+      });
 
-        if (streamEvent.type === "done") {
-          dispatch({ type: "turn/completed" });
-        }
-      } catch {
-        // Ignore malformed stream events during the prototype phase.
-      }
-    });
+      ws.addEventListener("error", () => {
+        ws?.close();
+      });
+    }
 
-    ws.addEventListener("close", () => {
-      dispatch({ type: "connection/closed" });
-    });
+    connect();
 
-    return () => ws.close();
+    return () => {
+      destroyed = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      ws?.close();
+    };
   }, []);
 
   useEffect(() => {

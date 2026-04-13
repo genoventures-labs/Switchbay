@@ -98,39 +98,9 @@ export function sessionReducer(
           : "Scratchpad cleared.",
       );
     case "connection/opened":
-      return appendTranscript(
-        appendActivity(
-          {
-            ...state,
-            status: "CONNECTED",
-          },
-          "status",
-          "Connected to the ORI stream.",
-        ),
-        createTranscriptEntry({
-          kind: "tool",
-          title: "Stream Connected",
-          body: "Connected to the ORI stream.",
-          tone: "success",
-        }),
-      );
+      return { ...state, status: "CONNECTED" };
     case "connection/closed":
-      return appendTranscript(
-        appendActivity(
-          {
-            ...state,
-            status: "DISCONNECTED",
-          },
-          "error",
-          "Stream disconnected.",
-        ),
-        createTranscriptEntry({
-          kind: "tool",
-          title: "Stream Disconnected",
-          body: "The websocket stream disconnected.",
-          tone: "error",
-        }),
-      );
+      return { ...state, status: "DISCONNECTED" };
     case "workspace/updated":
       return appendThought(
         appendActivity(

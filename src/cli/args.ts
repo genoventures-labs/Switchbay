@@ -28,7 +28,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
       console.log("  bun remove -g ori-code && bun install -g github:cassianwolfe/ori-code#main\n");
       process.exit(0);
     } else if (arg === "version" || arg === "--version" || arg === "-v") {
-      console.log("ori-code 0.1.6");
+      console.log("ori-code 0.1.7");
       process.exit(0);
     } else if (arg === undefined || arg === "help" || arg === "--help" || arg === "-h") {
       return { surface, profile, mode, initialQuery: "", subcommand: "help" };

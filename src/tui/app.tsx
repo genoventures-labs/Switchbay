@@ -129,7 +129,8 @@ export function OriApp({
   const resumeDrawerVisible = composerMode === "resume_picker";
   const bundleDrawerVisible = composerMode === "bundle_picker";
 
-  const transcriptWindowSize = Math.max(5, stdoutHeight - 12);
+  // Fixed transcript window size to avoid pushing content off screen
+  const transcriptWindowSize = Math.max(5, stdoutHeight - 15);
   const totalTranscriptEntries = state.transcript.length;
   const clampedScrollOffset = Math.min(
     transcriptScrollOffset,
@@ -475,7 +476,6 @@ export function OriApp({
             dispatch({ type: "turn/completed" });
           }
         } catch {
-          // Ignore malformed stream events.
         }
       });
 
@@ -521,9 +521,8 @@ export function OriApp({
       ? state.activeBundleIds.filter((bid) => bid !== id)
       : [...state.activeBundleIds, id];
     
-    // Explicitly update state — since it's part of state, auto-persistence handles saving
     state.activeBundleIds = nextIds;
-    dispatch({ type: "workspace/updated", workspace: state.workspace }); // Trigger re-render
+    dispatch({ type: "workspace/updated", workspace: state.workspace });
   }
 
   async function handleSubmit(value: string) {
@@ -957,7 +956,7 @@ export function OriApp({
   }, [mentionPartial, state.workspace?.cwd]);
 
   return (
-    <Box flexDirection="column" width={stdoutWidth} height={stdoutHeight}>
+    <Box flexDirection="column" width={stdoutWidth} height={stdoutHeight} overflowY="hidden">
       {state.transcript.length > 0 && (
         <Header
           mode={mode}
@@ -966,18 +965,20 @@ export function OriApp({
           workspace={state.workspace}
         />
       )}
-      <Transcript
-        activeCapability={state.activeCapability}
-        entries={visibleTranscriptEntries}
-        hasMoreAbove={transcriptStartIndex > 0}
-        hasMoreBelow={transcriptEndIndex < totalTranscriptEntries}
-        pendingApproval={state.pendingApproval}
-        pendingDraft={state.pendingDraft}
-        scrollOffset={clampedScrollOffset}
-        streamingText={state.streamingText}
-        thinking={thinkingCollapsed ? null : (state.thoughts[0]?.summary ?? null)}
-        terminalWidth={stdoutWidth}
-      />
+      <Box flexGrow={1} flexDirection="column">
+        <Transcript
+          activeCapability={state.activeCapability}
+          entries={visibleTranscriptEntries}
+          hasMoreAbove={transcriptStartIndex > 0}
+          hasMoreBelow={transcriptEndIndex < totalTranscriptEntries}
+          pendingApproval={state.pendingApproval}
+          pendingDraft={state.pendingDraft}
+          scrollOffset={clampedScrollOffset}
+          streamingText={state.streamingText}
+          thinking={thinkingCollapsed ? null : (state.thoughts[0]?.summary ?? null)}
+          terminalWidth={stdoutWidth}
+        />
+      </Box>
       <EditDrawer
         files={editPickerState.files}
         selectedIndex={selectedEditFileIndex}

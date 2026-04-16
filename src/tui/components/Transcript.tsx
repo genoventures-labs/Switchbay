@@ -19,7 +19,6 @@ type TranscriptProps = {
 };
 
 export function Transcript({
-  activeCapability,
   entries,
   hasMoreAbove = false,
   hasMoreBelow = false,
@@ -43,7 +42,7 @@ export function Transcript({
 
       {entries.length === 0 && !streamingText && !thinking ? (
         <WelcomeBoard
-          version="0.4.7"
+          version="0.5.0"
           user="Mike"
           email="thatnotiondude@gmail.com"
           model="Sonnet 4.6"
@@ -79,35 +78,9 @@ export function Transcript({
           );
         }
 
-        if (entry.kind === "tool") {
-          const isError = entry.tone === "error";
-          return (
-            <Box key={entry.id} flexDirection="column" marginBottom={1}>
-              <Box gap={1}>
-                <Text color={isError ? "red" : greenColor}>⏺</Text>
-                <Text color="white" bold>{entry.title.toLowerCase()}</Text>
-              </Box>
-              <Box paddingLeft={1}>
-                <Text color={grayColor}>└ {entry.summary || "completed"}</Text>
-              </Box>
-            </Box>
-          );
-        }
-
+        // Tool entries are now hidden from the transcript per user request
         return null;
       })}
-
-      {(thinking || activeCapability) && !streamingText && (
-        <Box flexDirection="column" marginBottom={1} marginTop={1}>
-          <Box gap={1}>
-            <Text color={greenColor}>⏺</Text>
-            <Text color="white" bold>{activeCapability ? activeCapability.toLowerCase() : "thinking"}</Text>
-          </Box>
-          <Box paddingLeft={1}>
-             <Text color={grayColor}>└ Thinking...</Text>
-          </Box>
-        </Box>
-      )}
 
       {streamingText && (
         <Box flexDirection="column" marginBottom={1}>

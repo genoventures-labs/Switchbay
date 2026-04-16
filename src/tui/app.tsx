@@ -29,6 +29,7 @@ import { MentionPicker } from "./components/MentionPicker";
 import { Transcript } from "./components/Transcript";
 import { ResumeDrawer } from "./components/ResumeDrawer";
 import { BundleDrawer } from "./components/BundleDrawer";
+import { ShortcutDrawer } from "./components/ShortcutDrawer";
 import { getCommandMatches } from "./commands";
 
 export type OriAppProps = {
@@ -46,7 +47,7 @@ type StreamEvent =
   | { type: "token"; content?: string }
   | { type: "done" };
 
-type ComposerMode = "default" | "edit_file_picker" | "edit_intent" | "resume_picker" | "bundle_picker";
+type ComposerMode = "default" | "edit_file_picker" | "edit_intent" | "resume_picker" | "bundle_picker" | "shortcut_picker";
 
 export function OriApp({
   client,
@@ -128,8 +129,8 @@ export function OriApp({
   
   const resumeDrawerVisible = composerMode === "resume_picker";
   const bundleDrawerVisible = composerMode === "bundle_picker";
+  const shortcutDrawerVisible = composerMode === "shortcut_picker";
 
-  // Fixed transcript window size to avoid pushing content off screen
   const transcriptWindowSize = Math.max(5, stdoutHeight - 15);
   const totalTranscriptEntries = state.transcript.length;
   const clampedScrollOffset = Math.min(
@@ -177,6 +178,14 @@ export function OriApp({
         setThinkingCollapsed((previous) => !previous);
       }
       return;
+    }
+
+    if (shortcutDrawerVisible) {
+        if (key.escape || key.return) {
+            setComposerMode("default");
+            setQuerySync("");
+        }
+        return;
     }
 
     if (bundleDrawerVisible) {
@@ -384,6 +393,9 @@ export function OriApp({
         if (input === "/" && queryRef.current.length === 1) {
           setSelectedCommandIndex(0);
           setComposerMode("default");
+        }
+        if (input === "?" && queryRef.current.length === 1) {
+            setComposerMode("shortcut_picker");
         }
         setQuery(next);
       }
@@ -928,7 +940,7 @@ export function OriApp({
   useEffect(() => {
     const trimmed = query.trim();
 
-    if (composerMode === "edit_intent" || composerMode === "resume_picker" || composerMode === "bundle_picker") {
+    if (composerMode === "edit_intent" || composerMode === "resume_picker" || composerMode === "bundle_picker" || composerMode === "shortcut_picker") {
       return;
     }
 
@@ -1001,6 +1013,9 @@ export function OriApp({
         activeBundleIds={state.activeBundleIds}
         selectedIndex={selectedBundleIndex}
         visible={bundleDrawerVisible}
+      />
+      <ShortcutDrawer
+        visible={shortcutDrawerVisible}
       />
       <CommandDrawer
         commands={commandMatches}

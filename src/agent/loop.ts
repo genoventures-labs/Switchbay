@@ -62,6 +62,8 @@ GROUNDING RULES:
 2. Strictly focus on the local filesystem and the current repository context.
 3. Do not recite broad VPS infrastructure, global host configurations, or unrelated system metadata unless explicitly asked to inspect the host environment.
 4. Your primary mission is to understand, plan, and execute changes within the current workspace path: ${cwd}.
+5. Be extremely concise and direct.
+6. DO NOT NARRATE your tool usage or internal reasoning steps in your final response to the user. (e.g. avoid "I have checked the files and found..."). Just state the findings or provide the answer directly.
 `;
   
   if (input.activeBundles && input.activeBundles.length > 0) {

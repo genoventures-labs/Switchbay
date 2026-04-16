@@ -94,6 +94,8 @@ export function OriApp({
   const [selectedMentionIndex, setSelectedMentionIndex] = useState(0);
   const [resumeSessions, setResumeSessions] = useState<{id: string, title: string, updatedAt: number}[]>([]);
   const [selectedResumeIndex, setSelectedResumeIndex] = useState(0);
+  const [turnThoughts, setTurnThoughts] = useState<string[]>([]);
+  
   const didHydrateRef = useRef(false);
   const initialPolicy = resolveAgentPolicy({ mode, profile });
   const [state, dispatch] = useReducer(
@@ -553,7 +555,7 @@ export function OriApp({
       return;
     }
 
-    if (resolvedValue.trim() === "/new") {
+    if (value.trim() === "/new") {
       const workspace = await refreshWorkspace();
       const policy = resolveAgentPolicy({ mode, profile });
 
@@ -619,6 +621,11 @@ export function OriApp({
 
     setQuerySync("");
     setComposerMode("default");
+
+    const onStep = (title: string) => {
+        setTurnThoughts(prev => [...prev, title]);
+    };
+    setTurnThoughts([]);
 
     const localCommand = await tryLocalCommand(resolvedValue, {
       client,
@@ -765,6 +772,7 @@ export function OriApp({
         surface,
         turn,
         workspace,
+        onStep,
       });
       const response = executedTurn.response;
 
@@ -816,6 +824,7 @@ export function OriApp({
       });
 
       dispatch({ type: "turn/completed" });
+      setTurnThoughts([]);
 
       refreshWorkspace().then((ws) => {
         dispatch({ type: "workspace/updated", workspace: ws });
@@ -825,6 +834,7 @@ export function OriApp({
         type: "turn/failed",
         error: "Request failed. Check ORI_API_KEY and runtime connectivity.",
       });
+      setTurnThoughts([]);
     }
   }
 
@@ -931,6 +941,7 @@ export function OriApp({
         initialQuery={initialQuery}
         query={query}
         status={state.status}
+        thoughts={turnThoughts}
       />
     </Box>
   );

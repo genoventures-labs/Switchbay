@@ -8,20 +8,8 @@ type ComposerProps = {
   initialQuery: string;
   query: string;
   status: SessionStatus;
+  thoughts?: string[];
 };
-
-const THINKING_PHRASES = [
-  "Polishing the symbols...",
-  "Consulting the Oracle...",
-  "Drafting the plan...",
-  "Reading between the lines...",
-  "Aligning the stars...",
-  "Sifting through the repo...",
-  "Thinking it over...",
-  "Almost there...",
-  "Waking up the daemons...",
-  "Sharpening the tools...",
-];
 
 export function Composer({
   activeCapability,
@@ -29,19 +17,9 @@ export function Composer({
   initialQuery,
   query,
   status,
+  thoughts = [],
 }: ComposerProps) {
   const isThinking = status === "THINKING";
-  const [phraseIndex, setPhraseIndex] = useState(0);
-
-  useEffect(() => {
-    if (!isThinking) return;
-    
-    const interval = setInterval(() => {
-      setPhraseIndex((prev) => (prev + 1) % THINKING_PHRASES.length);
-    }, 3000);
-    
-    return () => clearInterval(interval);
-  }, [isThinking]);
 
   if (initialQuery) {
     return (
@@ -53,18 +31,29 @@ export function Composer({
     );
   }
 
+  const brandColor = "#E57373"; // Salmon/Coral
   const greenColor = "#00FF7F"; // Bright Spring Green
   const grayColor = "#707070";  // Steel Gray
 
   return (
     <Box flexDirection="column" paddingX={0} paddingTop={0} paddingBottom={0}>
       {isThinking && (
-        <Box paddingX={2} marginBottom={0} marginTop={1}>
+        <Box flexDirection="column" paddingX={2} marginBottom={0} marginTop={1}>
           <Box gap={1}>
-            <Text color={greenColor}>⏺</Text>
-            <Text color="white" bold>{activeCapability ? activeCapability.toLowerCase() : "thinking"}</Text>
-            <Text color={grayColor}> · {THINKING_PHRASES[phraseIndex]}</Text>
+            <Text color={brandColor}>⏺</Text>
+            <Text color="white" bold>ORI</Text>
           </Box>
+          {thoughts.length > 0 ? (
+            thoughts.map((t, i) => (
+              <Box key={i} paddingLeft={2}>
+                <Text color={grayColor}>└ {t}</Text>
+              </Box>
+            ))
+          ) : (
+            <Box paddingLeft={2}>
+              <Text color={grayColor}>└ thinking...</Text>
+            </Box>
+          )}
         </Box>
       )}
 
@@ -78,7 +67,7 @@ export function Composer({
         paddingX={2}
         paddingY={0}
         flexDirection="column"
-        marginTop={isThinking ? 1 : 1}
+        marginTop={1}
       >
         <Box marginY={0}>
           <Text color={grayColor}>❯ </Text>

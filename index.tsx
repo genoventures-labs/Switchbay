@@ -7,7 +7,6 @@ import { loadOriConfig } from "./src/config/ori-config";
 import { fuzzyMatchLocations, travelTo } from "./src/tools/travel";
 import { listSessions, purgeSessions, loadPersistedSession, savePersistedSession } from "./src/session/persistence";
 import { buildTurn, executeTurn, refreshWorkspace } from "./src/agent/loop";
-import { createThoughtFrame } from "./src/agent/turn-state";
 
 // ANSI colors for CLI mode
 const CLR = {
@@ -106,7 +105,7 @@ Options:
   render(
     <OriApp
       client={client}
-      initialHopLabel={null} // Hop already handled by process.chdir if needed
+      initialHopLabel={null}
       initialQuery=""
       mode={options.mode}
       profile={options.profile}
@@ -142,7 +141,13 @@ async function runCliMode(options: any, resumeId: string | null) {
     workspace,
   });
 
-  process.stdout.write(`\n${CLR.green}⏺${CLR.reset} ${CLR.white}${CLR.bold}thinking...${CLR.reset}\r`);
+  process.stdout.write(`\n${CLR.salmon}⏺${CLR.reset} ${CLR.white}${CLR.bold}ORI${CLR.reset}\n`);
+  
+  let lineCount = 0;
+  const onStep = (title: string) => {
+    process.stdout.write(`  ${CLR.gray}└ ${title}${CLR.reset}\n`);
+    lineCount++;
+  };
 
   try {
     const executedTurn = await executeTurn({
@@ -151,17 +156,20 @@ async function runCliMode(options: any, resumeId: string | null) {
       surface: state.surface,
       turn,
       workspace,
+      onStep,
     });
 
-    // Clear thinking line
-    process.stdout.write(" ".repeat(50) + "\r");
+    // Move cursor up and clear thinking lines
+    for (let i = 0; i <= lineCount; i++) {
+        process.stdout.write("\x1b[1A\x1b[2K");
+    }
+    process.stdout.write("\r");
 
     const content = executedTurn.response.choices?.[0]?.message?.content?.trim();
     if (content) {
       process.stdout.write(`${CLR.salmon}⏺${CLR.reset} ${CLR.white}${CLR.bold}ORI${CLR.reset}\n\n`);
       process.stdout.write(`${content}\n\n`);
       
-      // Save the updated state
       state.conversation.push({ role: "user", content: options.initialQuery });
       state.conversation.push({ role: "assistant", content });
       state.updatedAt = Date.now();

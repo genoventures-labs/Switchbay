@@ -22,35 +22,48 @@ export async function loadPersistedSession(id?: string): Promise<SessionState | 
   }
 
   try {
-    const parsed = JSON.parse(await file.text()) as Partial<SessionState>;
+    const text = await file.text();
+    if (!text.trim()) return null;
+    const parsed = JSON.parse(text) as Partial<SessionState>;
     return normalizeSessionState(parsed);
-  } catch {
+  } catch (e) {
     return null;
   }
 }
 
 export async function savePersistedSession(state: SessionState): Promise<void> {
-  await Bun.$`mkdir -p ${SESSION_DIR}`.quiet();
-  const serializableState: SessionState = {
-    ...state,
-    scratchpad: null,
-    updatedAt: Date.now(),
-  };
-  
-  await Bun.write(SESSION_PATH, JSON.stringify(serializableState, null, 2));
-  const uniquePath = path.join(SESSION_DIR, `session-${state.sessionId}.json`);
-  await Bun.write(uniquePath, JSON.stringify(serializableState, null, 2));
+  try {
+    await fs.mkdir(SESSION_DIR, { recursive: true });
+    
+    const serializableState: SessionState = {
+      ...state,
+      scratchpad: null,
+      updatedAt: Date.now(),
+    };
+    
+    const content = JSON.stringify(serializableState, null, 2);
+    
+    // Always update the main session.json for quick --resume
+    await Bun.write(SESSION_PATH, content);
+    
+    // Also save a unique record
+    const uniquePath = path.join(SESSION_DIR, `session-${state.sessionId}.json`);
+    await Bun.write(uniquePath, content);
+  } catch (e) {
+    // Silent fail on save errors
+  }
 }
 
 export async function listSessions(): Promise<{ id: string; title: string; updatedAt: number }[]> {
   const sessions: { id: string; title: string; updatedAt: number }[] = [];
   
   try {
-    const files = await Bun.$`ls ${SESSION_DIR}/session-*.json`.text();
-    const paths = files.trim().split("\n").filter(Boolean);
+    const entries = await fs.readdir(SESSION_DIR);
+    const sessionFiles = entries.filter(e => e.startsWith("session-") && e.endsWith(".json"));
     
-    for (const p of paths) {
+    for (const fname of sessionFiles) {
       try {
+        const p = path.join(SESSION_DIR, fname);
         const file = Bun.file(p);
         const text = await file.text();
         const data = JSON.parse(text);
@@ -61,7 +74,7 @@ export async function listSessions(): Promise<{ id: string; title: string; updat
           title = firstUserMsg.content.slice(0, 50) + (firstUserMsg.content.length > 50 ? "..." : "");
         }
         
-        const id = path.basename(p, ".json").replace("session-", "");
+        const id = fname.replace("session-", "").replace(".json", "");
         
         sessions.push({
           id,
@@ -69,11 +82,11 @@ export async function listSessions(): Promise<{ id: string; title: string; updat
           updatedAt: data.updatedAt ?? (await fs.stat(p)).mtimeMs,
         });
       } catch {
-        // Skip malformed files
+        // Skip malformed
       }
     }
   } catch {
-    // No sessions found
+    // Dir missing
   }
   
   return sessions.sort((a, b) => b.updatedAt - a.updatedAt);
@@ -84,32 +97,20 @@ export async function purgeSessions(olderThanMs: number): Promise<number> {
   const now = Date.now();
   
   try {
-    const files = await Bun.$`ls ${SESSION_DIR}/session-*.json`.text();
-    const paths = files.trim().split("\n").filter(Boolean);
-    
-    for (const p of paths) {
+    const entries = await fs.readdir(SESSION_DIR);
+    for (const fname of entries) {
+      if (!fname.endsWith(".json")) continue;
+      
+      const p = path.join(SESSION_DIR, fname);
       try {
         const stats = await fs.stat(p);
         if (now - stats.mtimeMs > olderThanMs) {
           await fs.unlink(p);
           count++;
         }
-      } catch {
-        // Skip files that can't be accessed
-      }
+      } catch {}
     }
-    
-    // Also check the main session.json
-    try {
-      const stats = await fs.stat(SESSION_PATH);
-      if (now - stats.mtimeMs > olderThanMs) {
-        await fs.unlink(SESSION_PATH);
-      }
-    } catch {}
-    
-  } catch {
-    // Directory might not exist
-  }
+  } catch {}
   
   return count;
 }
@@ -148,5 +149,6 @@ function normalizeSessionState(parsed: Partial<SessionState>): SessionState {
     pendingApproval: parsed.pendingApproval ?? null,
     scratchpad: null,
     updatedAt: parsed.updatedAt ?? Date.now(),
+    activeBundleIds: parsed.activeBundleIds ?? [],
   };
 }

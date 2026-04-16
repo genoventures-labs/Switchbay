@@ -11,6 +11,10 @@ type MentionPickerProps = {
 export function MentionPicker({ candidates, selectedIndex, visible }: MentionPickerProps) {
   if (!visible || candidates.length === 0) return null;
 
+  const brandColor = "#E57373"; // Salmon/Coral
+  const greenColor = "#00FF7F"; // Bright Spring Green
+  const grayColor = "#707070";  // Steel Gray
+
   const visible_count = Math.min(candidates.length, 8);
   const startIndex = Math.max(0, Math.min(selectedIndex - 3, candidates.length - visible_count));
   const visibleCandidates = candidates.slice(startIndex, startIndex + visible_count);
@@ -19,33 +23,41 @@ export function MentionPicker({ candidates, selectedIndex, visible }: MentionPic
     <Box
       flexDirection="column"
       paddingX={2}
-      paddingY={0}
-      marginBottom={0}
+      marginTop={1}
+      marginBottom={1}
       borderStyle="round"
-      borderColor="gray"
+      borderColor={grayColor}
     >
-      <Text color="cyan" bold>Files</Text>
-      <Text color="#707070">Pick a path to insert into the prompt.</Text>
+      <Box marginBottom={1}>
+        <Text color={brandColor} bold>Files</Text>
+        <Text color={grayColor}> · Use arrow keys to select</Text>
+      </Box>
+
       {visibleCandidates.map((candidate, i) => {
         const absoluteIndex = startIndex + i;
         const isSelected = absoluteIndex === selectedIndex;
         return (
-          <Box key={candidate.value} gap={1} marginTop={1}>
-            <Text color={isSelected ? "cyan" : "gray"} bold={isSelected}>
+          <Box 
+            key={candidate.value} 
+            gap={1} 
+            paddingX={1}
+            backgroundColor={isSelected ? "#2D333B" : undefined}
+          >
+            <Text color={isSelected ? greenColor : grayColor} bold={isSelected}>
               {isSelected ? "❯" : " "}
             </Text>
-            <Text color={isSelected ? "white" : "gray"}>
-              {candidate.isDir ? (
-                <Text color={isSelected ? "cyan" : "gray"}>{candidate.label}/</Text>
-              ) : (
-                candidate.label
-              )}
+            <Text color="white" bold={isSelected}>
+              {candidate.label}{candidate.isDir ? "/" : ""}
             </Text>
+            {isSelected && <Text color={grayColor}>  - insert path</Text>}
           </Box>
         );
       })}
+      
       {candidates.length > visible_count && (
-        <Text color="#707070">  +{candidates.length - visible_count} more</Text>
+        <Box marginTop={1} paddingX={1}>
+          <Text color={grayColor}>  ... {candidates.length - visible_count} more files</Text>
+        </Box>
       )}
     </Box>
   );

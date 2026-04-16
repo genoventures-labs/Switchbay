@@ -55,12 +55,12 @@ export function Composer({
           )}
         </Box>
         <Box marginTop={1}>
-          <Text color="gray" dimColor>> </Text>
-          <Text color="gray"> · </Text>
+          <Text color="gray" dimColor>❯ </Text>
+          <Text color="gray"❯ · </Text>
           <Text color={query ? "white" : "gray"} dimColor={!query}>
             {query || placeholder}
             {!isThinking && !disabled ? (
-              <Text backgroundColor="white" color="black"> </Text>
+              <Text backgroundColor="white" color="black"❯ </Text>
             ) : null}
           </Text>
         </Box>

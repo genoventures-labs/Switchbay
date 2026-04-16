@@ -148,7 +148,7 @@ export function createInitialSessionState(input: {
       createTranscriptEntry({
         kind: "tool",
         title: "Session Started",
-        body: `Booted ORI Code in ${input.mode} mode on ${input.surface}.`,
+        body: "",
         tone: "info",
       }),
     ],

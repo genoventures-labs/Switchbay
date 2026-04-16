@@ -719,7 +719,7 @@ export function OriApp({
     } else {
       dispatch({
         type: "assistant/appended",
-        message: "I’m online. How can I help you today?",
+        message: "",
       });
     }
   }, []);

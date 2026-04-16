@@ -32,7 +32,7 @@ export function Header({ mode, status, workspace }: HeaderProps) {
       <Box justifyContent="space-between">
         <Box flexDirection="column">
           <Box gap={1}>
-            <Text color="cyan" bold>ORI</Text>
+            <Text color="magenta" bold>ORI</Text>
             <Text color="gray">in</Text>
             <Text color="white" bold>{project}</Text>
             {branch ? (

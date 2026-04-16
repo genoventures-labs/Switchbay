@@ -46,7 +46,7 @@ export function Composer({
       >
         <Box justifyContent="space-between">
           <Text color={titleColor} bold>
-            {disabled ? "Edit intent" : "Message ORI"}
+            {disabled ? "Edit intent" : "ORI Code"}
           </Text>
           {isThinking && (
             <Text color="yellow" dimColor>
@@ -55,7 +55,7 @@ export function Composer({
           )}
         </Box>
         <Box marginTop={1}>
-          <Text color="gray">{disabled ? "intent" : "prompt"}</Text>
+          <Text color="gray">> </Text>
           <Text color="gray"> · </Text>
           <Text color={query ? "white" : "gray"} dimColor={!query}>
             {query || placeholder}

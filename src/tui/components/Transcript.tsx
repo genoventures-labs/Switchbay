@@ -61,7 +61,7 @@ export function Transcript({
                 paddingX={1}
                 paddingY={0}
               >
-                <Text color="gray" dimColor>you</Text>
+                <Text color="gray" dimColor>> </Text>
                 <Text color="white">{entry.body}</Text>
               </Box>
             </Box>
@@ -79,8 +79,8 @@ export function Transcript({
                 paddingY={0}
               >
                 <Box gap={1} marginBottom={0}>
-                  <Text color="cyan" bold>ori</Text>
-                  <Text color="gray" dimColor>Assistant</Text>
+                  <Text color="white">●</Text>
+                  <Text color="gray" dimColor>ORI</Text>
                 </Box>
                 <Box marginTop={1}>
                   <MarkdownText content={entry.body} role="assistant" />
@@ -133,7 +133,7 @@ export function Transcript({
             paddingY={0}
           >
             <Box gap={1}>
-              <Text color="cyan" bold>ori</Text>
+              <Text color="white">●</Text>
               <Text color="gray" dimColor>Thinking</Text>
             </Box>
             <Box marginTop={1}>
@@ -155,7 +155,7 @@ export function Transcript({
             paddingY={0}
           >
             <Box gap={1}>
-              <Text color="cyan" bold>ori</Text>
+              <Text color="white">●</Text>
               <Text color="gray" dimColor>Responding</Text>
             </Box>
             <Box marginTop={1}>

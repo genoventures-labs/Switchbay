@@ -333,7 +333,7 @@ export function OriApp({
       if (key.return) {
         const selectedCommand = commandMatches[selectedCommandIndex];
         if (selectedCommand) {
-          setQuerySync(`${selectedCommand.command} `);
+          void handleSubmit(selectedCommand.command);
           setSelectedCommandIndex(0);
         } else {
           void handleSubmit(queryRef.current);

@@ -142,12 +142,19 @@ export class OriClient {
     prompt: string;
     sessionId?: string;
     surface: string;
+    workspaceContext?: string;
   }): Promise<string> {
     const mappedEndpoint = mapCapabilityEndpoint(input.capability);
 
     if (mappedEndpoint) {
       const response = await this.postCapability(mappedEndpoint, {
-        input: buildCapabilityInput(input.capability, input.prompt, input.surface, input.profile),
+        input: buildCapabilityInput(
+          input.capability,
+          input.prompt,
+          input.surface,
+          input.profile,
+          input.workspaceContext,
+        ),
         sessionId: input.sessionId,
         surface: input.surface,
       });
@@ -198,6 +205,7 @@ export class OriClient {
       request.input,
       request.surface,
       request.sessionId,
+      { sendEnv: true },
     );
 
     return response as CapabilityResponse;
@@ -233,10 +241,11 @@ export class OriClient {
     body: unknown,
     surface: string,
     sessionId?: string,
+    options: { sendEnv?: boolean } = {},
   ): Promise<unknown> {
     const response = await this.fetchImpl(`${this.apiBase}${path}`, {
       method: "POST",
-      headers: this.buildHeaders(surface, sessionId),
+      headers: this.buildHeaders(surface, sessionId, { sendEnv: options.sendEnv }),
       body: JSON.stringify(body),
     });
 
@@ -351,12 +360,36 @@ function buildCapabilityInput(
   prompt: string,
   surface: string,
   profile?: string,
+  workspaceContext?: string,
 ): Record<string, unknown> {
+  const promptWithWorkspace = workspaceContext
+    ? [
+        "Current workspace context:",
+        workspaceContext,
+        "",
+        "User request:",
+        prompt,
+      ].join("\n")
+    : prompt;
+
   switch (capability) {
     case "web_fetch":
       return { url: prompt };
     case "repo_report":
-      return { prompt, surface, profile };
+      return {
+        prompt: promptWithWorkspace,
+        surface,
+        profile,
+        workspace_context: workspaceContext,
+      };
+    case "repo_research":
+      return {
+        prompt: promptWithWorkspace,
+        question: promptWithWorkspace,
+        surface,
+        profile,
+        workspace_context: workspaceContext,
+      };
     case "research":
     case "web_search":
       return { prompt, query: prompt, surface, profile };

@@ -40,8 +40,22 @@ export async function buildPatchPreview(input: {
   );
 
   const rewrittenDiff = (result.stdout || result.stderr || "No patch preview available.")
-    .replaceAll(beforePath, `a/${input.targetPath}`)
-    .replaceAll(afterPath, `b/${input.targetPath}`);
+    .split("\n")
+    .map((line) => {
+      if (line.startsWith(`diff --git a${beforePath} b${afterPath}`) || line.startsWith(`diff --git a/${beforePath} b/${afterPath}`)) {
+        return `diff --git a/${input.targetPath} b/${input.targetPath}`;
+      }
+      if (line.startsWith(`--- a${beforePath}`) || line.startsWith(`--- a/${beforePath}`)) {
+        return `--- a/${input.targetPath}`;
+      }
+      if (line.startsWith(`+++ b${afterPath}`) || line.startsWith(`+++ b/${afterPath}`)) {
+        return `+++ b/${input.targetPath}`;
+      }
+      return line
+        .replaceAll(beforePath, input.targetPath)
+        .replaceAll(afterPath, input.targetPath);
+    })
+    .join("\n");
 
   await Bun.$`rm -rf ${trimmedTempDir}`.cwd(cwd).quiet();
 

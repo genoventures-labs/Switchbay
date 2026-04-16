@@ -73,14 +73,31 @@ export function Transcript({
         if (entry.kind === "tool") {
           const isError = entry.tone === "error";
           const isInfo = entry.tone === "info";
+          const borderColor = isError ? "red" : isInfo ? "cyan" : "gray";
           return (
-            <Box key={entry.id} marginBottom={0} paddingLeft={2}>
-              <Text
-                color={isError ? "red" : isInfo ? "cyan" : "gray"}
-                dimColor={!isError && !isInfo}
-              >
-                {isError ? "✗" : isInfo ? "◈" : "·"} {entry.title.toLowerCase()}
-              </Text>
+            <Box key={entry.id} flexDirection="column" marginBottom={1}>
+              <Box paddingLeft={2}>
+                <Text
+                  color={isError ? "red" : isInfo ? "cyan" : "gray"}
+                  dimColor={!isError && !isInfo}
+                >
+                  {isError ? "✗" : isInfo ? "◈" : "·"} {entry.title.toLowerCase()}
+                </Text>
+              </Box>
+              {entry.body.trim() ? (
+                <Box
+                  borderStyle="single"
+                  borderLeft={true}
+                  borderRight={false}
+                  borderTop={false}
+                  borderBottom={false}
+                  borderColor={borderColor}
+                  paddingLeft={1}
+                  marginLeft={2}
+                >
+                  <MarkdownText content={entry.body} role="tool" />
+                </Box>
+              ) : null}
             </Box>
           );
         }

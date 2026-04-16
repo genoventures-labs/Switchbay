@@ -24,7 +24,7 @@ type Block =
   | { type: "blank" };
 
 export function MarkdownText({ content, role = "assistant" }: MarkdownTextProps) {
-  const blocks = parseBlocks(content);
+  const blocks = parseBlocks(normalizeDisplaySpacing(content));
 
   return (
     <Box flexDirection="column">
@@ -41,9 +41,11 @@ function renderBlock(
   switch (block.type) {
     case "heading":
       return (
-        <Text key={index} color={getHeadingColor(block.level)} bold>
-          {block.text}
-        </Text>
+        <Box key={index} marginBottom={1}>
+          <Text color={getHeadingColor(block.level)} bold>
+            {block.text}
+          </Text>
+        </Box>
       );
     case "bullet":
       return (
@@ -102,13 +104,21 @@ function renderBlock(
       );
     case "paragraph":
       return (
-        <Text key={index} color="white" wrap="wrap">
-          {renderInline(block.text, role)}
-        </Text>
+        <Box key={index} marginBottom={1}>
+          <Text color="white" wrap="wrap">
+            {renderInline(block.text, role)}
+          </Text>
+        </Box>
       );
     case "blank":
       return <Text key={index}> </Text>;
   }
+}
+
+function normalizeDisplaySpacing(content: string) {
+  return content
+    .replace(/([.!?])([A-Z][a-z])/g, "$1 $2")
+    .replace(/([a-z0-9])([A-Z][a-z])/g, "$1 $2");
 }
 
 function parseBlocks(content: string): Block[] {

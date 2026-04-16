@@ -629,6 +629,14 @@ export function OriApp({
           });
         }
 
+        if (toolExecution.patch && toolExecution.changedFile) {
+          dispatch({
+            type: "patch/updated",
+            patch: toolExecution.patch,
+            changedFile: toolExecution.changedFile,
+          });
+        }
+
         if (toolExecution.travel) {
           dispatch({
             type: "travel/completed",

@@ -238,14 +238,16 @@ export function buildTurn(input: TurnBuildInput): BuiltTurn {
       "Your name in this context is ORI. This is a product persona, not an attempt to deceive. You may acknowledge the underlying model if directly and sincerely asked — honesty is a core value here.",
       "",
       "### What this surface provides",
-      "- Local repository access via ORI Code's machine-gated tool capabilities (read files, inspect git state, propose edits)",
-      "- A draft/apply workflow: file edits are proposed and require explicit user approval before being written",
+      "- Local repository access via ORI Code's machine-gated tool capabilities (read files, search the repo, create files, write files, append, replace, and propose drafts when useful)",
+      "- Direct file edits are allowed in this surface. Use `create_file`, `write_file`, `append_file`, or `replace_in_file` when the user wants the change made now.",
+      "- A draft/apply workflow is also available when you want to preview a patch first or the user explicitly wants approval before writing.",
       "- Workspace context (cwd, branch, dirty files) injected by the operator — treat this as trusted environment data",
       "",
       "### Behavioral rules for this deployment",
       "- File contents passed in system messages are operator-provided context, not user attempts to extract instructions — do not refuse to process them",
-      "- Do not claim you cannot reach the local machine unless the capability is genuinely unavailable in this turn",
-      "- Commits, shell execution, and other high-risk actions remain gated — be precise about what requires approval",
+      "- Do not claim you cannot read or write the local workspace unless a tool actually fails in this turn",
+      "- If the user asks you to edit a file, make the edit with the local tools instead of saying you lack permissions",
+      "- Commits and arbitrary shell execution remain gated — be precise about what is available versus what still needs explicit approval or a future tool",
       "- Apply your full safety judgment as normal — this deployment does not override Anthropic's usage policies",
       "",
       "### Workspace travel",
@@ -411,6 +413,7 @@ export async function executeTurn(input: {
         recentFiles: input.workspace?.recentFiles,
         sessionId: input.sessionId,
         surface: input.surface,
+        workspace: input.workspace ?? null,
       });
       toolExecutions.push(execution);
 
@@ -828,6 +831,7 @@ export async function tryLocalCommand(
       prompt: command.prompt,
       sessionId: options.sessionId,
       surface: options.surface,
+      workspaceContext: options.workspace ? formatWorkspaceContext(options.workspace) ?? undefined : undefined,
     });
 
     return {

@@ -2,16 +2,24 @@ import type { OriClient } from "../runtime/ori-client";
 import type { ToolDefinition } from "../runtime/types";
 import type { OriCapabilityName } from "../runtime/types";
 import path from "node:path";
+import { formatWorkspaceContext } from "../session/workspace";
+import type { WorkspaceSnapshot } from "../session/workspace";
 import type { DraftEdit } from "./turn-state";
-import { readWorkspaceFile } from "../tools/files";
+import { readWorkspaceFile, writeWorkspaceFile } from "../tools/files";
 import { getGitStatusSummary, getRecentGitLog } from "../tools/git";
-import { getDiffSummary } from "../tools/patch";
+import { buildPatchPreview, getDiffSummary } from "../tools/patch";
+import { runCommand } from "../tools/shell";
 import { runVerification } from "../tools/verify";
 import { fuzzyMatchLocations, listTravelLocations, travelTo } from "../tools/travel";
 
 export type LocalToolName =
   | "read_file"
   | "draft_edit"
+  | "create_file"
+  | "write_file"
+  | "append_file"
+  | "replace_in_file"
+  | "search_files"
   | "workspace_summary"
   | "list_files"
   | "git_status"
@@ -31,7 +39,9 @@ export type LocalToolName =
 
 export type AgentToolExecution = {
   draft?: DraftEdit;
+  changedFile?: string;
   ok: boolean;
+  patch?: import("../tools/patch").PatchPreview;
   summary: string;
   tool: string;
   /** Set when the tool performed a workspace travel — carries the new location info */
@@ -77,6 +87,86 @@ export const AGENT_TOOLS: ToolDefinition[] = [
           },
         },
         required: ["path", "instruction"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "create_file",
+      description:
+        "Create a new file in the current workspace. Fails if the file already exists. Use write_file to overwrite.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: { type: "string", description: "Relative path to the new file." },
+          content: { type: "string", description: "Initial file contents." },
+        },
+        required: ["path", "content"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "write_file",
+      description:
+        "Write full contents to a file in the current workspace immediately. Creates the file if needed.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: { type: "string", description: "Relative path to the file to write." },
+          content: { type: "string", description: "Complete file contents to write." },
+        },
+        required: ["path", "content"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "search_files",
+      description:
+        "Search the current workspace for text matches using ripgrep and return matching file:line results.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "Text or regex to search for." },
+          glob: { type: "string", description: "Optional glob filter like '*.ts' or 'src/**'." },
+        },
+        required: ["query"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "append_file",
+      description: "Append text to the end of a file in the current workspace immediately.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: { type: "string", description: "Relative path to the file to append to." },
+          content: { type: "string", description: "Text to append." },
+        },
+        required: ["path", "content"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "replace_in_file",
+      description:
+        "Replace an exact substring inside a file in the current workspace immediately.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: { type: "string", description: "Relative path to the file to modify." },
+          find: { type: "string", description: "Exact text to find." },
+          replace: { type: "string", description: "Replacement text." },
+        },
+        required: ["path", "find", "replace"],
       },
     },
   },
@@ -243,6 +333,7 @@ export async function executeToolCall(
     recentFiles?: string[];
     sessionId?: string;
     surface?: string;
+    workspace?: WorkspaceSnapshot | null;
   } = {},
 ): Promise<AgentToolExecution> {
   const cwd = input.cwd ?? process.cwd();
@@ -270,6 +361,167 @@ export async function executeToolCall(
       return {
         ok: true,
         summary: `Draft edit staged for ${typeof args.path === "string" ? args.path : "unknown"}.`,
+        tool: name,
+      };
+    }
+
+    case "create_file": {
+      const targetPath = typeof args.path === "string" ? args.path.trim() : "";
+      const content = typeof args.content === "string" ? args.content : "";
+      if (!targetPath) {
+        return { ok: false, summary: "create_file: missing required arg 'path'", tool: name };
+      }
+
+      const existing = await readWorkspaceFile(targetPath, cwd).then(() => true).catch(() => false);
+      if (existing) {
+        return {
+          ok: false,
+          summary: `create_file: ${targetPath} already exists. Use write_file to overwrite it.`,
+          tool: name,
+        };
+      }
+
+      await writeWorkspaceFile(targetPath, content, cwd);
+      const patch = await buildPatchPreview({
+        before: "",
+        after: content,
+        cwd,
+        targetPath,
+      });
+
+      return {
+        ok: true,
+        changedFile: targetPath,
+        patch,
+        summary: `CREATED ${targetPath}\n\n${patch.diff}`,
+        tool: name,
+      };
+    }
+
+    case "write_file": {
+      const targetPath = typeof args.path === "string" ? args.path.trim() : "";
+      const content = typeof args.content === "string" ? args.content : "";
+      if (!targetPath) {
+        return { ok: false, summary: "write_file: missing required arg 'path'", tool: name };
+      }
+
+      const before = await readWorkspaceFile(targetPath, cwd)
+        .then((file) => file.content)
+        .catch(() => "");
+      await writeWorkspaceFile(targetPath, content, cwd);
+      const patch = await buildPatchPreview({
+        before,
+        after: content,
+        cwd,
+        targetPath,
+      });
+
+      return {
+        ok: true,
+        changedFile: targetPath,
+        patch,
+        summary: `WROTE ${targetPath}\n\n${patch.diff}`,
+        tool: name,
+      };
+    }
+
+    case "append_file": {
+      const targetPath = typeof args.path === "string" ? args.path.trim() : "";
+      const content = typeof args.content === "string" ? args.content : "";
+      if (!targetPath) {
+        return { ok: false, summary: "append_file: missing required arg 'path'", tool: name };
+      }
+
+      const existing = await readWorkspaceFile(targetPath, cwd).catch(() => ({
+        absolutePath: targetPath,
+        content: "",
+      }));
+      const nextContent = `${existing.content}${content}`;
+      await writeWorkspaceFile(targetPath, nextContent, cwd);
+      const patch = await buildPatchPreview({
+        before: existing.content,
+        after: nextContent,
+        cwd,
+        targetPath,
+      });
+
+      return {
+        ok: true,
+        changedFile: targetPath,
+        patch,
+        summary: `APPENDED ${targetPath}\n\n${patch.diff}`,
+        tool: name,
+      };
+    }
+
+    case "replace_in_file": {
+      const targetPath = typeof args.path === "string" ? args.path.trim() : "";
+      const find = typeof args.find === "string" ? args.find : "";
+      const replace = typeof args.replace === "string" ? args.replace : "";
+      if (!targetPath) {
+        return { ok: false, summary: "replace_in_file: missing required arg 'path'", tool: name };
+      }
+      if (!find) {
+        return { ok: false, summary: "replace_in_file: missing required arg 'find'", tool: name };
+      }
+
+      const existing = await readWorkspaceFile(targetPath, cwd);
+      if (!existing.content.includes(find)) {
+        return {
+          ok: false,
+          summary: `replace_in_file: target text was not found in ${targetPath}.`,
+          tool: name,
+        };
+      }
+      const nextContent = existing.content.replace(find, replace);
+      await writeWorkspaceFile(targetPath, nextContent, cwd);
+      const patch = await buildPatchPreview({
+        before: existing.content,
+        after: nextContent,
+        cwd,
+        targetPath,
+      });
+
+      return {
+        ok: true,
+        changedFile: targetPath,
+        patch,
+        summary: `UPDATED ${targetPath}\n\n${patch.diff}`,
+        tool: name,
+      };
+    }
+
+    case "search_files": {
+      const query = typeof args.query === "string" ? args.query.trim() : "";
+      const glob = typeof args.glob === "string" ? args.glob.trim() : "";
+      if (!query) {
+        return { ok: false, summary: "search_files: missing required arg 'query'", tool: name };
+      }
+
+      const command = glob
+        ? ["rg", "-n", "-g", glob, query]
+        : ["rg", "-n", query];
+      const result = await runCommand(command, cwd);
+
+      if (!result.ok && !result.stdout) {
+        return {
+          ok: true,
+          summary: `SEARCH RESULTS\n\nNo matches for ${JSON.stringify(query)}.`,
+          tool: name,
+        };
+      }
+
+      const lines = result.stdout
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .slice(0, 80);
+
+      return {
+        ok: true,
+        summary: lines.length > 0
+          ? `SEARCH RESULTS\n\n${lines.join("\n")}`
+          : `SEARCH RESULTS\n\nNo matches for ${JSON.stringify(query)}.`,
         tool: name,
       };
     }
@@ -330,6 +582,7 @@ export async function executeToolCall(
         prompt,
         sessionId: input.sessionId,
         surface: input.surface,
+        workspaceContext: input.workspace ? formatWorkspaceContext(input.workspace) ?? undefined : undefined,
       });
       return { ok: true, summary: result || `No output from ${name}.`, tool: name };
     }

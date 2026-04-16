@@ -756,11 +756,11 @@ export function OriApp({
 
   return (
     <Box flexDirection="column" width={stdoutWidth} minHeight={stdoutHeight}>
-      <Header
+      <Box>{state.transcript.length > 0 && <Header
         mode={mode}
         profile={state.resolvedProfile}
         status={state.status}
-        workspace={state.workspace}
+        workspace={state.workspace}}</Box>
       />
       <Transcript
         activeCapability={state.activeCapability}

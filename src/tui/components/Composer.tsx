@@ -36,7 +36,7 @@ export function Composer({
     : "Ask ORI a question or describe an edit...";
 
   return (
-    <Box flexDirection="column" paddingX={2} paddingTop={1} paddingBottom={1}>
+    <Box flexDirection="column" paddingX={0} paddingTop={0} paddingBottom={0}>
       <Box
         borderStyle="single" borderLeft={false} borderRight={false} borderBottom={false} borderTop={true}
         borderColor="gray"

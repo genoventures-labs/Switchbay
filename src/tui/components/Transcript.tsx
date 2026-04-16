@@ -3,6 +3,7 @@ import { Box, Text } from "ink";
 import type { TranscriptEntry } from "../../agent/turn-state";
 import type { DraftEdit, ApprovalRequest } from "../../agent/turn-state";
 import { MarkdownText } from "./MarkdownText";
+import { WelcomeBoard } from "./WelcomeBoard";
 
 type TranscriptProps = {
   activeCapability: string | null;
@@ -35,6 +36,16 @@ export function Transcript({
       )}
 
       {entries.length === 0 && !streamingText && !thinking ? (
+        <WelcomeBoard
+          version="0.4.0"
+          user="Mike"
+          email="thatnotiondude@gmail.com"
+          model="Sonnet 4.6"
+          cwd={process.cwd()}
+        />
+      ) : null}
+
+      /* 
         <Box
           flexDirection="column"
           

@@ -5,6 +5,7 @@ import { OriClient } from "./src/runtime/ori-client";
 import { OriApp } from "./src/tui/app";
 import { loadOriConfig } from "./src/config/ori-config";
 import { fuzzyMatchLocations, travelTo } from "./src/tools/travel";
+import { purgeSessions } from "./src/session/persistence";
 
 // Ensure config is initialized on first boot
 loadOriConfig();
@@ -22,6 +23,7 @@ Usage:
   ori-code "query" --hop <name>     Launch in a different workspace
   ori-code --resume                 Resume the last session
   ori-code --new                    Start a fresh session
+  ori-code --purge <duration>       Clean up old sessions (e.g. 1d, 1w)
   ori-code update                   Print update instructions
   ori-code version                  Print version
 
@@ -32,11 +34,33 @@ Options:
   --hop <name>           Travel to a whitelisted location before launching
   --resume               Resume the last saved session state
   --new                  Force a fresh session even if a saved one exists
+  --purge <duration>     Purge sessions older than duration (1d, 5d, 2w, etc.)
 `);
     return;
   }
 
   if (options.subcommand !== "run") return;
+
+  if (options.purge) {
+    const duration = options.purge.toLowerCase();
+    let ms = 0;
+    const match = duration.match(/^(\d+)([dw])$/);
+    if (match) {
+      const count = parseInt(match[1], 10);
+      const unit = match[2];
+      if (unit === "d") ms = count * 24 * 60 * 60 * 1000;
+      else if (unit === "w") ms = count * 7 * 24 * 60 * 60 * 1000;
+    } else {
+      console.error(`ori-code: invalid purge duration "${options.purge}". Use e.g. 1d, 5d, 2w.`);
+      process.exit(1);
+    }
+    
+    const count = await purgeSessions(ms);
+    console.log(`ori-code: purged ${count} old session(s).`);
+    if (!options.resume && !options.initialQuery) {
+        process.exit(0);
+    }
+  }
 
   // Resolve --hop before rendering so the TUI boots in the right cwd
   let initialHopLabel: string | null = null;

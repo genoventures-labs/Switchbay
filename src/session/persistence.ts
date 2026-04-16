@@ -1,4 +1,5 @@
 import path from "node:path";
+import fs from "node:fs/promises";
 import {
   createInitialSessionState,
   createThoughtFrame,
@@ -32,14 +33,11 @@ export async function savePersistedSession(state: SessionState): Promise<void> {
   await Bun.$`mkdir -p ${SESSION_DIR}`.quiet();
   const serializableState: SessionState = {
     ...state,
-    updatedAt: Date.now(),
     scratchpad: null,
+    updatedAt: Date.now(),
   };
   
-  // Always update the main session.json for quick --resume
   await Bun.write(SESSION_PATH, JSON.stringify(serializableState, null, 2));
-  
-  // Also save a unique record
   const uniquePath = path.join(SESSION_DIR, `session-${state.sessionId}.json`);
   await Bun.write(uniquePath, JSON.stringify(serializableState, null, 2));
 }
@@ -68,17 +66,52 @@ export async function listSessions(): Promise<{ id: string; title: string; updat
         sessions.push({
           id,
           title,
-          updatedAt: data.updatedAt ?? Date.now(),
+          updatedAt: data.updatedAt ?? (await fs.stat(p)).mtimeMs,
         });
       } catch {
         // Skip malformed files
       }
     }
   } catch {
-    // No sessions found or directory doesn't exist
+    // No sessions found
   }
   
   return sessions.sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
+export async function purgeSessions(olderThanMs: number): Promise<number> {
+  let count = 0;
+  const now = Date.now();
+  
+  try {
+    const files = await Bun.$`ls ${SESSION_DIR}/session-*.json`.text();
+    const paths = files.trim().split("\n").filter(Boolean);
+    
+    for (const p of paths) {
+      try {
+        const stats = await fs.stat(p);
+        if (now - stats.mtimeMs > olderThanMs) {
+          await fs.unlink(p);
+          count++;
+        }
+      } catch {
+        // Skip files that can't be accessed
+      }
+    }
+    
+    // Also check the main session.json
+    try {
+      const stats = await fs.stat(SESSION_PATH);
+      if (now - stats.mtimeMs > olderThanMs) {
+        await fs.unlink(SESSION_PATH);
+      }
+    } catch {}
+    
+  } catch {
+    // Directory might not exist
+  }
+  
+  return count;
 }
 
 function normalizeSessionState(parsed: Partial<SessionState>): SessionState {
@@ -114,5 +147,6 @@ function normalizeSessionState(parsed: Partial<SessionState>): SessionState {
     pendingPlanDraft: parsed.pendingPlanDraft ?? null,
     pendingApproval: parsed.pendingApproval ?? null,
     scratchpad: null,
+    updatedAt: parsed.updatedAt ?? Date.now(),
   };
 }

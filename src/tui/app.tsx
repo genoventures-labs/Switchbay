@@ -12,7 +12,7 @@ import { resolveAgentPolicy } from "../agent/policy";
 import { OriClient } from "../runtime/ori-client";
 import { createSessionStore, sessionReducer } from "../session/store";
 import { createTranscriptEntry } from "../agent/turn-state";
-import { loadPersistedSession, savePersistedSession, listSessions } from "../session/persistence";
+import { loadPersistedSession, savePersistedSession, listSessions, purgeSessions } from "../session/persistence";
 import {
   listMentionCandidates,
   parseMentions,
@@ -485,6 +485,32 @@ export function OriApp({
       return;
     }
     
+    if (value.trim().startsWith("/purge")) {
+      const parts = value.trim().split(" ");
+      const duration = parts[1]?.toLowerCase() || "1d";
+      let ms = 0;
+      const match = duration.match(/^(\d+)([dw])$/);
+      if (match) {
+        const count = parseInt(match[1], 10);
+        const unit = match[2];
+        if (unit === "d") ms = count * 24 * 60 * 60 * 1000;
+        else if (unit === "w") ms = count * 7 * 24 * 60 * 60 * 1000;
+        
+        const countPurged = await purgeSessions(ms);
+        dispatch({
+          type: "assistant/appended",
+          message: `I’ve purged ${countPurged} session(s) older than ${duration}.`,
+        });
+      } else {
+        dispatch({
+          type: "assistant/appended",
+          message: `Invalid purge duration "${duration}". Use e.g. 1d, 5d, 2w.`,
+        });
+      }
+      setQuerySync("");
+      return;
+    }
+
     if (value.trim() === "/save") {
       await savePersistedSession(state);
       dispatch({

@@ -8,6 +8,7 @@ export type CliOptions = {
   hop: string | null;
   resume: boolean;
   newSession: boolean;
+  purge: string | null;
   subcommand: "run" | "update" | "version" | "help";
 };
 
@@ -19,6 +20,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
   let hop: string | null = null;
   let resume = false;
   let newSession = false;
+  let purge: string | null = null;
   const positional: string[] = [];
 
   for (let i = 0; i < args.length; i++) {
@@ -35,6 +37,8 @@ export function parseCliArgs(argv: string[]): CliOptions {
       resume = true;
     } else if (arg === "--new") {
       newSession = true;
+    } else if (arg === "--purge") {
+      purge = args[++i] ?? null;
     } else if (arg === "update") {
       console.log("Run this to update ori-code:\n");
       console.log("  bun remove -g ori-code && bun install -g github:cassianwolfe/ori-code#main\n");
@@ -43,7 +47,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
       console.log("ori-code 0.5.7");
       process.exit(0);
     } else if (arg === undefined || arg === "help" || arg === "--help" || arg === "-h") {
-      return { surface, profile, mode, initialQuery: "", hop: null, resume: false, newSession: false, subcommand: "help" };
+      return { surface, profile, mode, initialQuery: "", hop: null, resume: false, newSession: false, purge: null, subcommand: "help" };
     } else if (!arg.startsWith("-")) {
       positional.push(arg);
     }
@@ -57,6 +61,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
     hop,
     resume,
     newSession,
+    purge,
     subcommand: "run",
   };
 }

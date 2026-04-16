@@ -59,7 +59,7 @@ export function Composer({
   return (
     <Box flexDirection="column" paddingX={0} paddingTop={0} paddingBottom={0}>
       {isThinking && (
-        <Box paddingX={2} marginBottom={0}>
+        <Box paddingX={2} marginBottom={0} marginTop={1}>
           <Box gap={1}>
             <Text color={greenColor}>⏺</Text>
             <Text color="white" bold>{activeCapability ? activeCapability.toLowerCase() : "thinking"}</Text>
@@ -69,13 +69,18 @@ export function Composer({
       )}
 
       <Box
-        borderStyle="single" borderLeft={false} borderRight={false} borderBottom={false} borderTop={true}
+        borderStyle="single" 
+        borderLeft={false} 
+        borderRight={false} 
+        borderBottom={true} 
+        borderTop={true}
         borderColor={grayColor}
         paddingX={2}
         paddingY={0}
         flexDirection="column"
+        marginTop={isThinking ? 1 : 1}
       >
-        <Box marginTop={1}>
+        <Box marginY={0}>
           <Text color={grayColor}>❯ </Text>
           <Text color={query ? "white" : grayColor}>
             {query || (disabled ? "Describe what you want to change..." : "Ask ORI a question or describe an edit...")}
@@ -85,7 +90,8 @@ export function Composer({
           </Text>
         </Box>
       </Box>
-      <Box marginTop={0} paddingX={2} paddingBottom={1}>
+      
+      <Box paddingX={2} paddingTop={0} paddingBottom={1}>
         <Text color={grayColor}>
           {disabled
             ? "Enter to draft · Esc to cancel"

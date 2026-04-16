@@ -61,11 +61,11 @@ export function Composer({
         borderStyle="single" 
         borderLeft={false} 
         borderRight={false} 
-        borderBottom={false} 
+        borderBottom={true} 
         borderTop={true}
         borderColor={grayColor}
         paddingX={2}
-        paddingY={0}
+        paddingY={1}
         flexDirection="column"
         marginTop={1}
       >

@@ -514,6 +514,30 @@ export function OriApp({
           ? "/cancel"
           : value;
 
+    if (resolvedValue.trim() === "/new") {
+      const workspace = await refreshWorkspace();
+      const policy = resolveAgentPolicy({ mode, profile });
+
+      dispatch({
+        type: "session/reset",
+        state: createSessionStore({
+          mode: policy.mode,
+          profile,
+          resolvedProfile: policy.runtimeProfile,
+          surface,
+        }),
+      });
+
+      dispatch({ type: "workspace/updated", workspace });
+      setQuerySync("");
+      setComposerMode("default");
+      setTranscriptScrollOffset(0);
+      setThinkingCollapsed(false);
+      setSelectedEditFile(null);
+      setEditIntent("");
+      return;
+    }
+
     if (resolvedValue.trim() === "/clear") {
       const workspace = await refreshWorkspace();
       const policy = resolveAgentPolicy({ mode, profile });

@@ -8,6 +8,12 @@ export type SlashCommand = {
 export const SLASH_COMMANDS: SlashCommand[] = [
   {
     category: "workspace",
+    command: "/new",
+    description: "Start a fresh session with a new ID.",
+    example: "/new",
+  },
+  {
+    category: "workspace",
     command: "/resume",
     description: "Pick a previous session to resume.",
     example: "/resume",

@@ -335,7 +335,7 @@ export function OriApp({
         if (selectedCommand) {
           const cmd = selectedCommand.command;
           setSelectedCommandIndex(0);
-          setQuerySync(""); // clear immediately
+          setQuerySync("");
           void handleSubmit(cmd);
         } else {
           void handleSubmit(queryRef.current);
@@ -540,34 +540,15 @@ export function OriApp({
   }
 
   async function handleSubmit(value: string) {
-    if (!value.trim()) {
-      return;
-    }
-    
-    if (value.trim() === "/bundles") {
-      const bundles = await listAvailableBundles();
-      setAvailableBundles(bundles);
-      setSelectedBundleIndex(0);
-      setComposerMode("bundle_picker");
-      return;
-    }
+    const trimmedVal = value.trim();
+    if (!trimmedVal) return;
 
-    if (value.trim().startsWith("/bundle ")) {
-      const id = value.trim().split(" ")[1];
-      if (id) {
-        await handleToggleBundle(id);
-        const bundles = await listAvailableBundles();
-        const bundle = bundles.find(b => b.manifest.id === id);
-        dispatch({
-            type: "assistant/appended",
-            message: `Specialization "${bundle?.manifest.name || id}" is now ${state.activeBundleIds.includes(id) ? "enabled" : "disabled"}.`,
-        });
-      }
-      setQuerySync("");
-      return;
-    }
+    // Reset UI state first
+    setQuerySync("");
+    setComposerMode("default");
 
-    if (value.trim() === "/sessions") {
+    // HANDLE SLASH COMMANDS
+    if (trimmedVal === "/sessions") {
       const sessions = await listSessions();
       const recent = sessions.slice(0, 10);
       if (recent.length === 0) {
@@ -587,12 +568,11 @@ export function OriApp({
           message: list,
         });
       }
-      setQuerySync("");
       return;
     }
 
-    if (value.trim().startsWith("/purge")) {
-      const parts = value.trim().split(" ");
+    if (trimmedVal.startsWith("/purge")) {
+      const parts = trimmedVal.split(" ");
       const duration = parts[1]?.toLowerCase() || "1d";
       let ms = 0;
       const match = duration.match(/^(\d+)([dw])$/);
@@ -613,21 +593,19 @@ export function OriApp({
           message: `Invalid purge duration "${duration}". Use e.g. 1d, 5d, 2w.`,
         });
       }
-      setQuerySync("");
       return;
     }
 
-    if (value.trim() === "/save") {
+    if (trimmedVal === "/save") {
       await savePersistedSession(state);
       dispatch({
         type: "assistant/appended",
         message: "I’ve saved the current session state.",
       });
-      setQuerySync("");
       return;
     }
 
-    if (value.trim() === "/resume") {
+    if (trimmedVal === "/resume") {
       const sessions = await listSessions();
       setResumeSessions(sessions);
       setSelectedResumeIndex(0);
@@ -635,7 +613,29 @@ export function OriApp({
       return;
     }
 
-    if (value.trim() === "/new") {
+    if (trimmedVal === "/bundles") {
+      const bundles = await listAvailableBundles();
+      setAvailableBundles(bundles);
+      setSelectedBundleIndex(0);
+      setComposerMode("bundle_picker");
+      return;
+    }
+
+    if (trimmedVal.startsWith("/bundle ")) {
+      const id = trimmedVal.split(" ")[1];
+      if (id) {
+        await handleToggleBundle(id);
+        const bundles = await listAvailableBundles();
+        const bundle = bundles.find(b => b.manifest.id === id);
+        dispatch({
+            type: "assistant/appended",
+            message: `Specialization "${bundle?.manifest.name || id}" is now ${state.activeBundleIds.includes(id) ? "enabled" : "disabled"}.`,
+        });
+      }
+      return;
+    }
+
+    if (trimmedVal === "/new") {
       const workspace = await refreshWorkspace();
       const policy = resolveAgentPolicy({ mode, profile });
 
@@ -650,8 +650,6 @@ export function OriApp({
       });
 
       dispatch({ type: "workspace/updated", workspace });
-      setQuerySync("");
-      setComposerMode("default");
       setTranscriptScrollOffset(0);
       setThinkingCollapsed(false);
       setSelectedEditFile(null);
@@ -661,16 +659,16 @@ export function OriApp({
 
     const approvalIntent =
       state.pendingApproval || state.pendingDraft || state.pendingPlanDraft
-        ? parseApprovalIntent(value)
+        ? parseApprovalIntent(trimmedVal)
         : null;
     const resolvedValue =
       approvalIntent === "apply"
         ? "/apply"
         : approvalIntent === "cancel"
           ? "/cancel"
-          : value;
+          : trimmedVal;
 
-    if (resolvedValue.trim() === "/clear") {
+    if (resolvedValue === "/clear") {
       const workspace = await refreshWorkspace();
       const policy = resolveAgentPolicy({ mode, profile });
 
@@ -685,8 +683,6 @@ export function OriApp({
       });
 
       dispatch({ type: "workspace/updated", workspace });
-      setQuerySync("");
-      setComposerMode("default");
       setTranscriptScrollOffset(0);
       setThinkingCollapsed(false);
       setSelectedEditFile(null);
@@ -698,10 +694,6 @@ export function OriApp({
     if (!state.workspace) {
       dispatch({ type: "workspace/updated", workspace });
     }
-
-    // Always reset view states when starting a turn
-    setQuerySync("");
-    setComposerMode("default");
 
     const onStep = (title: string) => {
         setTurnThoughts(prev => [...prev, title]);
@@ -765,7 +757,7 @@ export function OriApp({
       if (localCommand.clearDraft) {
         if (state.pendingApproval) {
           dispatch({
-            type: resolvedValue.trim() === "/apply" ? "approval/approved" : "approval/rejected",
+            type: resolvedValue === "/apply" ? "approval/approved" : "approval/rejected",
             requestId: state.pendingApproval.id,
           });
         }
@@ -775,7 +767,7 @@ export function OriApp({
       if (localCommand.clearPlanDraft) {
         if (state.pendingApproval) {
           dispatch({
-            type: resolvedValue.trim() === "/apply" ? "approval/approved" : "approval/rejected",
+            type: resolvedValue === "/apply" ? "approval/approved" : "approval/rejected",
             requestId: state.pendingApproval.id,
           });
         }

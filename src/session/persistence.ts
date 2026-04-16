@@ -12,8 +12,9 @@ const SESSION_DIR = path.join(
 );
 const SESSION_PATH = path.join(SESSION_DIR, "session.json");
 
-export async function loadPersistedSession(): Promise<SessionState | null> {
-  const file = Bun.file(SESSION_PATH);
+export async function loadPersistedSession(id?: string): Promise<SessionState | null> {
+  const targetPath = id ? path.join(SESSION_DIR, `session-${id}.json`) : SESSION_PATH;
+  const file = Bun.file(targetPath);
 
   if (!(await file.exists())) {
     return null;
@@ -31,9 +32,53 @@ export async function savePersistedSession(state: SessionState): Promise<void> {
   await Bun.$`mkdir -p ${SESSION_DIR}`.quiet();
   const serializableState: SessionState = {
     ...state,
+    updatedAt: Date.now(),
     scratchpad: null,
   };
+  
+  // Always update the main session.json for quick --resume
   await Bun.write(SESSION_PATH, JSON.stringify(serializableState, null, 2));
+  
+  // Also save a unique record
+  const uniquePath = path.join(SESSION_DIR, `session-${state.sessionId}.json`);
+  await Bun.write(uniquePath, JSON.stringify(serializableState, null, 2));
+}
+
+export async function listSessions(): Promise<{ id: string; title: string; updatedAt: number }[]> {
+  const sessions: { id: string; title: string; updatedAt: number }[] = [];
+  
+  try {
+    const files = await Bun.$`ls ${SESSION_DIR}/session-*.json`.text();
+    const paths = files.trim().split("\n").filter(Boolean);
+    
+    for (const p of paths) {
+      try {
+        const file = Bun.file(p);
+        const text = await file.text();
+        const data = JSON.parse(text);
+        
+        let title = "Untitled Session";
+        const firstUserMsg = data.conversation?.find((m: any) => m.role === "user");
+        if (firstUserMsg) {
+          title = firstUserMsg.content.slice(0, 50) + (firstUserMsg.content.length > 50 ? "..." : "");
+        }
+        
+        const id = path.basename(p, ".json").replace("session-", "");
+        
+        sessions.push({
+          id,
+          title,
+          updatedAt: data.updatedAt ?? Date.now(),
+        });
+      } catch {
+        // Skip malformed files
+      }
+    }
+  } catch {
+    // No sessions found or directory doesn't exist
+  }
+  
+  return sessions.sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
 function normalizeSessionState(parsed: Partial<SessionState>): SessionState {

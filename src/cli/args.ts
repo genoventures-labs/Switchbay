@@ -6,6 +6,7 @@ export type CliOptions = {
   mode: string;
   initialQuery: string;
   hop: string | null;
+  resume: boolean;
   subcommand: "run" | "update" | "version" | "help";
 };
 
@@ -15,6 +16,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
   let profile: string = DEFAULTS.profile;
   let mode: string = DEFAULTS.mode;
   let hop: string | null = null;
+  let resume = false;
   const positional: string[] = [];
 
   for (let i = 0; i < args.length; i++) {
@@ -27,6 +29,8 @@ export function parseCliArgs(argv: string[]): CliOptions {
       mode = args[++i] ?? DEFAULTS.mode;
     } else if (arg === "--hop") {
       hop = args[++i] ?? null;
+    } else if (arg === "--resume") {
+      resume = true;
     } else if (arg === "update") {
       console.log("Run this to update ori-code:\n");
       console.log("  bun remove -g ori-code && bun install -g github:cassianwolfe/ori-code#main\n");
@@ -35,7 +39,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
       console.log("ori-code 0.5.2");
       process.exit(0);
     } else if (arg === undefined || arg === "help" || arg === "--help" || arg === "-h") {
-      return { surface, profile, mode, initialQuery: "", hop: null, subcommand: "help" };
+      return { surface, profile, mode, initialQuery: "", hop: null, resume: false, subcommand: "help" };
     } else if (!arg.startsWith("-")) {
       positional.push(arg);
     }
@@ -47,6 +51,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
     mode,
     initialQuery: positional.join(" "),
     hop,
+    resume,
     subcommand: "run",
   };
 }

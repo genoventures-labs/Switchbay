@@ -20,6 +20,7 @@ Usage:
   ori-code                          Launch the TUI (interactive mode)
   ori-code "query"                  One-shot request
   ori-code "query" --hop <name>     Launch in a different workspace
+  ori-code --resume                 Resume the last session
   ori-code update                   Print update instructions
   ori-code version                  Print version
 
@@ -28,6 +29,7 @@ Options:
   -p, --profile <name>   Working style (default: ori_code)
   -m, --mode <name>      Agent mode: build | design | debug (default: build)
   --hop <name>           Travel to a whitelisted location before launching
+  --resume               Resume the last saved session state
 `);
     return;
   }
@@ -60,6 +62,7 @@ Options:
       mode={options.mode}
       profile={options.profile}
       surface={options.surface}
+      resume={options.resume}
     />,
   );
 }

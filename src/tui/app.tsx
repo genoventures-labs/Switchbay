@@ -12,7 +12,7 @@ import { resolveAgentPolicy } from "../agent/policy";
 import { OriClient } from "../runtime/ori-client";
 import { createSessionStore, sessionReducer } from "../session/store";
 import { createTranscriptEntry } from "../agent/turn-state";
-import { loadPersistedSession, savePersistedSession } from "../session/persistence";
+import { loadPersistedSession, savePersistedSession, listSessions } from "../session/persistence";
 import {
   listMentionCandidates,
   parseMentions,
@@ -26,6 +26,7 @@ import { EditIntentDrawer } from "./components/EditIntentDrawer";
 import { Header } from "./components/Header";
 import { MentionPicker } from "./components/MentionPicker";
 import { Transcript } from "./components/Transcript";
+import { ResumeDrawer } from "./components/ResumeDrawer";
 import { getCommandMatches } from "./commands";
 
 export type OriAppProps = {
@@ -35,6 +36,7 @@ export type OriAppProps = {
   mode: string;
   profile: string;
   surface: string;
+  resume?: boolean;
 };
 
 type StreamEvent =
@@ -42,7 +44,7 @@ type StreamEvent =
   | { type: "token"; content?: string }
   | { type: "done" };
 
-type ComposerMode = "default" | "edit_file_picker" | "edit_intent";
+type ComposerMode = "default" | "edit_file_picker" | "edit_intent" | "resume_picker";
 
 export function OriApp({
   client,
@@ -51,6 +53,7 @@ export function OriApp({
   mode,
   profile,
   surface,
+  resume = false,
 }: OriAppProps) {
   const { stdout } = useStdout();
   const [dimensions, setDimensions] = useState({
@@ -89,37 +92,20 @@ export function OriApp({
   const [selectedEditFileIndex, setSelectedEditFileIndex] = useState(0);
   const [mentionCandidates, setMentionCandidates] = useState<MentionCandidate[]>([]);
   const [selectedMentionIndex, setSelectedMentionIndex] = useState(0);
+  const [resumeSessions, setResumeSessions] = useState<{id: string, title: string, updatedAt: number}[]>([]);
+  const [selectedResumeIndex, setSelectedResumeIndex] = useState(0);
   const didHydrateRef = useRef(false);
   const initialPolicy = resolveAgentPolicy({ mode, profile });
   const [state, dispatch] = useReducer(
     sessionReducer,
-    (() => {
-      const store = createSessionStore({
-        mode: initialPolicy.mode,
-        profile,
-        resolvedProfile: initialPolicy.runtimeProfile,
-        surface,
-      });
-      if (initialHopLabel) {
-        const hopEntry = createTranscriptEntry({
-          kind: "tool",
-          title: `Hopped to ${initialHopLabel}`,
-          body: `Launched in ${process.cwd()}`,
-          tone: "info",
-        });
-        const systemNote: import("../runtime/types").OriMessage = {
-          role: "system",
-          content: `[LOCATION CHANGE] ORI launched directly into a different workspace via --hop.\nPath: ${process.cwd()}\nLabel: ${initialHopLabel}`,
-        };
-        return {
-          ...store,
-          transcript: [...store.transcript, hopEntry],
-          conversation: [...store.conversation, systemNote],
-        };
-      }
-      return store;
-    })(),
+    createSessionStore({
+      mode: initialPolicy.mode,
+      profile,
+      resolvedProfile: initialPolicy.runtimeProfile,
+      surface,
+    })
   );
+
   const commandMatches = useMemo(() => getCommandMatches(query), [query]);
   const commandToken = useMemo(() => {
     const match = query.match(/^\/(\S*)$/);
@@ -135,6 +121,8 @@ export function OriApp({
   }, [query]);
   const mentionPickerVisible = mentionPartial !== null && composerMode === "default" && !commandDrawerVisible;
   
+  const resumeDrawerVisible = composerMode === "resume_picker";
+
   // Dynamic transcript window based on terminal height
   const transcriptWindowSize = Math.max(5, stdoutHeight - 12);
   const totalTranscriptEntries = state.transcript.length;
@@ -183,6 +171,33 @@ export function OriApp({
         setThinkingCollapsed((previous) => !previous);
       }
       return;
+    }
+
+    if (resumeDrawerVisible) {
+      if (key.upArrow) {
+        setSelectedResumeIndex((prev) =>
+          prev <= 0 ? resumeSessions.length - 1 : prev - 1,
+        );
+        return;
+      }
+      if (key.downArrow) {
+        setSelectedResumeIndex((prev) =>
+          prev >= resumeSessions.length - 1 ? 0 : prev + 1,
+        );
+        return;
+      }
+      if (key.return || key.tab) {
+        const selected = resumeSessions[selectedResumeIndex];
+        if (selected) {
+           void handleResumeSession(selected.id);
+        }
+        return;
+      }
+      if (key.escape) {
+        setComposerMode("default");
+        setQuerySync("");
+        return;
+      }
     }
 
     if (mentionPickerVisible && mentionCandidates.length > 0) {
@@ -369,13 +384,16 @@ export function OriApp({
   }, [state.transcript.length, transcriptWindowSize]);
 
   useEffect(() => {
-    void loadPersistedSession().then((persisted) => {
-      if (persisted) {
-        dispatch({ type: "session/hydrated", state: persisted });
-      }
-
+    if (resume) {
+      void loadPersistedSession().then((persisted) => {
+        if (persisted) {
+          dispatch({ type: "session/hydrated", state: persisted });
+        }
+        didHydrateRef.current = true;
+      });
+    } else {
       didHydrateRef.current = true;
-    });
+    }
 
     void refreshWorkspace().then((workspace) => {
       dispatch({ type: "workspace/updated", workspace });
@@ -453,8 +471,25 @@ export function OriApp({
     void savePersistedSession(state);
   }, [state]);
 
+  async function handleResumeSession(id: string) {
+    const persisted = await loadPersistedSession(id);
+    if (persisted) {
+      dispatch({ type: "session/hydrated", state: persisted });
+    }
+    setComposerMode("default");
+    setQuerySync("");
+  }
+
   async function handleSubmit(value: string) {
     if (!value.trim()) {
+      return;
+    }
+    
+    if (value.trim() === "/resume") {
+      const sessions = await listSessions();
+      setResumeSessions(sessions);
+      setSelectedResumeIndex(0);
+      setComposerMode("resume_picker");
       return;
     }
 
@@ -730,7 +765,7 @@ export function OriApp({
   useEffect(() => {
     const trimmed = query.trim();
 
-    if (composerMode === "edit_intent") {
+    if (composerMode === "edit_intent" || composerMode === "resume_picker") {
       return;
     }
 
@@ -790,6 +825,11 @@ export function OriApp({
         onSubmit={handleEditIntentSubmit}
         value={editIntent}
         visible={composerMode === "edit_intent" && Boolean(selectedEditFile)}
+      />
+      <ResumeDrawer
+        sessions={resumeSessions}
+        selectedIndex={selectedResumeIndex}
+        visible={resumeDrawerVisible}
       />
       <CommandDrawer
         commands={commandMatches}

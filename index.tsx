@@ -147,13 +147,9 @@ async function runCliMode(options: any, resumeId: string | null) {
   });
 
   process.stdout.write(`\n${CLR.salmon}⏺${CLR.reset} ${CLR.white}${CLR.bold}ORI${CLR.reset} ${CLR.gray}(thinking…)${CLR.reset}\n`);
-  process.stdout.write(`  ${CLR.gray}└ thinking...${CLR.reset}`);
   
-  let lineCount = 1;
   const onStep = (title: string) => {
-    process.stdout.write(`\r\x1b[2K  ${CLR.gray}└ ${title}${CLR.reset}\n`);
-    process.stdout.write(`  ${CLR.gray}└ thinking...${CLR.reset}`);
-    lineCount++;
+    process.stdout.write(`  ${CLR.gray}└ ${title}${CLR.reset}\n`);
   };
 
   try {
@@ -166,14 +162,9 @@ async function runCliMode(options: any, resumeId: string | null) {
       onStep,
     });
 
-    for (let i = 0; i <= lineCount; i++) {
-        process.stdout.write("\x1b[1A\x1b[2K");
-    }
-    process.stdout.write("\r");
-
     const content = executedTurn.response.choices?.[0]?.message?.content?.trim();
     if (content) {
-      process.stdout.write(`${CLR.salmon}⏺${CLR.reset} ${CLR.white}${CLR.bold}ORI${CLR.reset}\n`);
+      process.stdout.write(`\n${CLR.salmon}⏺${CLR.reset} ${CLR.white}${CLR.bold}ORI${CLR.reset}\n`);
       process.stdout.write(`  ${CLR.gray}└ ${CLR.reset}${content}\n\n`);
       
       state.conversation.push({ role: "user", content: options.initialQuery });

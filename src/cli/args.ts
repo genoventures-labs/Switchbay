@@ -6,7 +6,7 @@ export type CliOptions = {
   mode: string;
   initialQuery: string;
   hop: string | null;
-  resume: boolean;
+  resume: string | boolean; // string (id/index) or true (latest)
   newSession: boolean;
   purge: string | null;
   subcommand: "run" | "update" | "version" | "help";
@@ -18,7 +18,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
   let profile: string = DEFAULTS.profile;
   let mode: string = DEFAULTS.mode;
   let hop: string | null = null;
-  let resume = false;
+  let resume: string | boolean = false;
   let newSession = false;
   let purge: string | null = null;
   const positional: string[] = [];
@@ -34,7 +34,13 @@ export function parseCliArgs(argv: string[]): CliOptions {
     } else if (arg === "--hop") {
       hop = args[++i] ?? null;
     } else if (arg === "--resume") {
-      resume = true;
+      const next = args[i + 1];
+      if (next && !next.startsWith("-")) {
+        resume = next;
+        i++;
+      } else {
+        resume = true;
+      }
     } else if (arg === "--new") {
       newSession = true;
     } else if (arg === "--purge") {

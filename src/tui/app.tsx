@@ -36,7 +36,7 @@ export type OriAppProps = {
   mode: string;
   profile: string;
   surface: string;
-  resume?: boolean;
+  resumeId?: string | null;
 };
 
 type StreamEvent =
@@ -53,7 +53,7 @@ export function OriApp({
   mode,
   profile,
   surface,
-  resume = false,
+  resumeId = null,
 }: OriAppProps) {
   const { stdout } = useStdout();
   const [dimensions, setDimensions] = useState({
@@ -384,8 +384,8 @@ export function OriApp({
   }, [state.transcript.length, transcriptWindowSize]);
 
   useEffect(() => {
-    if (resume) {
-      void loadPersistedSession().then((persisted) => {
+    if (resumeId) {
+      void loadPersistedSession(resumeId === "latest" ? undefined : resumeId).then((persisted) => {
         if (persisted) {
           dispatch({ type: "session/hydrated", state: persisted });
         }
@@ -495,11 +495,11 @@ export function OriApp({
         });
       } else {
         let list = "Recent local sessions:\n";
-        for (const s of recent) {
+        recent.forEach((s, i) => {
           const date = new Date(s.updatedAt).toLocaleString();
-          list += `- ${s.title} (${date})\n`;
-        }
-        list += "\nUse /resume to pick one.";
+          list += `${i}. ${s.title} (${date})\n`;
+        });
+        list += "\nUse /resume to pick one, or ori-code --resume <index>";
         dispatch({
           type: "assistant/appended",
           message: list,
@@ -553,17 +553,6 @@ export function OriApp({
       return;
     }
 
-    const approvalIntent =
-      state.pendingApproval || state.pendingDraft || state.pendingPlanDraft
-        ? parseApprovalIntent(value)
-        : null;
-    const resolvedValue =
-      approvalIntent === "apply"
-        ? "/apply"
-        : approvalIntent === "cancel"
-          ? "/cancel"
-          : value;
-
     if (resolvedValue.trim() === "/new") {
       const workspace = await refreshWorkspace();
       const policy = resolveAgentPolicy({ mode, profile });
@@ -587,6 +576,17 @@ export function OriApp({
       setEditIntent("");
       return;
     }
+
+    const approvalIntent =
+      state.pendingApproval || state.pendingDraft || state.pendingPlanDraft
+        ? parseApprovalIntent(value)
+        : null;
+    const resolvedValue =
+      approvalIntent === "apply"
+        ? "/apply"
+        : approvalIntent === "cancel"
+          ? "/cancel"
+          : value;
 
     if (resolvedValue.trim() === "/clear") {
       const workspace = await refreshWorkspace();

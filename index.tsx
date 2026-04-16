@@ -5,7 +5,7 @@ import { OriClient } from "./src/runtime/ori-client";
 import { OriApp } from "./src/tui/app";
 import { loadOriConfig } from "./src/config/ori-config";
 import { fuzzyMatchLocations, travelTo } from "./src/tools/travel";
-import { purgeSessions } from "./src/session/persistence";
+import { listSessions, purgeSessions } from "./src/session/persistence";
 
 // Ensure config is initialized on first boot
 loadOriConfig();
@@ -22,6 +22,7 @@ Usage:
   ori-code "query"                  One-shot request
   ori-code "query" --hop <name>     Launch in a different workspace
   ori-code --resume                 Resume the last session
+  ori-code --resume <id|index>      Resume a specific session by ID or index
   ori-code --new                    Start a fresh session
   ori-code --purge <duration>       Clean up old sessions (e.g. 1d, 1w)
   ori-code update                   Print update instructions
@@ -32,7 +33,7 @@ Options:
   -p, --profile <name>   Working style (default: ori_code)
   -m, --mode <name>      Agent mode: build | design | debug (default: build)
   --hop <name>           Travel to a whitelisted location before launching
-  --resume               Resume the last saved session state
+  --resume <val>         Resume last saved session, or specific ID/Index (0=latest)
   --new                  Force a fresh session even if a saved one exists
   --purge <duration>     Purge sessions older than duration (1d, 5d, 2w, etc.)
 `);
@@ -62,6 +63,28 @@ Options:
     }
   }
 
+  let resumeId: string | null = null;
+  if (options.resume && !options.newSession) {
+    if (typeof options.resume === "string") {
+      // Check if it's a numeric index
+      if (/^\d+$/.test(options.resume)) {
+        const sessions = await listSessions();
+        const index = parseInt(options.resume, 10);
+        if (sessions[index]) {
+          resumeId = sessions[index].id;
+        } else {
+          console.error(`ori-code: session index ${index} not found. Use /sessions to see history.`);
+          process.exit(1);
+        }
+      } else {
+        resumeId = options.resume; // Assume it's a UUID
+      }
+    } else {
+      // --resume without value = latest
+      resumeId = "latest";
+    }
+  }
+
   // Resolve --hop before rendering so the TUI boots in the right cwd
   let initialHopLabel: string | null = null;
   if (options.hop) {
@@ -88,7 +111,7 @@ Options:
       mode={options.mode}
       profile={options.profile}
       surface={options.surface}
-      resume={options.resume && !options.newSession}
+      resumeId={resumeId}
     />,
   );
 }

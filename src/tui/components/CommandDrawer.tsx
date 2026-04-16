@@ -17,17 +17,24 @@ export function CommandDrawer({
     return null;
   }
 
+  const brandColor = "#E57373"; // Salmon/Coral
+  const greenColor = "#00FF7F"; // Bright Spring Green
+  const grayColor = "#707070";  // Steel Gray
+
   return (
     <Box
       flexDirection="column"
       paddingX={2}
       marginTop={1}
-      marginBottom={0}
+      marginBottom={1}
       borderStyle="round"
-      borderColor="cyan"
+      borderColor={grayColor}
     >
-      <Text color="cyan" bold>Slash Commands</Text>
-      <Text color="#707070">Use arrow keys to browse. Press Tab or Enter to insert.</Text>
+      <Box marginBottom={1}>
+        <Text color={brandColor} bold>Slash Commands</Text>
+        <Text color={grayColor}> · Use arrow keys to browse</Text>
+      </Box>
+
       {commands.length > 0 ? (
         commands.map((item, index) => {
           const selected = index === selectedIndex;
@@ -36,21 +43,33 @@ export function CommandDrawer({
             <Box
               key={item.command}
               flexDirection="column"
-              marginTop={1}
+              marginTop={selected ? 1 : 0}
+              marginBottom={selected ? 1 : 0}
               paddingX={1}
-              borderStyle={selected ? "round" : undefined}
-              borderColor={selected ? "yellow" : undefined}
+              paddingY={selected ? 1 : 0}
+              backgroundColor={selected ? "#2D333B" : undefined}
             >
-              <Text color={selected ? "yellow" : "white"} bold={selected}>
-                {selected ? ">" : " "} {item.command} <Text color="cyan">{item.category}</Text>
-              </Text>
-              <Text color="white">{item.description}</Text>
-              <Text color="#707070">{item.example}</Text>
+              <Box gap={1}>
+                <Text color={selected ? greenColor : grayColor} bold={selected}>
+                  {selected ? "❯" : " "}
+                </Text>
+                <Text color="white" bold={selected}>
+                  {item.command}
+                </Text>
+                <Text color={grayColor}>[{item.category}]</Text>
+              </Box>
+              
+              {selected && (
+                <Box flexDirection="column" marginLeft={2} marginTop={0}>
+                  <Text color="white">{item.description}</Text>
+                  <Text color={grayColor}>└ {item.example}</Text>
+                </Box>
+              )}
             </Box>
           );
         })
       ) : (
-        <Text color="white">No matching slash commands.</Text>
+        <Text color={grayColor}>No matching slash commands.</Text>
       )}
     </Box>
   );

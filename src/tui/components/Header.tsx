@@ -26,7 +26,7 @@ export function Header({ mode, status, workspace }: HeaderProps) {
       paddingY={1}
       flexDirection="column"
       borderStyle="round"
-      borderColor="gray"
+      borderColor="#707070"
       marginBottom={1}
     >
       <Box justifyContent="space-between">

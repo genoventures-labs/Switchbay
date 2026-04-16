@@ -42,7 +42,7 @@ export function Transcript({
 
       {entries.length === 0 && !streamingText && !thinking ? (
         <WelcomeBoard
-          version="0.5.0"
+          version="0.7.0"
           user="Mike"
           email="thatnotiondude@gmail.com"
           model="Sonnet 4.6"
@@ -70,15 +70,19 @@ export function Transcript({
                   <Text color={brandColor}>⏺</Text>
                   <Text color="white" bold>ORI</Text>
                 </Box>
-                <Box marginTop={1}>
-                  <MarkdownText content={entry.body} role="assistant" />
+                <Box paddingLeft={2} marginTop={0}>
+                  <Box marginRight={1}>
+                    <Text color={grayColor}>└ </Text>
+                  </Box>
+                  <Box flexShrink={1} flexDirection="column">
+                    <MarkdownText content={entry.body} role="assistant" />
+                  </Box>
                 </Box>
               </Box>
             </Box>
           );
         }
 
-        // Tool entries are now hidden from the transcript per user request
         return null;
       })}
 
@@ -87,10 +91,15 @@ export function Transcript({
           <Box flexDirection="column">
             <Box gap={1}>
               <Text color={brandColor}>⏺</Text>
-              <Text color="white" bold>ORI</Text>
+              <Text color="white" bold>ORI <Text color={grayColor}>(responding…)</Text></Text>
             </Box>
-            <Box marginTop={1}>
-              <MarkdownText content={streamingText} role="assistant" />
+            <Box paddingLeft={2} marginTop={0}>
+              <Box marginRight={1}>
+                <Text color={grayColor}>└ </Text>
+              </Box>
+              <Box flexShrink={1} flexDirection="column">
+                <MarkdownText content={streamingText} role="assistant" />
+              </Box>
             </Box>
           </Box>
         </Box>

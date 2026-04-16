@@ -141,14 +141,12 @@ async function runCliMode(options: any, resumeId: string | null) {
     workspace,
   });
 
-  process.stdout.write(`\n${CLR.salmon}⏺${CLR.reset} ${CLR.white}${CLR.bold}ORI${CLR.reset}\n`);
+  process.stdout.write(`\n${CLR.salmon}⏺${CLR.reset} ${CLR.white}${CLR.bold}ORI${CLR.reset} ${CLR.gray}(thinking…)${CLR.reset}\n`);
   process.stdout.write(`  ${CLR.gray}└ thinking...${CLR.reset}`);
   
   let lineCount = 1;
   const onStep = (title: string) => {
-    // Clear current "thinking..." line and print real step
     process.stdout.write(`\r\x1b[2K  ${CLR.gray}└ ${title}${CLR.reset}\n`);
-    // Print new placeholder for next step
     process.stdout.write(`  ${CLR.gray}└ thinking...${CLR.reset}`);
     lineCount++;
   };
@@ -163,16 +161,16 @@ async function runCliMode(options: any, resumeId: string | null) {
       onStep,
     });
 
-    // Clear all thinking lines (including the header)
-    for (let i = 0; i < lineCount; i++) {
+    // Clear all thinking lines (including the thinking header)
+    for (let i = 0; i <= lineCount; i++) {
         process.stdout.write("\x1b[1A\x1b[2K");
     }
     process.stdout.write("\r");
 
     const content = executedTurn.response.choices?.[0]?.message?.content?.trim();
     if (content) {
-      process.stdout.write(`${CLR.salmon}⏺${CLR.reset} ${CLR.white}${CLR.bold}ORI${CLR.reset}\n\n`);
-      process.stdout.write(`${content}\n\n`);
+      process.stdout.write(`${CLR.salmon}⏺${CLR.reset} ${CLR.white}${CLR.bold}ORI${CLR.reset}\n`);
+      process.stdout.write(`  ${CLR.gray}└ ${CLR.reset}${content}\n\n`);
       
       state.conversation.push({ role: "user", content: options.initialQuery });
       state.conversation.push({ role: "assistant", content });

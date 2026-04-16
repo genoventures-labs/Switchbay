@@ -32,6 +32,7 @@ export function Composer({
   }
 
   const brandColor = "#E57373"; // Salmon/Coral
+  const greenColor = "#00FF7F"; // Bright Spring Green
   const grayColor = "#707070";  // Steel Gray
 
   return (
@@ -40,7 +41,7 @@ export function Composer({
         <Box flexDirection="column" paddingX={2} marginBottom={0} marginTop={1}>
           <Box gap={1}>
             <Text color={brandColor}>⏺</Text>
-            <Text color="white" bold>ORI</Text>
+            <Text color="white" bold>ORI <Text color={grayColor}>(thinking…)</Text></Text>
           </Box>
           {thoughts.length > 0 ? (
             thoughts.map((t, i) => (

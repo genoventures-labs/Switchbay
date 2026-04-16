@@ -717,10 +717,7 @@ export function OriApp({
     if (initialQuery) {
       void handleSubmit(initialQuery);
     } else {
-      dispatch({
-        type: "assistant/appended",
-        message: "",
-      });
+      // Do nothing — keeps the transcript empty so the WelcomeBoard shows up.
     }
   }, []);
 

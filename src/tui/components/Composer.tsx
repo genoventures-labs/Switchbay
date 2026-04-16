@@ -36,7 +36,7 @@ export function Composer({
   const grayColor = "#707070";  // Steel Gray
 
   return (
-    <Box flexDirection="column" paddingX={0} paddingTop={0} paddingBottom={0}>
+    <Box flexDirection="column">
       {isThinking && (
         <Box flexDirection="column" paddingX={2} marginBottom={0} marginTop={1}>
           <Box gap={1}>
@@ -61,7 +61,7 @@ export function Composer({
         borderStyle="single" 
         borderLeft={false} 
         borderRight={false} 
-        borderBottom={true} 
+        borderBottom={false} 
         borderTop={true}
         borderColor={grayColor}
         paddingX={2}
@@ -83,9 +83,9 @@ export function Composer({
       <Box paddingX={2} paddingTop={0} paddingBottom={1}>
         <Text color={grayColor}>
           {disabled ? (
-            <>Enter to <Text color={brandColor}>draft</Text> · Esc to <Text color={brandColor}>cancel</Text></>
+            <Text>Enter to <Text color={brandColor}>draft</Text> · Esc to <Text color={brandColor}>cancel</Text></Text>
           ) : (
-            <>? for <Text color={brandColor}>shortcuts</Text> · / for <Text color={brandColor}>commands</Text></>
+            <Text>? for <Text color={brandColor}>shortcuts</Text> · / for <Text color={brandColor}>commands</Text></Text>
           )}
         </Text>
       </Box>

@@ -20,6 +20,7 @@ import {
   type TranscriptEntry,
 } from "./turn-state";
 import { loadWorkspaceSnapshot, type WorkspaceSnapshot } from "../session/workspace";
+import type { Bundle } from "../tools/bundles";
 
 export type BuiltTurn = {
   mode: AgentMode;
@@ -45,14 +46,24 @@ export function buildTurn(input: {
   profile: string;
   transcript: OriMessage[];
   workspace: WorkspaceSnapshot | null;
+  activeBundles?: Bundle[];
 }): BuiltTurn {
   const mode = (input.mode as AgentMode) || "build";
   const objective = input.input.slice(0, 100);
 
+  let systemPrompt = `You are ORI, a sovereign coding agent. Current mode: ${mode}. Profile: ${input.profile}.`;
+  
+  if (input.activeBundles && input.activeBundles.length > 0) {
+    systemPrompt += "\n\nActive Specializations (Bundles):";
+    for (const bundle of input.activeBundles) {
+      systemPrompt += `\n\n--- BUNDLE: ${bundle.manifest.name} ---\n${bundle.rules}`;
+    }
+  }
+
   const messages: OriMessage[] = [
     {
       role: "system",
-      content: `You are ORI, a sovereign coding agent. Current mode: ${mode}. Profile: ${input.profile}.`,
+      content: systemPrompt,
     },
     ...input.transcript,
     { role: "user", content: input.input },

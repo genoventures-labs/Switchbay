@@ -19,6 +19,7 @@ import {
   resolveMentionContent,
   type MentionCandidate,
 } from "../tools/mentions";
+import { listAvailableBundles, type Bundle } from "../tools/bundles";
 import { CommandDrawer } from "./components/CommandDrawer";
 import { Composer } from "./components/Composer";
 import { EditDrawer } from "./components/EditDrawer";
@@ -27,6 +28,7 @@ import { Header } from "./components/Header";
 import { MentionPicker } from "./components/MentionPicker";
 import { Transcript } from "./components/Transcript";
 import { ResumeDrawer } from "./components/ResumeDrawer";
+import { BundleDrawer } from "./components/BundleDrawer";
 import { getCommandMatches } from "./commands";
 
 export type OriAppProps = {
@@ -44,7 +46,7 @@ type StreamEvent =
   | { type: "token"; content?: string }
   | { type: "done" };
 
-type ComposerMode = "default" | "edit_file_picker" | "edit_intent" | "resume_picker";
+type ComposerMode = "default" | "edit_file_picker" | "edit_intent" | "resume_picker" | "bundle_picker";
 
 export function OriApp({
   client,
@@ -94,6 +96,8 @@ export function OriApp({
   const [selectedMentionIndex, setSelectedMentionIndex] = useState(0);
   const [resumeSessions, setResumeSessions] = useState<{id: string, title: string, updatedAt: number}[]>([]);
   const [selectedResumeIndex, setSelectedResumeIndex] = useState(0);
+  const [availableBundles, setAvailableBundles] = useState<Bundle[]>([]);
+  const [selectedBundleIndex, setSelectedBundleIndex] = useState(0);
   const [turnThoughts, setTurnThoughts] = useState<string[]>([]);
   
   const didHydrateRef = useRef(false);
@@ -116,7 +120,6 @@ export function OriApp({
   const commandDrawerVisible =
     !initialQuery && composerMode === "default" && commandToken !== null;
 
-  // Detect the active @mention partial — last @word in the query
   const mentionPartial = useMemo(() => {
     const match = query.match(/@([\w./\-]*)$/);
     return match ? match[1] : null;
@@ -124,8 +127,8 @@ export function OriApp({
   const mentionPickerVisible = mentionPartial !== null && composerMode === "default" && !commandDrawerVisible;
   
   const resumeDrawerVisible = composerMode === "resume_picker";
+  const bundleDrawerVisible = composerMode === "bundle_picker";
 
-  // Dynamic transcript window based on terminal height
   const transcriptWindowSize = Math.max(5, stdoutHeight - 12);
   const totalTranscriptEntries = state.transcript.length;
   const clampedScrollOffset = Math.min(
@@ -173,6 +176,33 @@ export function OriApp({
         setThinkingCollapsed((previous) => !previous);
       }
       return;
+    }
+
+    if (bundleDrawerVisible) {
+      if (key.upArrow) {
+        setSelectedBundleIndex((prev) =>
+          prev <= 0 ? availableBundles.length - 1 : prev - 1,
+        );
+        return;
+      }
+      if (key.downArrow) {
+        setSelectedBundleIndex((prev) =>
+          prev >= availableBundles.length - 1 ? 0 : prev + 1,
+        );
+        return;
+      }
+      if (key.return || key.tab) {
+        const selected = availableBundles[selectedBundleIndex];
+        if (selected) {
+           void handleToggleBundle(selected.manifest.id);
+        }
+        return;
+      }
+      if (key.escape) {
+        setComposerMode("default");
+        setQuerySync("");
+        return;
+      }
     }
 
     if (resumeDrawerVisible) {
@@ -400,6 +430,10 @@ export function OriApp({
     void refreshWorkspace().then((workspace) => {
       dispatch({ type: "workspace/updated", workspace });
     });
+    
+    void listAvailableBundles().then((bundles) => {
+      setAvailableBundles(bundles);
+    });
 
     let ws: WebSocket | null = null;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -482,11 +516,44 @@ export function OriApp({
     setQuerySync("");
   }
 
+  async function handleToggleBundle(id: string) {
+    const nextIds = state.activeBundleIds.includes(id)
+      ? state.activeBundleIds.filter((bid) => bid !== id)
+      : [...state.activeBundleIds, id];
+    
+    // Explicitly update state — since it's part of state, auto-persistence handles saving
+    state.activeBundleIds = nextIds;
+    dispatch({ type: "workspace/updated", workspace: state.workspace }); // Trigger re-render
+  }
+
   async function handleSubmit(value: string) {
     if (!value.trim()) {
       return;
     }
     
+    if (value.trim() === "/bundles") {
+      const bundles = await listAvailableBundles();
+      setAvailableBundles(bundles);
+      setSelectedBundleIndex(0);
+      setComposerMode("bundle_picker");
+      return;
+    }
+
+    if (value.trim().startsWith("/bundle ")) {
+      const id = value.trim().split(" ")[1];
+      if (id) {
+        await handleToggleBundle(id);
+        const bundles = await listAvailableBundles();
+        const bundle = bundles.find(b => b.manifest.id === id);
+        dispatch({
+            type: "assistant/appended",
+            message: `Specialization "${bundle?.manifest.name || id}" is now ${state.activeBundleIds.includes(id) ? "enabled" : "disabled"}.`,
+        });
+      }
+      setQuerySync("");
+      return;
+    }
+
     if (value.trim() === "/sessions") {
       const sessions = await listSessions();
       const recent = sessions.slice(0, 10);
@@ -627,6 +694,8 @@ export function OriApp({
     };
     setTurnThoughts([]);
 
+    const activeBundles = availableBundles.filter(b => state.activeBundleIds.includes(b.manifest.id));
+
     const localCommand = await tryLocalCommand(resolvedValue, {
       client,
       profile: state.resolvedProfile,
@@ -751,6 +820,7 @@ export function OriApp({
       previousObjective: state.currentObjective,
       transcript: state.conversation,
       workspace,
+      activeBundles,
     });
 
     dispatch({
@@ -859,7 +929,7 @@ export function OriApp({
   useEffect(() => {
     const trimmed = query.trim();
 
-    if (composerMode === "edit_intent" || composerMode === "resume_picker") {
+    if (composerMode === "edit_intent" || composerMode === "resume_picker" || composerMode === "bundle_picker") {
       return;
     }
 
@@ -924,6 +994,12 @@ export function OriApp({
         sessions={resumeSessions}
         selectedIndex={selectedResumeIndex}
         visible={resumeDrawerVisible}
+      />
+      <BundleDrawer
+        bundles={availableBundles}
+        activeBundleIds={state.activeBundleIds}
+        selectedIndex={selectedBundleIndex}
+        visible={bundleDrawerVisible}
       />
       <CommandDrawer
         commands={commandMatches}

@@ -7,6 +7,7 @@ import { loadOriConfig } from "./src/config/ori-config";
 import { fuzzyMatchLocations, travelTo } from "./src/tools/travel";
 import { listSessions, purgeSessions, loadPersistedSession, savePersistedSession } from "./src/session/persistence";
 import { buildTurn, executeTurn, refreshWorkspace } from "./src/agent/loop";
+import { listAvailableBundles } from "./src/tools/bundles";
 
 // ANSI colors for CLI mode
 const CLR = {
@@ -132,6 +133,9 @@ async function runCliMode(options: any, resumeId: string | null) {
     });
   }
 
+  const bundles = await listAvailableBundles();
+  const activeBundles = bundles.filter(b => state.activeBundleIds.includes(b.manifest.id));
+
   const turn = buildTurn({
     input: options.initialQuery,
     mode: state.mode,
@@ -139,6 +143,7 @@ async function runCliMode(options: any, resumeId: string | null) {
     previousObjective: state.currentObjective,
     transcript: state.conversation,
     workspace,
+    activeBundles,
   });
 
   process.stdout.write(`\n${CLR.salmon}⏺${CLR.reset} ${CLR.white}${CLR.bold}ORI${CLR.reset} ${CLR.gray}(thinking…)${CLR.reset}\n`);
@@ -161,7 +166,6 @@ async function runCliMode(options: any, resumeId: string | null) {
       onStep,
     });
 
-    // Clear all thinking lines (including the thinking header)
     for (let i = 0; i <= lineCount; i++) {
         process.stdout.write("\x1b[1A\x1b[2K");
     }

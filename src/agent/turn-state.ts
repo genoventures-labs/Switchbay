@@ -85,6 +85,7 @@ export type SessionState = {
   pendingApproval: ApprovalRequest | null;
   thoughts: ThoughtFrame[];
   updatedAt: number;
+  activeBundleIds: string[];
   scratchpad: ScratchpadState | null;
 };
 
@@ -169,6 +170,7 @@ export function createInitialSessionState(input: {
     resolvedProfile: input.resolvedProfile,
     surface: input.surface,
     updatedAt: Date.now(),
+    activeBundleIds: [],
     lastError: null,
     workspace: null,
     verification: null,

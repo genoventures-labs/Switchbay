@@ -8,6 +8,18 @@ export type SlashCommand = {
 export const SLASH_COMMANDS: SlashCommand[] = [
   {
     category: "workspace",
+    command: "/bundles",
+    description: "List available and active ORI Bundles (specializations).",
+    example: "/bundles",
+  },
+  {
+    category: "workspace",
+    command: "/bundle",
+    description: "Toggle a bundle by ID (e.g. /bundle react-native).",
+    example: "/bundle react-native",
+  },
+  {
+    category: "workspace",
     command: "/sessions",
     description: "List recent local session history.",
     example: "/sessions",

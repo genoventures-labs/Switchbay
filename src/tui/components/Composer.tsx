@@ -22,7 +22,7 @@ export function Composer({
   if (initialQuery) {
     return (
       <Box paddingX={2} paddingY={1}>
-        <Box borderStyle="round" borderColor="gray" paddingX={1} paddingY={0}>
+        <Box borderStyle="single" borderLeft={false} borderRight={false} borderBottom={false} borderTop={true} borderColor="gray" paddingX={1} paddingY={0}>
           <Text color="gray" dimColor>one-shot mode · Ctrl+C to exit</Text>
         </Box>
       </Box>
@@ -38,8 +38,8 @@ export function Composer({
   return (
     <Box flexDirection="column" paddingX={2} paddingTop={1} paddingBottom={1}>
       <Box
-        borderStyle="round"
-        borderColor={borderColor}
+        borderStyle="single" borderLeft={false} borderRight={false} borderBottom={false} borderTop={true}
+        borderColor="gray"
         paddingX={1}
         paddingY={0}
         flexDirection="column"
@@ -55,7 +55,7 @@ export function Composer({
           )}
         </Box>
         <Box marginTop={1}>
-          <Text color="gray">> </Text>
+          <Text color="gray" dimColor>> </Text>
           <Text color="gray"> · </Text>
           <Text color={query ? "white" : "gray"} dimColor={!query}>
             {query || placeholder}

@@ -31,14 +31,14 @@ export function StatusBar({ activeCapability, currentThought, scratchpad, status
     >
       <Box>
         
-        <Text color={getStatusColor(status)} bold>
+        <Text color="gray" dimColor>
           {status === "DISCONNECTED" ? "READY" : status}
         </Text>
         <Text color="gray">
           {activeCapability ? "  active " : "  idle "}
         </Text>
         {activeCapability ? (
-          <Text color="yellow">{activeCapability}</Text>
+          <Text color="white" bold>{activeCapability}</Text>
         ) : null}
       </Box>
 
@@ -52,7 +52,7 @@ export function StatusBar({ activeCapability, currentThought, scratchpad, status
         ) : null}
         {currentThought ? (
           <Text color="gray">
-            <Text color="yellow"> now</Text> {currentThought}
+            <Text color="gray" dimColor> now</Text> {currentThought}
           </Text>
         ) : null}
       </Box>

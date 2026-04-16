@@ -27,7 +27,7 @@ export function Transcript({
   thinking,
 }: TranscriptProps) {
   return (
-    <Box flexDirection="column" flexGrow={1} paddingX={2} paddingTop={1}>
+    <Box flexDirection="column" flexGrow={1}  paddingTop={1}>
       {hasMoreAbove && (
         <Box marginBottom={1}>
           <Text color="gray" dimColor>↑ scroll up  Ctrl+U</Text>
@@ -37,10 +37,10 @@ export function Transcript({
       {entries.length === 0 && !streamingText && !thinking ? (
         <Box
           flexDirection="column"
-          borderStyle="round"
-          borderColor="gray"
-          paddingX={2}
-          paddingY={1}
+          
+          
+          
+          
           marginBottom={1}
         >
           <Text color="cyan" bold>Ready to help</Text>
@@ -56,10 +56,10 @@ export function Transcript({
             <Box key={entry.id} flexDirection="column" marginBottom={1}>
               <Box
                 flexDirection="column"
-                borderStyle="round"
-                borderColor="gray"
-                paddingX={1}
-                paddingY={0}
+                
+                
+                
+                
               >
                 <Text color="gray" dimColor>> </Text>
                 <Text color="white">{entry.body}</Text>
@@ -73,13 +73,13 @@ export function Transcript({
             <Box key={entry.id} flexDirection="column" marginBottom={1}>
               <Box
                 flexDirection="column"
-                borderStyle="round"
-                borderColor="cyan"
-                paddingX={1}
-                paddingY={0}
+                
+                
+                
+                
               >
                 <Box gap={1} marginBottom={0}>
-                  <Text color="white">●</Text>
+                  <Text color="gray" dimColor>●</Text>
                   <Text color="gray" dimColor>ORI</Text>
                 </Box>
                 <Box marginTop={1}>
@@ -99,10 +99,10 @@ export function Transcript({
             <Box key={entry.id} flexDirection="column" marginBottom={1}>
               <Box
                 flexDirection="column"
-                borderStyle="round"
-                borderColor={borderColor}
-                paddingX={1}
-                paddingY={0}
+                
+                
+                
+                
               >
                 <Box gap={1}>
                   <Text color={titleColor} bold>{entry.title}</Text>
@@ -127,13 +127,13 @@ export function Transcript({
         <Box flexDirection="column" marginBottom={1}>
           <Box
             flexDirection="column"
-            borderStyle="round"
-            borderColor="yellow"
-            paddingX={1}
-            paddingY={0}
+            
+            
+            
+            
           >
             <Box gap={1}>
-              <Text color="white">●</Text>
+              <Text color="gray" dimColor>●</Text>
               <Text color="gray" dimColor>Thinking</Text>
             </Box>
             <Box marginTop={1}>
@@ -149,13 +149,13 @@ export function Transcript({
         <Box flexDirection="column" marginBottom={1}>
           <Box
             flexDirection="column"
-            borderStyle="round"
-            borderColor="cyan"
-            paddingX={1}
-            paddingY={0}
+            
+            
+            
+            
           >
             <Box gap={1}>
-              <Text color="white">●</Text>
+              <Text color="gray" dimColor>●</Text>
               <Text color="gray" dimColor>Responding</Text>
             </Box>
             <Box marginTop={1}>
@@ -168,11 +168,11 @@ export function Transcript({
       {pendingApproval && pendingDraft && (
         <Box
           flexDirection="column"
-          paddingX={2}
-          paddingY={1}
+          
+          
           marginTop={1}
-          borderStyle="round"
-          borderColor="yellow"
+          
+          
         >
           <Box gap={1} marginBottom={1}>
             <Text color="yellow" bold>Draft Ready</Text>

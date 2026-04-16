@@ -66,6 +66,7 @@ function normalizeSessionState(parsed: Partial<SessionState>): SessionState {
         ? parsed.thoughts
         : [createThoughtFrame("goal", "Restored session state.")],
     pendingDraft: parsed.pendingDraft ?? null,
+    pendingPlanDraft: parsed.pendingPlanDraft ?? null,
     pendingApproval: parsed.pendingApproval ?? null,
     scratchpad: null,
   };

@@ -101,8 +101,12 @@ export function OriApp({
     })(),
   );
   const commandMatches = useMemo(() => getCommandMatches(query), [query]);
+  const commandToken = useMemo(() => {
+    const match = query.match(/^\/(\S*)$/);
+    return match ? match[1] ?? "" : null;
+  }, [query]);
   const commandDrawerVisible =
-    !initialQuery && composerMode === "default" && query.trim().startsWith("/");
+    !initialQuery && composerMode === "default" && commandToken !== null;
 
   // Detect the active @mention partial — last @word in the query
   const mentionPartial = useMemo(() => {
@@ -250,7 +254,7 @@ export function OriApp({
       if (key.tab) {
         const selectedCommand = commandMatches[selectedCommandIndex];
         if (selectedCommand) {
-          setQuerySync(`${selectedCommand.example} `);
+          setQuerySync(`${selectedCommand.command} `);
           setSelectedCommandIndex(0);
         }
         return;
@@ -258,7 +262,7 @@ export function OriApp({
       if (key.return) {
         const selectedCommand = commandMatches[selectedCommandIndex];
         if (selectedCommand) {
-          setQuerySync(`${selectedCommand.example} `);
+          setQuerySync(`${selectedCommand.command} `);
           setSelectedCommandIndex(0);
         } else {
           void handleSubmit(queryRef.current);
@@ -444,7 +448,7 @@ export function OriApp({
     }
 
     const approvalIntent =
-      state.pendingApproval || state.pendingDraft
+      state.pendingApproval || state.pendingDraft || state.pendingPlanDraft
         ? parseApprovalIntent(value)
         : null;
     const resolvedValue =
@@ -494,6 +498,7 @@ export function OriApp({
       surface,
       workspace,
       pendingDraft: state.pendingDraft,
+      pendingPlanDraft: state.pendingPlanDraft,
     });
     if (localCommand.handled) {
       dispatch({
@@ -531,6 +536,13 @@ export function OriApp({
         });
       }
 
+      if (localCommand.planDraft) {
+        dispatch({
+          type: "plan/staged",
+          plan: localCommand.planDraft,
+        });
+      }
+
       if (localCommand.clearDraft) {
         if (state.pendingApproval) {
           dispatch({
@@ -539,6 +551,16 @@ export function OriApp({
           });
         }
         dispatch({ type: "draft/cleared" });
+      }
+
+      if (localCommand.clearPlanDraft) {
+        if (state.pendingApproval) {
+          dispatch({
+            type: resolvedValue.trim() === "/apply" ? "approval/approved" : "approval/rejected",
+            requestId: state.pendingApproval.id,
+          });
+        }
+        dispatch({ type: "plan/cleared" });
       }
 
       if (localCommand.verification) {
@@ -563,6 +585,10 @@ export function OriApp({
           localCommand.assistantMessage ??
           "Local command ran, but it did not produce a message.",
       });
+
+      if (localCommand.followUpInput) {
+        await handleSubmit(localCommand.followUpInput);
+      }
       return;
     }
 

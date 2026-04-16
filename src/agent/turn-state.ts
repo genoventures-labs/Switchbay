@@ -44,7 +44,13 @@ export type DraftEdit = {
   targetPath: string;
 };
 
-export type ApprovalKind = "draft_edit";
+export type PlanDraft = {
+  title: string;
+  content: string;
+  executionPrompt: string;
+};
+
+export type ApprovalKind = "draft_edit" | "execution_plan";
 
 export type ApprovalRequest = {
   id: string;
@@ -75,6 +81,7 @@ export type SessionState = {
   changedFiles: string[];
   lastPatchPreview: PatchPreview | null;
   pendingDraft: DraftEdit | null;
+  pendingPlanDraft: PlanDraft | null;
   pendingApproval: ApprovalRequest | null;
   thoughts: ThoughtFrame[];
   scratchpad: ScratchpadState | null;
@@ -166,6 +173,7 @@ export function createInitialSessionState(input: {
     changedFiles: [],
     lastPatchPreview: null,
     pendingDraft: null,
+    pendingPlanDraft: null,
     pendingApproval: null,
     thoughts: [
       createThoughtFrame("goal", `Session booted in ${input.mode} mode.`),

@@ -164,6 +164,12 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     category: "ori",
+    command: "/plan",
+    description: "Draft an execution plan, review it, then approve to start building.",
+    example: "/plan add a planning approval workflow for multi-file changes",
+  },
+  {
+    category: "ori",
     command: "/plan-review",
     description: "Ask ORI to critique a plan before acting.",
     example: "/plan-review inspect auth flow, patch retry logic, then verify",

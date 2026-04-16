@@ -9,6 +9,7 @@ import {
   createTranscriptEntry,
   type DraftEdit,
   type AgentMode,
+  type PlanDraft,
   type SessionState,
 } from "../agent/turn-state";
 import type { WorkspaceSnapshot } from "./workspace";
@@ -22,9 +23,11 @@ export type SessionAction =
   | { type: "workspace/updated"; workspace: WorkspaceSnapshot }
   | { type: "patch/updated"; patch: PatchPreview; changedFile: string }
   | { type: "draft/staged"; draft: DraftEdit }
+  | { type: "plan/staged"; plan: PlanDraft }
   | { type: "approval/approved"; requestId: string }
   | { type: "approval/rejected"; requestId: string }
   | { type: "draft/cleared" }
+  | { type: "plan/cleared" }
   | { type: "verification/updated"; verification: VerificationSummary }
   | {
       type: "turn/submitted";
@@ -153,6 +156,33 @@ export function sessionReducer(
           tone: "warning",
         }),
       );
+    case "plan/staged":
+      return appendTranscript(
+        appendThought(
+          appendActivity(
+            {
+              ...state,
+              pendingPlanDraft: action.plan,
+              pendingApproval: createApprovalRequest({
+                kind: "execution_plan",
+                title: `Approve execution plan: ${action.plan.title}`,
+                summary: "Review the proposed implementation plan. Approve to start building.",
+                commandHint: "/apply or /cancel",
+              }),
+            },
+            "tool",
+            `Drafted execution plan: ${action.plan.title}.`,
+          ),
+          "plan",
+          `Prepared an execution plan for ${action.plan.title}.`,
+        ),
+        createTranscriptEntry({
+          kind: "tool",
+          title: "Execution Plan Ready",
+          body: action.plan.content,
+          tone: "warning",
+        }),
+      );
     case "approval/approved":
       return appendTranscript(
         appendThought(
@@ -200,6 +230,20 @@ export function sessionReducer(
           kind: "tool",
           title: "Draft Cleared",
           body: "The pending draft was canceled.",
+          tone: "info",
+        }),
+      );
+    case "plan/cleared":
+      return appendTranscript(
+        {
+          ...state,
+          pendingPlanDraft: null,
+          pendingApproval: null,
+        },
+        createTranscriptEntry({
+          kind: "tool",
+          title: "Plan Cleared",
+          body: "The pending execution plan was canceled.",
           tone: "info",
         }),
       );

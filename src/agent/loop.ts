@@ -19,7 +19,7 @@ import { deriveObjective, draftPlan } from "./planner";
 import { resolveAgentPolicy } from "./policy";
 import type { WorkspaceSnapshot } from "../session/workspace";
 import { formatWorkspaceContext, loadWorkspaceSnapshot } from "../session/workspace";
-import type { DraftEdit } from "./turn-state";
+import type { DraftEdit, PlanDraft } from "./turn-state";
 import {
   AGENT_TOOLS,
   executeToolCall,
@@ -52,12 +52,15 @@ export type ExecutedTurn = {
 export type LocalCommandResult = {
   handled: boolean;
   draft?: DraftEdit;
+  planDraft?: PlanDraft;
   assistantMessage?: string;
   changedFile?: string;
   patch?: PatchPreview;
   workspace?: WorkspaceSnapshot;
   verification?: VerificationSummary;
   clearDraft?: boolean;
+  clearPlanDraft?: boolean;
+  followUpInput?: string;
   scratchpad?: ScratchpadState | null;
   /** Set when the command performed a workspace travel */
   travel?: {
@@ -86,6 +89,7 @@ type ParsedLocalCommand =
   | { type: "gitStatus" }
   | { type: "gitLog" }
   | { type: "oriCapability"; capability: "ask_ori" | "memory_lookup" | "plan_review" | "repo_research" | "web_search" | "web_fetch" | "research" | "repo_report"; prompt: string }
+  | { type: "plan"; prompt: string }
   | { type: "edit"; targetPath: string; instruction: string }
   | { type: "read"; targetPath: string }
   | { type: "write"; targetPath: string; content: string }
@@ -163,6 +167,13 @@ function parseLocalCommand(input: string): ParsedLocalCommand {
           prompt,
         };
       }
+    }
+  }
+
+  if (normalized.startsWith("/plan ")) {
+    const prompt = trimmed.slice(6).trim();
+    if (prompt) {
+      return { type: "plan", prompt };
     }
   }
 
@@ -537,6 +548,57 @@ async function proposeDraftToolExecution(input: {
   };
 }
 
+async function proposeExecutionPlan(input: {
+  client: OriClient;
+  profile: string;
+  prompt: string;
+  sessionId?: string;
+  surface: string;
+  workspace: WorkspaceSnapshot | null;
+}): Promise<{ plan: PlanDraft; scratchpad: ScratchpadState | null }> {
+  const workspacePrompt = formatWorkspaceContext(input.workspace);
+  const response = await input.client.createChatCompletion(
+    input.surface,
+    {
+      model: getDefaultModel(),
+      profile: input.profile,
+      stream: false,
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are preparing an execution plan for ORI Code. Return a concise markdown README-style implementation plan with these sections when relevant: Goal, Current Context, Approach, Concrete Steps, Files To Touch, Verification, Risks. Keep it actionable and implementation-first.",
+        },
+        ...(workspacePrompt
+          ? [{ role: "system" as const, content: workspacePrompt }]
+          : []),
+        {
+          role: "user",
+          content: input.prompt,
+        },
+      ],
+    },
+    { sessionId: input.sessionId, operator: true, sendEnv: true },
+  );
+
+  const content =
+    response.choices?.[0]?.message?.content?.trim() ?? "# Execution Plan\n\nNo plan generated.";
+
+  return {
+    plan: {
+      title: input.prompt.slice(0, 80),
+      content,
+      executionPrompt: [
+        "Execute the approved implementation plan below.",
+        "Make the necessary code changes in the current workspace, verify them, and summarize what changed.",
+        "",
+        content,
+      ].join("\n"),
+    },
+    scratchpad: response.meta?.scratchpad ?? null,
+  };
+}
+
 export async function refreshWorkspace(cwd = process.cwd()) {
   return loadWorkspaceSnapshot(cwd);
 }
@@ -550,6 +612,7 @@ export async function tryLocalCommand(
     surface?: string;
     cwd?: string;
     pendingDraft?: DraftEdit | null;
+    pendingPlanDraft?: PlanDraft | null;
     workspace?: WorkspaceSnapshot | null;
   } = {},
 ): Promise<LocalCommandResult> {
@@ -840,6 +903,31 @@ export async function tryLocalCommand(
     };
   }
 
+  if (command.type === "plan") {
+    if (!options.client || !options.surface || !options.profile) {
+      return {
+        handled: true,
+        assistantMessage: "Plan workflow is unavailable because the ORI client context is missing.",
+      };
+    }
+
+    const planResult = await proposeExecutionPlan({
+      client: options.client,
+      profile: options.profile,
+      prompt: command.prompt,
+      sessionId: options.sessionId,
+      surface: options.surface,
+      workspace: options.workspace ?? null,
+    });
+
+    return {
+      handled: true,
+      planDraft: planResult.plan,
+      scratchpad: planResult.scratchpad,
+      assistantMessage: `Drafted execution plan for: ${command.prompt}`,
+    };
+  }
+
   if (command.type === "write") {
     const before = await readWorkspaceFile(command.targetPath, cwd)
       .then((file) => file.content)
@@ -915,6 +1003,14 @@ export async function tryLocalCommand(
 
   if (command.type === "apply") {
     if (!options.pendingDraft) {
+      if (options.pendingPlanDraft) {
+        return {
+          handled: true,
+          clearPlanDraft: true,
+          assistantMessage: `Approved execution plan: ${options.pendingPlanDraft.title}. Starting implementation.`,
+          followUpInput: options.pendingPlanDraft.executionPrompt,
+        };
+      }
       return {
         handled: true,
         assistantMessage: "There is no pending draft to apply.",
@@ -939,10 +1035,13 @@ export async function tryLocalCommand(
   if (command.type === "cancel") {
     return {
       handled: true,
-      clearDraft: true,
+      clearDraft: Boolean(options.pendingDraft),
+      clearPlanDraft: Boolean(options.pendingPlanDraft),
       assistantMessage: options.pendingDraft
         ? `Canceled draft for ${options.pendingDraft.targetPath}.`
-        : "There was no draft to cancel.",
+        : options.pendingPlanDraft
+          ? `Canceled execution plan: ${options.pendingPlanDraft.title}.`
+          : "There was no draft to cancel.",
     };
   }
 

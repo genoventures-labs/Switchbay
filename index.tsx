@@ -5,7 +5,19 @@ import { OriClient } from "./src/runtime/ori-client";
 import { OriApp } from "./src/tui/app";
 import { loadOriConfig } from "./src/config/ori-config";
 import { fuzzyMatchLocations, travelTo } from "./src/tools/travel";
-import { listSessions, purgeSessions } from "./src/session/persistence";
+import { listSessions, purgeSessions, loadPersistedSession, savePersistedSession } from "./src/session/persistence";
+import { buildTurn, executeTurn, refreshWorkspace } from "./src/agent/loop";
+import { createThoughtFrame } from "./src/agent/turn-state";
+
+// ANSI colors for CLI mode
+const CLR = {
+  reset: "\x1b[0m",
+  bold: "\x1b[1m",
+  salmon: "\x1b[38;2;229;115;115m",
+  green: "\x1b[38;2;0;255;127m",
+  gray: "\x1b[38;2;112;112;112m",
+  white: "\x1b[37m",
+};
 
 // Ensure config is initialized on first boot
 loadOriConfig();
@@ -66,7 +78,6 @@ Options:
   let resumeId: string | null = null;
   if (options.resume && !options.newSession) {
     if (typeof options.resume === "string") {
-      // Check if it's a numeric index
       if (/^\d+$/.test(options.resume)) {
         const sessions = await listSessions();
         const index = parseInt(options.resume, 10);
@@ -77,43 +88,88 @@ Options:
           process.exit(1);
         }
       } else {
-        resumeId = options.resume; // Assume it's a UUID
+        resumeId = options.resume;
       }
     } else {
-      // --resume without value = latest
       resumeId = "latest";
     }
   }
 
-  // Resolve --hop before rendering so the TUI boots in the right cwd
-  let initialHopLabel: string | null = null;
-  if (options.hop) {
-    const matches = await fuzzyMatchLocations(options.hop);
-    if (matches.length === 0) {
-      console.error(`ori-code: --hop: no whitelisted location matched "${options.hop}"`);
-      process.exit(1);
-    }
-    const best = matches[0]!;
-    const result = await travelTo(best.absPath);
-    if (!result.ok) {
-      console.error(`ori-code: --hop failed: ${result.error}`);
-      process.exit(1);
-    }
-    initialHopLabel = result.location!.label;
+  // CLI Mode: One-shot query provided
+  if (options.initialQuery) {
+    await runCliMode(options, resumeId);
+    return;
   }
 
+  // TUI Mode: No query, launch interactive app
   const client = new OriClient();
   render(
     <OriApp
       client={client}
-      initialHopLabel={initialHopLabel}
-      initialQuery={options.initialQuery}
+      initialHopLabel={null} // Hop already handled by process.chdir if needed
+      initialQuery=""
       mode={options.mode}
       profile={options.profile}
       surface={options.surface}
       resumeId={resumeId}
     />,
   );
+}
+
+async function runCliMode(options: any, resumeId: string | null) {
+  const client = new OriClient();
+  const workspace = await refreshWorkspace();
+  
+  let state = await loadPersistedSession(resumeId === "latest" ? undefined : resumeId || undefined);
+  if (!state || options.newSession) {
+    const { resolveAgentPolicy } = await import("./src/agent/policy");
+    const { createInitialSessionState } = await import("./src/agent/turn-state");
+    const policy = resolveAgentPolicy({ mode: options.mode, profile: options.profile });
+    state = createInitialSessionState({
+      mode: policy.mode,
+      profile: options.profile,
+      resolvedProfile: policy.runtimeProfile,
+      surface: options.surface,
+    });
+  }
+
+  const turn = buildTurn({
+    input: options.initialQuery,
+    mode: state.mode,
+    profile: state.requestedProfile,
+    previousObjective: state.currentObjective,
+    transcript: state.conversation,
+    workspace,
+  });
+
+  process.stdout.write(`\n${CLR.green}⏺${CLR.reset} ${CLR.white}${CLR.bold}thinking...${CLR.reset}\r`);
+
+  try {
+    const executedTurn = await executeTurn({
+      client,
+      sessionId: state.sessionId,
+      surface: state.surface,
+      turn,
+      workspace,
+    });
+
+    // Clear thinking line
+    process.stdout.write(" ".repeat(50) + "\r");
+
+    const content = executedTurn.response.choices?.[0]?.message?.content?.trim();
+    if (content) {
+      process.stdout.write(`${CLR.salmon}⏺${CLR.reset} ${CLR.white}${CLR.bold}ORI${CLR.reset}\n\n`);
+      process.stdout.write(`${content}\n\n`);
+      
+      // Save the updated state
+      state.conversation.push({ role: "user", content: options.initialQuery });
+      state.conversation.push({ role: "assistant", content });
+      state.updatedAt = Date.now();
+      await savePersistedSession(state);
+    }
+  } catch (err) {
+    process.stdout.write(`\n${CLR.salmon}⏺${CLR.reset} ${CLR.white}${CLR.bold}Error:${CLR.reset} Request failed.\n`);
+  }
 }
 
 boot().catch((err) => {

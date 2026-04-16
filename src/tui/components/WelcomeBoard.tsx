@@ -36,12 +36,14 @@ export function WelcomeBoard({ version, user, email, model, cwd }: WelcomeBoardP
       
       <Box flexDirection="row" paddingY={1}>
         <Box flexDirection="column" flexGrow={1} alignItems="center" justifyContent="center">
-          <Text color="white">Welcome back {user}!</Text>
+          <Text color="white" bold>Welcome back {user}!</Text>
           <Box marginTop={1} marginBottom={1} flexDirection="column" alignItems="center">
-            <Text color="magenta">▗ ▗   ▖ ▖</Text>
-            <Text color="magenta">  ▘▘ ▝▝</Text>
+            <Text color="magenta">  ▄▄▄▄▄  </Text>
+            <Text color="magenta"> █ █ █ █ </Text>
+            <Text color="magenta"> █▄▄▄▄▄█ </Text>
+            <Text color="magenta">  █   █  </Text>
           </Box>
-          <Text color="gray" dimColor>{model} · ORI Pro ·</Text>
+          <Text color="gray" dimColor>{model} · ORI Pro</Text>
           <Text color="gray" dimColor>{email}</Text>
           <Text color="gray" dimColor>{cwd}</Text>
         </Box>
@@ -57,8 +59,12 @@ export function WelcomeBoard({ version, user, email, model, cwd }: WelcomeBoardP
           flexGrow={1}
         >
            <Box flexDirection="column">
-             <Text color="white" bold>Tips for getting started</Text>
-             <Text color="gray" dimColor>Run /help to see all available commands</Text>
+             <Text color="white" bold>Tips for getting started:</Text>
+             <Box marginLeft={1}>
+               <Text color="gray" dimColor>- /help - See all available commands</Text>
+               <Text color="gray" dimColor>- /edit - Rapidly edit a file</Text>
+               <Text color="gray" dimColor>- @file - Mention a file for context</Text>
+             </Box>
              
              <Box 
                marginY={1} 
@@ -70,7 +76,7 @@ export function WelcomeBoard({ version, user, email, model, cwd }: WelcomeBoardP
                borderColor="gray" 
              />
              
-             <Text color="white" bold>Recent activity</Text>
+             <Text color="white" bold>Recent activity:</Text>
              <Text color="gray" dimColor>No recent activity</Text>
            </Box>
         </Box>

@@ -62,7 +62,7 @@ export function Transcript({
               <Box flexDirection="column">
                 <Box gap={1} marginBottom={0}>
                   <Text color="magenta">⏺</Text>
-                  <Text color="magenta" bold>ORI</Text>
+                  <Text color="white" bold>ORI</Text>
                 </Box>
                 <Box marginTop={1}>
                   <MarkdownText content={entry.body} role="assistant" />
@@ -76,10 +76,12 @@ export function Transcript({
           const isError = entry.tone === "error";
           return (
             <Box key={entry.id} flexDirection="column" marginBottom={0}>
-              <Box flexDirection="column">
-                <Box gap={1}>
-                  <Text color={isError ? "red" : "green"} dimColor={!isError}>  ⎿  {entry.title.toLowerCase()}</Text>
-                </Box>
+              <Box gap={1}>
+                <Text color={isError ? "red" : "green"}>⏺</Text>
+                <Text color="white" bold>{entry.title.toLowerCase()}</Text>
+              </Box>
+              <Box paddingLeft={1}>
+                <Text color="gray" dimColor>└ {entry.summary || "completed"}</Text>
               </Box>
             </Box>
           );
@@ -90,16 +92,12 @@ export function Transcript({
 
       {(thinking || activeCapability) && !streamingText && (
         <Box flexDirection="column" marginBottom={1} marginTop={1}>
-          <Box flexDirection="column">
-            <Box gap={1}>
-              <Text color="green" dimColor>⏺</Text>
-              <Text color="gray" dimColor>Thinking...</Text>
-            </Box>
-            {activeCapability && (
-              <Box marginTop={0} paddingLeft={2}>
-                <Text color="green" dimColor>  ⎿  {activeCapability.toLowerCase()}</Text>
-              </Box>
-            )}
+          <Box gap={1}>
+            <Text color="green" dimColor>⏺</Text>
+            <Text color="white" bold>{activeCapability ? activeCapability.toLowerCase() : "thinking"}</Text>
+          </Box>
+          <Box paddingLeft={1}>
+             <Text color="gray" dimColor>└ Thinking...</Text>
           </Box>
         </Box>
       )}
@@ -109,7 +107,7 @@ export function Transcript({
           <Box flexDirection="column">
             <Box gap={1}>
               <Text color="magenta">⏺</Text>
-              <Text color="magenta" bold>ORI</Text>
+              <Text color="white" bold>ORI</Text>
             </Box>
             <Box marginTop={1}>
               <MarkdownText content={streamingText} role="assistant" />

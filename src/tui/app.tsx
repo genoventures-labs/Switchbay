@@ -485,6 +485,30 @@ export function OriApp({
       return;
     }
     
+    if (value.trim() === "/sessions") {
+      const sessions = await listSessions();
+      const recent = sessions.slice(0, 10);
+      if (recent.length === 0) {
+        dispatch({
+          type: "assistant/appended",
+          message: "No recent local sessions found.",
+        });
+      } else {
+        let list = "Recent local sessions:\n";
+        for (const s of recent) {
+          const date = new Date(s.updatedAt).toLocaleString();
+          list += `- ${s.title} (${date})\n`;
+        }
+        list += "\nUse /resume to pick one.";
+        dispatch({
+          type: "assistant/appended",
+          message: list,
+        });
+      }
+      setQuerySync("");
+      return;
+    }
+
     if (value.trim().startsWith("/purge")) {
       const parts = value.trim().split(" ");
       const duration = parts[1]?.toLowerCase() || "1d";

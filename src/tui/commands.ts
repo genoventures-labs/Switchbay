@@ -8,6 +8,12 @@ export type SlashCommand = {
 export const SLASH_COMMANDS: SlashCommand[] = [
   {
     category: "workspace",
+    command: "/sessions",
+    description: "List recent local session history.",
+    example: "/sessions",
+  },
+  {
+    category: "workspace",
     command: "/purge",
     description: "Clean up old sessions (e.g. /purge 1d, /purge 1w).",
     example: "/purge 1d",
@@ -101,12 +107,6 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     command: "/spaces",
     description: "List knowledge spaces for the current tenant.",
     example: "/spaces",
-  },
-  {
-    category: "workspace",
-    command: "/sessions",
-    description: "List recent ORI runtime sessions for the current surface.",
-    example: "/sessions",
   },
   {
     category: "workspace",

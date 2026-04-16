@@ -333,8 +333,10 @@ export function OriApp({
       if (key.return) {
         const selectedCommand = commandMatches[selectedCommandIndex];
         if (selectedCommand) {
-          void handleSubmit(selectedCommand.command);
+          const cmd = selectedCommand.command;
           setSelectedCommandIndex(0);
+          setQuerySync(""); // clear immediately
+          void handleSubmit(cmd);
         } else {
           void handleSubmit(queryRef.current);
         }
@@ -697,6 +699,7 @@ export function OriApp({
       dispatch({ type: "workspace/updated", workspace });
     }
 
+    // Always reset view states when starting a turn
     setQuerySync("");
     setComposerMode("default");
 

@@ -43,8 +43,8 @@ export function CommandDrawer({
             <Box
               key={item.command}
               flexDirection="column"
-              marginTop={selected ? 1 : 0}
-              marginBottom={selected ? 1 : 0}
+              marginTop={0}
+              marginBottom={0}
               paddingX={1}
               paddingY={selected ? 1 : 0}
               backgroundColor={selected ? "#2D333B" : undefined}
@@ -62,7 +62,6 @@ export function CommandDrawer({
               {selected && (
                 <Box flexDirection="column" marginLeft={2} marginTop={0}>
                   <Text color="white">{item.description}</Text>
-                  <Text color={grayColor}>└ {item.example}</Text>
                 </Box>
               )}
             </Box>

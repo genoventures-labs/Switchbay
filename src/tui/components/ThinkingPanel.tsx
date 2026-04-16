@@ -2,7 +2,7 @@ import React from "react";
 import { Box, Text } from "ink";
 import type { ThoughtFrame } from "../../agent/turn-state";
 
-type ThinkingPanelProps = {
+type ThinkingelProps = {
   collapsed: boolean;
   items: ThoughtFrame[];
 };
@@ -36,11 +36,11 @@ function getLabel(item: ThoughtFrame) {
   return item.kind;
 }
 
-export function ThinkingPanel({ collapsed, items }: ThinkingPanelProps) {
+export function Thinkingel({ collapsed, items }: ThinkingelProps) {
   return (
     <Box flexDirection="column" paddingX={1} marginBottom={1}>
       <Text color="gray">
-        Thinking... {collapsed ? "(Ctrl+T to expand)" : "(Ctrl+T to collapse)"}
+        Thinking {collapsed ? "(Ctrl+T to expand)" : "(Ctrl+T to collapse)"}
       </Text>
       {!collapsed
         ? items.slice(0, 5).map((item) => (

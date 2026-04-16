@@ -34,7 +34,7 @@ export function Header({ mode, status, workspace }: HeaderProps) {
           <Box gap={1}>
             <Text color="magenta" bold>ORI</Text>
             <Text color="gray">in</Text>
-            <Text color="white" bold>{project}</Text>
+            <Text color="white">{project}</Text>
             {branch ? (
               <>
                 <Text color="gray">·</Text>
@@ -47,7 +47,7 @@ export function Header({ mode, status, workspace }: HeaderProps) {
         </Box>
         <Box flexDirection="column" alignItems="flex-end">
           <Text color="gray" dimColor>{mode}</Text>
-          <Text color={isThinking ? "yellow" : "green"} bold>
+          <Text color={isThinking ? "magenta" : "green"} bold>
             {isThinking ? "thinking" : statusLabel}
           </Text>
         </Box>

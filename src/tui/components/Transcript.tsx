@@ -37,7 +37,7 @@ export function Transcript({
 
       {entries.length === 0 && !streamingText && !thinking ? (
         <WelcomeBoard
-          version="0.4.1"
+          version="0.4.3"
           user="Mike"
           email="thatnotiondude@gmail.com"
           model="Sonnet 4.6"
@@ -50,7 +50,7 @@ export function Transcript({
           return (
             <Box key={entry.id} flexDirection="column" marginBottom={1}>
               <Box flexDirection="column">
-                <Text color="gray" dimColor>❯ {entry.body}</Text>
+                <Text color="gray" dimColor>❯ <Text color="white">{entry.body}</Text></Text>
               </Box>
             </Box>
           );
@@ -59,10 +59,10 @@ export function Transcript({
         if (entry.kind === "assistant") {
           return (
             <Box key={entry.id} flexDirection="column" marginBottom={1}>
-              <Box flexDirection="column" borderColor="magenta" paddingX={0} paddingY={0}>
+              <Box flexDirection="column">
                 <Box gap={1} marginBottom={0}>
-                  <Text color="gray" dimColor>⏺</Text>
-                  <Text color="gray" dimColor>ORI</Text>
+                  <Text color="magenta">⏺</Text>
+                  <Text color="magenta" bold>ORI</Text>
                 </Box>
                 <Box marginTop={1}>
                   <MarkdownText content={entry.body} role="assistant" />
@@ -73,11 +73,12 @@ export function Transcript({
         }
 
         if (entry.kind === "tool") {
+          const isError = entry.tone === "error";
           return (
-            <Box key={entry.id} flexDirection="column" marginBottom={1}>
+            <Box key={entry.id} flexDirection="column" marginBottom={0}>
               <Box flexDirection="column">
                 <Box gap={1}>
-                  <Text color="gray" dimColor>  ⎿  {entry.title.toLowerCase()}</Text>
+                  <Text color={isError ? "red" : "green"} dimColor={!isError}>  ⎿  {entry.title.toLowerCase()}</Text>
                 </Box>
               </Box>
             </Box>
@@ -88,17 +89,17 @@ export function Transcript({
       })}
 
       {(thinking || activeCapability) && !streamingText && (
-        <Box flexDirection="column" marginBottom={1}>
+        <Box flexDirection="column" marginBottom={1} marginTop={1}>
           <Box flexDirection="column">
             <Box gap={1}>
-              <Text color="gray" dimColor>⏺</Text>
-              <Text color="gray" dimColor>Thinking</Text>
+              <Text color="green" dimColor>⏺</Text>
+              <Text color="gray" dimColor>Thinking...</Text>
             </Box>
-            <Box marginTop={1}>
-              <Text color="yellow" dimColor>
-                {activeCapability ? `${activeCapability}...` : thinking}
-              </Text>
-            </Box>
+            {activeCapability && (
+              <Box marginTop={0} paddingLeft={2}>
+                <Text color="green" dimColor>  ⎿  {activeCapability.toLowerCase()}</Text>
+              </Box>
+            )}
           </Box>
         </Box>
       )}
@@ -107,8 +108,8 @@ export function Transcript({
         <Box flexDirection="column" marginBottom={1}>
           <Box flexDirection="column">
             <Box gap={1}>
-              <Text color="gray" dimColor>⏺</Text>
-              <Text color="gray" dimColor>Responding</Text>
+              <Text color="magenta">⏺</Text>
+              <Text color="magenta" bold>ORI</Text>
             </Box>
             <Box marginTop={1}>
               <MarkdownText content={streamingText} role="assistant" />
@@ -118,9 +119,9 @@ export function Transcript({
       )}
 
       {pendingApproval && pendingDraft && (
-        <Box flexDirection="column" marginTop={1}>
+        <Box flexDirection="column" marginTop={1} borderStyle="round" borderColor="magenta" paddingX={2} paddingY={1}>
           <Box gap={1} marginBottom={1}>
-            <Text color="yellow" bold>Draft Ready</Text>
+            <Text color="magenta" bold>Draft Ready</Text>
             <Text color="gray">·</Text>
             <Text color="white" bold>{pendingDraft.targetPath}</Text>
           </Box>

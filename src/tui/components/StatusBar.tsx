@@ -38,7 +38,7 @@ export function StatusBar({ activeCapability, currentThought, scratchpad, status
           {activeCapability ? "  active " : "  idle "}
         </Text>
         {activeCapability ? (
-          <Text color="white" bold>{activeCapability}</Text>
+          <Text color="green" dimColor>{activeCapability}</Text>
         ) : null}
       </Box>
 

@@ -32,7 +32,6 @@ export function Composer({
   }
 
   const brandColor = "#E57373"; // Salmon/Coral
-  const greenColor = "#00FF7F"; // Bright Spring Green
   const grayColor = "#707070";  // Steel Gray
 
   return (
@@ -71,7 +70,7 @@ export function Composer({
       >
         <Box marginY={0}>
           <Text color={grayColor}>❯ </Text>
-          <Text color={query ? "white" : grayColor}>
+          <Text color={query ? "white" : brandColor}>
             {query || (disabled ? "Describe what you want to change..." : "Ask ORI a question or describe an edit...")}
             {!isThinking && !disabled ? (
               <Text backgroundColor="white" color="black"> </Text>
@@ -82,9 +81,11 @@ export function Composer({
       
       <Box paddingX={2} paddingTop={0} paddingBottom={1}>
         <Text color={grayColor}>
-          {disabled
-            ? "Enter to draft · Esc to cancel"
-            : "? for shortcuts · / for commands"}
+          {disabled ? (
+            <>Enter to <Text color={brandColor}>draft</Text> · Esc to <Text color={brandColor}>cancel</Text></>
+          ) : (
+            <>? for <Text color={brandColor}>shortcuts</Text> · / for <Text color={brandColor}>commands</Text></>
+          )}
         </Text>
       </Box>
     </Box>

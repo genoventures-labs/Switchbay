@@ -485,6 +485,16 @@ export function OriApp({
       return;
     }
     
+    if (value.trim() === "/save") {
+      await savePersistedSession(state);
+      dispatch({
+        type: "assistant/appended",
+        message: "I’ve saved the current session state.",
+      });
+      setQuerySync("");
+      return;
+    }
+
     if (value.trim() === "/resume") {
       const sessions = await listSessions();
       setResumeSessions(sessions);

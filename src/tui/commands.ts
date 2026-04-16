@@ -14,6 +14,12 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     category: "workspace",
+    command: "/save",
+    description: "Manually persist the current session state.",
+    example: "/save",
+  },
+  {
+    category: "workspace",
     command: "/clear",
     description: "Clear the current conversation and session view.",
     example: "/clear",

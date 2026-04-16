@@ -22,24 +22,31 @@ export function Composer({
   if (initialQuery) {
     return (
       <Box paddingX={2} paddingY={1}>
-        <Text color="gray" dimColor>one-shot · Ctrl+C to exit</Text>
+        <Box borderStyle="round" borderColor="gray" paddingX={1} paddingY={0}>
+          <Text color="gray" dimColor>one-shot mode · Ctrl+C to exit</Text>
+        </Box>
       </Box>
     );
   }
+
+  const borderColor = isThinking ? "yellow" : disabled ? "magenta" : "cyan";
+  const titleColor = isThinking ? "yellow" : disabled ? "magenta" : "cyan";
+  const placeholder = disabled
+    ? "Describe what you want to change..."
+    : "Ask ORI a question or describe an edit...";
 
   return (
     <Box flexDirection="column" paddingX={2} paddingTop={1} paddingBottom={1}>
       <Box
         borderStyle="round"
-        borderColor={isThinking ? "gray" : disabled ? "gray" : "green"}
+        borderColor={borderColor}
         paddingX={1}
         paddingY={0}
         flexDirection="column"
       >
-        {/* Label row */}
         <Box justifyContent="space-between">
-          <Text color={isThinking ? "gray" : disabled ? "gray" : "green"} bold>
-            {disabled ? "edit intent" : "message"}
+          <Text color={titleColor} bold>
+            {disabled ? "Edit intent" : "Message ORI"}
           </Text>
           {isThinking && (
             <Text color="yellow" dimColor>
@@ -47,26 +54,22 @@ export function Composer({
             </Text>
           )}
         </Box>
-
-        {/* Input row */}
-        {!disabled && (
-          <Box marginTop={0}>
-            <Text color={isThinking ? "gray" : "white"}>
-              {query || ""}
-              {!isThinking && (
-                <Text backgroundColor="white" color="black"> </Text>
-              )}
-            </Text>
-          </Box>
-        )}
+        <Box marginTop={1}>
+          <Text color="gray">{disabled ? "intent" : "prompt"}</Text>
+          <Text color="gray"> · </Text>
+          <Text color={query ? "white" : "gray"} dimColor={!query}>
+            {query || placeholder}
+            {!isThinking && !disabled ? (
+              <Text backgroundColor="white" color="black"> </Text>
+            ) : null}
+          </Text>
+        </Box>
       </Box>
-
-      {/* Hint */}
       <Box marginTop={0} paddingX={1}>
         <Text color="gray" dimColor>
           {disabled
-            ? "describe the change · Enter to draft · Esc to cancel"
-            : "Enter to send · @ for files · / for commands · Tab completes"}
+            ? "Enter to draft the change · Esc to cancel"
+            : "Enter to send · Tab completes drawers · Ctrl+U / Ctrl+D scroll"}
         </Text>
       </Box>
     </Box>

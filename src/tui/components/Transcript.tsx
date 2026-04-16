@@ -34,14 +34,34 @@ export function Transcript({
         </Box>
       )}
 
+      {entries.length === 0 && !streamingText && !thinking ? (
+        <Box
+          flexDirection="column"
+          borderStyle="round"
+          borderColor="gray"
+          paddingX={2}
+          paddingY={1}
+          marginBottom={1}
+        >
+          <Text color="cyan" bold>Ready to help</Text>
+          <Text color="gray" dimColor>
+            I can help you understand the repo, make a plan, or edit code. What’s on your mind?
+          </Text>
+        </Box>
+      ) : null}
+
       {entries.map((entry) => {
         if (entry.kind === "user") {
           return (
             <Box key={entry.id} flexDirection="column" marginBottom={1}>
-              <Box gap={1} marginBottom={0}>
+              <Box
+                flexDirection="column"
+                borderStyle="round"
+                borderColor="gray"
+                paddingX={1}
+                paddingY={0}
+              >
                 <Text color="gray" dimColor>you</Text>
-              </Box>
-              <Box paddingLeft={2}>
                 <Text color="white">{entry.body}</Text>
               </Box>
             </Box>
@@ -51,53 +71,51 @@ export function Transcript({
         if (entry.kind === "assistant") {
           return (
             <Box key={entry.id} flexDirection="column" marginBottom={1}>
-              <Box gap={1} marginBottom={0}>
-                <Text color="cyan" bold>ori</Text>
-              </Box>
               <Box
-                borderStyle="single"
-                borderLeft={true}
-                borderRight={false}
-                borderTop={false}
-                borderBottom={false}
+                flexDirection="column"
+                borderStyle="round"
                 borderColor="cyan"
-                paddingLeft={1}
+                paddingX={1}
+                paddingY={0}
               >
-                <MarkdownText content={entry.body} role="assistant" />
+                <Box gap={1} marginBottom={0}>
+                  <Text color="cyan" bold>ori</Text>
+                  <Text color="gray" dimColor>Assistant</Text>
+                </Box>
+                <Box marginTop={1}>
+                  <MarkdownText content={entry.body} role="assistant" />
+                </Box>
               </Box>
             </Box>
           );
         }
 
-        // tool entry — compact, dimmed
         if (entry.kind === "tool") {
           const isError = entry.tone === "error";
           const isInfo = entry.tone === "info";
           const borderColor = isError ? "red" : isInfo ? "cyan" : "gray";
+          const titleColor = isError ? "red" : isInfo ? "cyan" : "white";
           return (
             <Box key={entry.id} flexDirection="column" marginBottom={1}>
-              <Box paddingLeft={2}>
-                <Text
-                  color={isError ? "red" : isInfo ? "cyan" : "gray"}
-                  dimColor={!isError && !isInfo}
-                >
-                  {isError ? "✗" : isInfo ? "◈" : "·"} {entry.title.toLowerCase()}
-                </Text>
-              </Box>
-              {entry.body.trim() ? (
-                <Box
-                  borderStyle="single"
-                  borderLeft={true}
-                  borderRight={false}
-                  borderTop={false}
-                  borderBottom={false}
-                  borderColor={borderColor}
-                  paddingLeft={1}
-                  marginLeft={2}
-                >
-                  <MarkdownText content={entry.body} role="tool" />
+              <Box
+                flexDirection="column"
+                borderStyle="round"
+                borderColor={borderColor}
+                paddingX={1}
+                paddingY={0}
+              >
+                <Box gap={1}>
+                  <Text color={titleColor} bold>{entry.title}</Text>
+                  <Text color="gray" dimColor>
+                    {isError ? "error" : isInfo ? "info" : "tool"}
+                  </Text>
                 </Box>
-              ) : null}
+                {entry.body.trim() ? (
+                  <Box marginTop={1}>
+                    <MarkdownText content={entry.body} role="tool" />
+                  </Box>
+                ) : null}
+              </Box>
             </Box>
           );
         }
@@ -105,49 +123,48 @@ export function Transcript({
         return null;
       })}
 
-      {/* Thinking / capability indicator */}
       {(thinking || activeCapability) && !streamingText && (
-        <Box flexDirection="column" marginBottom={0}>
-          <Box gap={1} marginBottom={0}>
-            <Text color="cyan" bold>ori</Text>
-          </Box>
+        <Box flexDirection="column" marginBottom={1}>
           <Box
-            borderStyle="single"
-            borderLeft={true}
-            borderRight={false}
-            borderTop={false}
-            borderBottom={false}
-            borderColor="cyan"
-            paddingLeft={1}
+            flexDirection="column"
+            borderStyle="round"
+            borderColor="yellow"
+            paddingX={1}
+            paddingY={0}
           >
-            <Text color="yellow" dimColor>
-              {activeCapability ? `${activeCapability}...` : thinking}
-            </Text>
+            <Box gap={1}>
+              <Text color="cyan" bold>ori</Text>
+              <Text color="gray" dimColor>Thinking</Text>
+            </Box>
+            <Box marginTop={1}>
+              <Text color="yellow" dimColor>
+                {activeCapability ? `${activeCapability}...` : thinking}
+              </Text>
+            </Box>
           </Box>
         </Box>
       )}
 
-      {/* Streaming response — live ORI block */}
       {streamingText && (
         <Box flexDirection="column" marginBottom={1}>
-          <Box gap={1} marginBottom={0}>
-            <Text color="cyan" bold>ori</Text>
-          </Box>
           <Box
-            borderStyle="single"
-            borderLeft={true}
-            borderRight={false}
-            borderTop={false}
-            borderBottom={false}
+            flexDirection="column"
+            borderStyle="round"
             borderColor="cyan"
-            paddingLeft={1}
+            paddingX={1}
+            paddingY={0}
           >
-            <MarkdownText content={streamingText} role="assistant" />
+            <Box gap={1}>
+              <Text color="cyan" bold>ori</Text>
+              <Text color="gray" dimColor>Responding</Text>
+            </Box>
+            <Box marginTop={1}>
+              <MarkdownText content={streamingText} role="assistant" />
+            </Box>
           </Box>
         </Box>
       )}
 
-      {/* Draft approval prompt */}
       {pendingApproval && pendingDraft && (
         <Box
           flexDirection="column"
@@ -158,7 +175,7 @@ export function Transcript({
           borderColor="yellow"
         >
           <Box gap={1} marginBottom={1}>
-            <Text color="yellow" bold>◈ draft ready</Text>
+            <Text color="yellow" bold>Draft Ready</Text>
             <Text color="gray">·</Text>
             <Text color="white" bold>{pendingDraft.targetPath}</Text>
           </Box>

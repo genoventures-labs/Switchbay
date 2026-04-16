@@ -30,7 +30,7 @@ export function StatusBar({ activeCapability, currentThought, scratchpad, status
       justifyContent="space-between"
     >
       <Box>
-        <Text color="gray">status </Text>
+        <Text color="gray">READY </Text>
         <Text color={getStatusColor(status)} bold>
           {status === "DISCONNECTED" ? "READY" : status}
         </Text>

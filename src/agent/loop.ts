@@ -635,7 +635,7 @@ export async function tryLocalCommand(
   if (command.type === "clear") {
     return {
       handled: true,
-      assistantMessage: "Clearing the current session view.",
+      assistantMessage: "I’ve cleared the session for you.",
     };
   }
 
@@ -1013,7 +1013,7 @@ export async function tryLocalCommand(
       }
       return {
         handled: true,
-        assistantMessage: "There is no pending draft to apply.",
+        assistantMessage: "There isn’t a draft to apply right now.",
       };
     }
 

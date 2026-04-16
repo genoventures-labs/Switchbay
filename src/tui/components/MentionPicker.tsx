@@ -21,12 +21,16 @@ export function MentionPicker({ candidates, selectedIndex, visible }: MentionPic
       paddingX={2}
       paddingY={0}
       marginBottom={0}
+      borderStyle="round"
+      borderColor="gray"
     >
+      <Text color="cyan" bold>Files</Text>
+      <Text color="gray" dimColor>Pick a path to insert into the prompt.</Text>
       {visibleCandidates.map((candidate, i) => {
         const absoluteIndex = startIndex + i;
         const isSelected = absoluteIndex === selectedIndex;
         return (
-          <Box key={candidate.value} gap={1}>
+          <Box key={candidate.value} gap={1} marginTop={1}>
             <Text color={isSelected ? "cyan" : "gray"} bold={isSelected}>
               {isSelected ? "❯" : " "}
             </Text>

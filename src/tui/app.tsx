@@ -392,7 +392,7 @@ export function OriApp({
           if (streamEvent.type === "agent_dispatch") {
             dispatch({
               type: "turn/capability",
-              capability: streamEvent.action ?? "Thinking",
+              capability: streamEvent.action ?? "thinking",
             });
             return;
           }
@@ -504,7 +504,7 @@ export function OriApp({
       dispatch({
         type: "turn/submitted",
         message: { role: "user", content: value },
-        objective: state.currentObjective ?? "Handle the local command.",
+        objective: state.currentObjective ?? "Process a local command.",
         pendingPlan: state.pendingPlan,
         mode: state.mode,
         resolvedProfile: state.resolvedProfile,
@@ -719,7 +719,7 @@ export function OriApp({
     } else {
       dispatch({
         type: "assistant/appended",
-        message: "Online. What are we building?",
+        message: "I’m online. How can I help you today?",
       });
     }
   }, []);

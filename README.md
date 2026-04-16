@@ -1,6 +1,8 @@
 # ORI-Code
 
-A high-speed, Bun-powered terminal interface for ORI Studio. Built for agents and sovereign operators who live in the console.
+A high-speed, **Bun**-powered **terminal UI (TUI)** for working with **ORI** as a **coding agent**: agents and sovereign operators who live in the console, not the browser. It targets the same **`glm.thynaptic.com`** backbone as other first-party ORI clients and maps to the **`ori_code`** dev surface in ORI product manifests.
+
+**Product topology:** ORI-Code is documented alongside the rest of the ORI line in the main platform repo — see **`docs/PRODUCTS.md`** in [Mavaia](https://github.com/thynaptic/oricli-alpha) (canonical ID `ori_code`, sibling repo path `../ori-code` next to the platform clone).
 
 ## The Stack
 - **Runtime**: [Bun](https://bun.sh) (Insanely fast startup and execution)
@@ -57,4 +59,5 @@ ori-code "summarize this repo"
 ```
 
 ---
-*Built in the Shadowlab for the Sovereign Agent OS.*
+
+*Built in the Shadowlab for the Sovereign Agent OS — Thynaptic Research.*

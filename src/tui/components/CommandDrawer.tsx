@@ -20,25 +20,32 @@ export function CommandDrawer({
   return (
     <Box
       flexDirection="column"
-      paddingX={1}
+      paddingX={2}
       marginTop={1}
       marginBottom={0}
+      borderStyle="round"
+      borderColor="cyan"
     >
-      <Text color="cyan" bold>
-        Slash Commands
-      </Text>
-      <Text color="gray">Use arrow keys to browse. Press Tab to insert.</Text>
+      <Text color="cyan" bold>Slash Commands</Text>
+      <Text color="gray" dimColor>Use arrow keys to browse. Press Tab or Enter to insert.</Text>
       {commands.length > 0 ? (
         commands.map((item, index) => {
           const selected = index === selectedIndex;
 
           return (
-            <Box key={item.command} flexDirection="column" marginTop={1}>
+            <Box
+              key={item.command}
+              flexDirection="column"
+              marginTop={1}
+              paddingX={1}
+              borderStyle={selected ? "round" : undefined}
+              borderColor={selected ? "yellow" : undefined}
+            >
               <Text color={selected ? "yellow" : "white"} bold={selected}>
                 {selected ? ">" : " "} {item.command} <Text color="cyan">{item.category}</Text>
               </Text>
               <Text color="white">{item.description}</Text>
-              <Text color="gray">{item.example}</Text>
+              <Text color="gray" dimColor>{item.example}</Text>
             </Box>
           );
         })

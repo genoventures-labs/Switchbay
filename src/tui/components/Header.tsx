@@ -17,35 +17,47 @@ export function Header({ mode, status, workspace }: HeaderProps) {
   const branch = workspace?.branch ?? null;
   const dirty = workspace?.dirtyFiles.length ?? 0;
   const isThinking = status === "THINKING";
+  const statusLabel = status === "DISCONNECTED" ? "ready" : status.toLowerCase();
+  const branchColor = dirty > 0 ? "yellow" : "green";
 
   return (
     <Box
       paddingX={2}
-      paddingY={0}
-      justifyContent="space-between"
-      borderStyle="single"
-      borderTop={false}
-      borderLeft={false}
-      borderRight={false}
-      borderBottom={true}
+      paddingY={1}
+      flexDirection="column"
+      borderStyle="round"
       borderColor="gray"
+      marginBottom={1}
     >
-      <Box gap={1}>
-        <Text color="cyan" bold>ori</Text>
-        <Text color="gray">·</Text>
-        <Text color="white" bold>{project}</Text>
-        {branch ? (
-          <>
-            <Text color="gray">·</Text>
-            <Text color={dirty > 0 ? "yellow" : "green"}>{branch}</Text>
-            {dirty > 0 && <Text color="yellow" dimColor>{dirty}~</Text>}
-          </>
-        ) : null}
+      <Box justifyContent="space-between">
+        <Box flexDirection="column">
+          <Box gap={1}>
+            <Text color="cyan" bold>ORI</Text>
+            <Text color="gray">in</Text>
+            <Text color="white" bold>{project}</Text>
+            {branch ? (
+              <>
+                <Text color="gray">·</Text>
+                <Text color={branchColor}>{branch}</Text>
+                {dirty > 0 ? <Text color="yellow" dimColor>{dirty} dirty</Text> : null}
+              </>
+            ) : null}
+          </Box>
+          <Text color="gray" dimColor>{cwd}</Text>
+        </Box>
+        <Box flexDirection="column" alignItems="flex-end">
+          <Text color="gray" dimColor>{mode}</Text>
+          <Text color={isThinking ? "yellow" : "green"} bold>
+            {isThinking ? "thinking" : statusLabel}
+          </Text>
+        </Box>
       </Box>
-      <Box gap={1}>
-        <Text color="gray" dimColor>{mode}</Text>
-        <Text color={isThinking ? "yellow" : "green"}>
-          {isThinking ? "⠿" : "●"}
+      <Box marginTop={1} justifyContent="space-between">
+        <Text color="gray" dimColor>
+          Ask a question, describe an edit, or use slash commands.
+        </Text>
+        <Text color="gray" dimColor>
+          / for commands · @ for files
         </Text>
       </Box>
     </Box>

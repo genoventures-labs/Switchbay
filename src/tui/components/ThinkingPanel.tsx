@@ -40,7 +40,7 @@ export function ThinkingPanel({ collapsed, items }: ThinkingPanelProps) {
   return (
     <Box flexDirection="column" paddingX={1} marginBottom={1}>
       <Text color="gray">
-        trace {collapsed ? "(Ctrl+T)" : "(Ctrl+T to collapse)"}
+        Thinking... {collapsed ? "(Ctrl+T to expand)" : "(Ctrl+T to collapse)"}
       </Text>
       {!collapsed
         ? items.slice(0, 5).map((item) => (

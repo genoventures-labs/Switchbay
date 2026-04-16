@@ -1,5 +1,10 @@
 import { DEFAULTS } from "../config/defaults";
-import { getApiBase, getApiKey, getRuntimeEnvironmentHeaders } from "../config/env";
+import {
+  getApiBase,
+  getApiKey,
+  getDefaultModel,
+  getRuntimeEnvironmentHeaders,
+} from "../config/env";
 import type {
   CapabilityRequest,
   CapabilityResponse,
@@ -28,14 +33,20 @@ type OriClientOptions = {
 export class OriClient {
   private readonly apiBase: string;
   private readonly apiKey?: string;
-  private readonly environment: RuntimeEnvironmentHeaders;
+  private readonly staticEnvironment: RuntimeEnvironmentHeaders | undefined;
   private readonly fetchImpl: typeof fetch;
 
   constructor(options: OriClientOptions = {}) {
     this.apiBase = options.apiBase ?? getApiBase();
     this.apiKey = options.apiKey ?? getApiKey();
-    this.environment = options.environment ?? getRuntimeEnvironmentHeaders();
+    // Only store a static snapshot if explicitly provided — otherwise resolve live
+    // from process.cwd() on every request so /hop workspace changes are reflected.
+    this.staticEnvironment = options.environment;
     this.fetchImpl = options.fetchImpl ?? fetch;
+  }
+
+  private get environment(): RuntimeEnvironmentHeaders {
+    return this.staticEnvironment ?? getRuntimeEnvironmentHeaders();
   }
 
   async createChatCompletion(
@@ -53,7 +64,7 @@ export class OriClient {
         "X-ORI-Include-Scratchpad": "true",
       },
       body: JSON.stringify({
-        model: request.model ?? DEFAULTS.model,
+        model: request.model ?? getDefaultModel(),
         messages: request.messages,
         profile: request.profile,
         stream: request.stream ?? false,
@@ -146,7 +157,7 @@ export class OriClient {
 
     const capabilityInstruction = getCapabilityInstruction(input.capability);
     const response = await this.createChatCompletion(input.surface, {
-      model: DEFAULTS.model,
+      model: getDefaultModel(),
       profile: input.profile,
       stream: false,
       messages: [

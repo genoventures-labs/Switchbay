@@ -10,6 +10,10 @@ export function getApiBase(): string {
   return readEnv("ORI_API_BASE") ?? DEFAULTS.apiBase;
 }
 
+export function getDefaultModel(): string {
+  return readEnv("ORI_MODEL") ?? DEFAULTS.model;
+}
+
 export function getWebSocketBase(): string {
   return readEnv("ORI_WS_BASE") ?? DEFAULTS.wsBase;
 }

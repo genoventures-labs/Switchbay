@@ -1,5 +1,7 @@
 export const DEFAULTS = {
-  model: "oricli-oracle",
+  // Use the explicit fast default here so ORI Code doesn't depend on a
+  // server-side alias that may lag behind Oracle routing changes.
+  model: "gpt-5-mini",
   surface: "dev",
   profile: "ori_code",
   mode: "build",

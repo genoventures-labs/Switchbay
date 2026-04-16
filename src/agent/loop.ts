@@ -1,4 +1,5 @@
 import { DEFAULTS } from "../config/defaults";
+import { getDefaultModel } from "../config/env";
 import type { OriClient } from "../runtime/ori-client";
 import type {
   ChatCompletionRequest,
@@ -268,7 +269,7 @@ export function buildTurn(input: TurnBuildInput): BuiltTurn {
     objective,
     pendingPlan: draftPlan(policy.mode),
     request: {
-      model: DEFAULTS.model,
+      model: getDefaultModel(),
       messages,
       profile: policy.runtimeProfile,
       stream: false,
@@ -451,7 +452,7 @@ async function proposeFileEdit(input: {
   const response = await input.client.createChatCompletion(
     input.surface,
     {
-      model: DEFAULTS.model,
+      model: getDefaultModel(),
       profile: input.profile,
       stream: false,
       messages: [

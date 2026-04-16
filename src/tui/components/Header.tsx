@@ -18,7 +18,7 @@ export function Header({ mode, status, workspace }: HeaderProps) {
   const dirty = workspace?.dirtyFiles.length ?? 0;
   const isThinking = status === "THINKING";
   const statusLabel = status === "DISCONNECTED" ? "ready" : status.toLowerCase();
-  const branchColor = dirty > 0 ? "yellow" : "green";
+  const branchColor = dirty > 0 ? "yellow" : "#00FF7F";
 
   return (
     <Box
@@ -32,7 +32,7 @@ export function Header({ mode, status, workspace }: HeaderProps) {
       <Box justifyContent="space-between">
         <Box flexDirection="column">
           <Box gap={1}>
-            <Text color="magenta" bold>ORI</Text>
+            <Text color="#E57373" bold>ORI</Text>
             <Text color="gray">in</Text>
             <Text color="white">{project}</Text>
             {branch ? (
@@ -47,7 +47,7 @@ export function Header({ mode, status, workspace }: HeaderProps) {
         </Box>
         <Box flexDirection="column" alignItems="flex-end">
           <Text color="gray" dimColor>{mode}</Text>
-          <Text color={isThinking ? "magenta" : "green"} bold>
+          <Text color={isThinking ? "#E57373" : "#00FF7F"} bold>
             {isThinking ? "thinking" : statusLabel}
           </Text>
         </Box>

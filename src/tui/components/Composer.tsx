@@ -29,7 +29,7 @@ export function Composer({
     );
   }
 
-  const titleColor = isThinking ? "yellow" : disabled ? "magenta" : "magenta";
+  const titleColor = isThinking ? "yellow" : disabled ? "#E57373" : "#E57373";
   const placeholder = disabled
     ? "Describe what you want to change..."
     : "Ask ORI a question or describe an edit...";

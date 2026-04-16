@@ -29,17 +29,21 @@ export function Transcript({
   thinking,
   terminalWidth = 120,
 }: TranscriptProps) {
+  const brandColor = "#E57373"; // Salmon/Coral
+  const greenColor = "#00FF7F"; // Bright Spring Green
+  const grayColor = "#707070";  // Steel Gray
+
   return (
     <Box flexDirection="column" flexGrow={1} paddingTop={1}>
       {hasMoreAbove && (
         <Box marginBottom={1}>
-          <Text color="gray" dimColor>↑ scroll up  Ctrl+U</Text>
+          <Text color={grayColor}>↑ scroll up  Ctrl+U</Text>
         </Box>
       )}
 
       {entries.length === 0 && !streamingText && !thinking ? (
         <WelcomeBoard
-          version="0.4.6"
+          version="0.4.7"
           user="Mike"
           email="thatnotiondude@gmail.com"
           model="Sonnet 4.6"
@@ -53,7 +57,7 @@ export function Transcript({
           return (
             <Box key={entry.id} flexDirection="column" marginBottom={1}>
               <Box flexDirection="column">
-                <Text color="gray" dimColor>❯ <Text color="white">{entry.body}</Text></Text>
+                <Text color={grayColor}>❯ <Text color="white">{entry.body}</Text></Text>
               </Box>
             </Box>
           );
@@ -64,7 +68,7 @@ export function Transcript({
             <Box key={entry.id} flexDirection="column" marginBottom={1}>
               <Box flexDirection="column">
                 <Box gap={1} marginBottom={0}>
-                  <Text color="magenta">⏺</Text>
+                  <Text color={brandColor}>⏺</Text>
                   <Text color="white" bold>ORI</Text>
                 </Box>
                 <Box marginTop={1}>
@@ -78,13 +82,13 @@ export function Transcript({
         if (entry.kind === "tool") {
           const isError = entry.tone === "error";
           return (
-            <Box key={entry.id} flexDirection="column" marginBottom={0}>
+            <Box key={entry.id} flexDirection="column" marginBottom={1}>
               <Box gap={1}>
-                <Text color={isError ? "red" : "green"}>⏺</Text>
+                <Text color={isError ? "red" : greenColor}>⏺</Text>
                 <Text color="white" bold>{entry.title.toLowerCase()}</Text>
               </Box>
               <Box paddingLeft={1}>
-                <Text color="gray" dimColor>└ {entry.summary || "completed"}</Text>
+                <Text color={grayColor}>└ {entry.summary || "completed"}</Text>
               </Box>
             </Box>
           );
@@ -96,11 +100,11 @@ export function Transcript({
       {(thinking || activeCapability) && !streamingText && (
         <Box flexDirection="column" marginBottom={1} marginTop={1}>
           <Box gap={1}>
-            <Text color="green" dimColor>⏺</Text>
+            <Text color={greenColor}>⏺</Text>
             <Text color="white" bold>{activeCapability ? activeCapability.toLowerCase() : "thinking"}</Text>
           </Box>
           <Box paddingLeft={1}>
-             <Text color="gray" dimColor>└ Thinking...</Text>
+             <Text color={grayColor}>└ Thinking...</Text>
           </Box>
         </Box>
       )}
@@ -109,7 +113,7 @@ export function Transcript({
         <Box flexDirection="column" marginBottom={1}>
           <Box flexDirection="column">
             <Box gap={1}>
-              <Text color="magenta">⏺</Text>
+              <Text color={brandColor}>⏺</Text>
               <Text color="white" bold>ORI</Text>
             </Box>
             <Box marginTop={1}>
@@ -120,15 +124,15 @@ export function Transcript({
       )}
 
       {pendingApproval && pendingDraft && (
-        <Box flexDirection="column" marginTop={1} borderStyle="round" borderColor="magenta" paddingX={2} paddingY={1}>
+        <Box flexDirection="column" marginTop={1} borderStyle="round" borderColor={brandColor} paddingX={2} paddingY={1}>
           <Box gap={1} marginBottom={1}>
-            <Text color="magenta" bold>Draft Ready</Text>
-            <Text color="gray">·</Text>
+            <Text color={brandColor} bold>Draft Ready</Text>
+            <Text color={grayColor}>·</Text>
             <Text color="white" bold>{pendingDraft.targetPath}</Text>
           </Box>
-          <Text color="gray" dimColor>{pendingApproval.summary}</Text>
+          <Text color={grayColor}>{pendingApproval.summary}</Text>
           <Box marginTop={1} gap={3}>
-            <Text color="green">y / yes → apply</Text>
+            <Text color={greenColor}>y / yes → apply</Text>
             <Text color="red">n / no → discard</Text>
           </Box>
         </Box>
@@ -136,7 +140,7 @@ export function Transcript({
 
       {hasMoreBelow && (
         <Box marginTop={1}>
-          <Text color="gray" dimColor>↓ scroll down  Ctrl+D</Text>
+          <Text color={grayColor}>↓ scroll down  Ctrl+D</Text>
         </Box>
       )}
     </Box>

@@ -12,7 +12,7 @@ type StatusBarProps = {
 
 function getStatusColor(status: SessionStatus) {
   if (status === "READY" || status === "CONNECTED" || status === "DISCONNECTED") {
-    return "green";
+    return "#00FF7F";
   }
 
   if (status === "ERROR") {
@@ -31,28 +31,28 @@ export function StatusBar({ activeCapability, currentThought, scratchpad, status
     >
       <Box>
         
-        <Text color="gray" dimColor>
+        <Text color="#707070" dimColor>
           {status === "DISCONNECTED" ? "READY" : status}
         </Text>
-        <Text color="gray">
+        <Text color="#707070">
           {activeCapability ? "  active " : "  idle "}
         </Text>
         {activeCapability ? (
-          <Text color="green" dimColor>{activeCapability}</Text>
+          <Text color="#00FF7F" dimColor>{activeCapability}</Text>
         ) : null}
       </Box>
 
       <Box>
         {scratchpad?.task ? (
-          <Text color={scratchpad.status === "stale" ? "gray" : "cyan"}>
-            <Text color="gray">task </Text>
+          <Text color={scratchpad.status === "stale" ? "#707070" : "cyan"}>
+            <Text color="#707070">task </Text>
             {scratchpad.task}
-            <Text color="gray"> ({scratchpad.status}) </Text>
+            <Text color="#707070"> ({scratchpad.status}) </Text>
           </Text>
         ) : null}
         {currentThought ? (
-          <Text color="gray">
-            <Text color="gray" dimColor> now</Text> {currentThought}
+          <Text color="#707070">
+            <Text color="#707070" dimColor> now</Text> {currentThought}
           </Text>
         ) : null}
       </Box>

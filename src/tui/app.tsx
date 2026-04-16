@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useReducer, useRef, useState } from "react";
-import { Box, useInput } from "ink";
+import { Box, useInput, useStdout } from "ink";
 import { getWebSocketBase } from "../config/env";
 import {
   buildTurn,
@@ -52,8 +52,28 @@ export function OriApp({
   profile,
   surface,
 }: OriAppProps) {
-  const stdoutWidth = process.stdout.columns ?? 120;
-  const stdoutHeight = process.stdout.rows ?? 40;
+  const { stdout } = useStdout();
+  const [dimensions, setDimensions] = useState({
+    columns: stdout?.columns ?? 120,
+    rows: stdout?.rows ?? 40,
+  });
+
+  useEffect(() => {
+    const handleResize = () => {
+      setDimensions({
+        columns: stdout?.columns ?? 120,
+        rows: stdout?.rows ?? 40,
+      });
+    };
+    stdout?.on("resize", handleResize);
+    return () => {
+      stdout?.off("resize", handleResize);
+    };
+  }, [stdout]);
+
+  const stdoutWidth = dimensions.columns;
+  const stdoutHeight = dimensions.rows;
+
   const [query, setQuery] = useState("");
   const queryRef = useRef("");
   const setQuerySync = (value: string) => {
@@ -114,8 +134,9 @@ export function OriApp({
     return match ? match[1] : null;
   }, [query]);
   const mentionPickerVisible = mentionPartial !== null && composerMode === "default" && !commandDrawerVisible;
-  // Single-column layout — full width for transcript
-  const transcriptWindowSize = Math.max(8, stdoutHeight - 6);
+  
+  // Dynamic transcript window based on terminal height
+  const transcriptWindowSize = Math.max(5, stdoutHeight - 12);
   const totalTranscriptEntries = state.transcript.length;
   const clampedScrollOffset = Math.min(
     transcriptScrollOffset,
@@ -144,7 +165,6 @@ export function OriApp({
   }, [query, state.workspace?.recentFiles]);
 
   function acceptMention(candidate: MentionCandidate) {
-    // Replace the trailing @partial with @selected-value
     const next = queryRef.current.replace(/@([\w./\-]*)$/, `@${candidate.value}${candidate.isDir ? "/" : ""} `);
     queryRef.current = next;
     setQuery(next);
@@ -153,7 +173,6 @@ export function OriApp({
   }
 
   useInput((input, key) => {
-    // edit_intent mode: only handle escape and ctrl+t; TextInput in EditIntentDrawer owns the rest
     if (composerMode === "edit_intent") {
       if (key.escape) {
         setComposerMode("default");
@@ -166,7 +185,6 @@ export function OriApp({
       return;
     }
 
-    // mention picker: navigate and select
     if (mentionPickerVisible && mentionCandidates.length > 0) {
       if (key.upArrow) {
         setSelectedMentionIndex((prev) =>
@@ -188,7 +206,6 @@ export function OriApp({
         return;
       }
       if (key.escape) {
-        // Close picker without selecting — strip the trailing @partial
         const next = queryRef.current.replace(/@([\w./\-]*)$/, "").trimEnd();
         queryRef.current = next;
         setQuery(next);
@@ -198,7 +215,6 @@ export function OriApp({
       }
     }
 
-    // edit file picker: navigate and select with arrow keys, tab, enter, escape
     if (editPickerState.visible) {
       if (key.upArrow) {
         setSelectedEditFileIndex((previous) =>
@@ -232,10 +248,8 @@ export function OriApp({
         setSelectedEditFileIndex(0);
         return;
       }
-      // Let character input fall through to the query handler below
     }
 
-    // command drawer open: navigate and select
     if (commandDrawerVisible) {
       if (key.upArrow) {
         setSelectedCommandIndex((previous) =>
@@ -278,7 +292,6 @@ export function OriApp({
       }
     }
 
-    // Global shortcuts available in all non-edit modes
     if (key.ctrl && input === "t") {
       setThinkingCollapsed((previous) => !previous);
       return;
@@ -299,7 +312,6 @@ export function OriApp({
       return;
     }
 
-    // Default composer input handling (no initialQuery = interactive mode)
     if (!initialQuery) {
       if (key.return) {
         void handleSubmit(queryRef.current);
@@ -415,7 +427,6 @@ export function OriApp({
 
       ws.addEventListener("close", () => {
         if (destroyed) return;
-        // Reconnect silently with exponential backoff, cap at 30s.
         reconnectDelay = Math.min(reconnectDelay * 2, 30000);
         reconnectTimer = setTimeout(connect, reconnectDelay);
       });
@@ -487,7 +498,6 @@ export function OriApp({
       dispatch({ type: "workspace/updated", workspace });
     }
 
-    // Clear input immediately so the UI feels responsive
     setQuerySync("");
     setComposerMode("default");
 
@@ -592,7 +602,6 @@ export function OriApp({
       return;
     }
 
-    // Resolve @mentions: inject file/dir content as a context prefix
     const { mentions, cleanQuery } = parseMentions(value);
     let mentionContext = "";
     if (mentions.length > 0) {
@@ -689,7 +698,6 @@ export function OriApp({
 
       dispatch({ type: "turn/completed" });
 
-      // Refresh workspace after turn so next turn has fresh git state
       refreshWorkspace().then((ws) => {
         dispatch({ type: "workspace/updated", workspace: ws });
       }).catch(() => {});
@@ -716,8 +724,6 @@ export function OriApp({
   useEffect(() => {
     if (initialQuery) {
       void handleSubmit(initialQuery);
-    } else {
-      // Do nothing — keeps the transcript empty so the WelcomeBoard shows up.
     }
   }, []);
 
@@ -752,7 +758,7 @@ export function OriApp({
   }, [mentionPartial, state.workspace?.cwd]);
 
   return (
-    <Box flexDirection="column" width={stdoutWidth} minHeight={stdoutHeight}>
+    <Box flexDirection="column" width={stdoutWidth} height={stdoutHeight}>
       {state.transcript.length > 0 && (
         <Header
           mode={mode}
@@ -771,6 +777,7 @@ export function OriApp({
         scrollOffset={clampedScrollOffset}
         streamingText={state.streamingText}
         thinking={thinkingCollapsed ? null : (state.thoughts[0]?.summary ?? null)}
+        terminalWidth={stdoutWidth}
       />
       <EditDrawer
         files={editPickerState.files}

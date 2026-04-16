@@ -15,6 +15,7 @@ type TranscriptProps = {
   scrollOffset?: number;
   streamingText: string;
   thinking: string | null;
+  terminalWidth?: number;
 };
 
 export function Transcript({
@@ -26,6 +27,7 @@ export function Transcript({
   pendingDraft,
   streamingText,
   thinking,
+  terminalWidth = 120,
 }: TranscriptProps) {
   return (
     <Box flexDirection="column" flexGrow={1} paddingTop={1}>
@@ -37,11 +39,12 @@ export function Transcript({
 
       {entries.length === 0 && !streamingText && !thinking ? (
         <WelcomeBoard
-          version="0.4.5"
+          version="0.4.6"
           user="Mike"
           email="thatnotiondude@gmail.com"
           model="Sonnet 4.6"
           cwd={process.cwd()}
+          terminalWidth={terminalWidth}
         />
       ) : null}
 

@@ -42,7 +42,7 @@ export function Transcript({
 
       {entries.length === 0 && !streamingText && !thinking ? (
         <WelcomeBoard
-          version="0.7.0"
+          version="0.7.3"
           user="Mike"
           email="thatnotiondude@gmail.com"
           model="Sonnet 4.6"

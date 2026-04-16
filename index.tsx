@@ -98,7 +98,7 @@ Options:
   // CLI Mode: One-shot query provided
   if (options.initialQuery) {
     await runCliMode(options, resumeId);
-    return;
+    process.exit(0);
   }
 
   // TUI Mode: No query, launch interactive app

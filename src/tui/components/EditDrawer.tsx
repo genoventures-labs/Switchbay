@@ -21,7 +21,7 @@ export function EditDrawer({ files, selectedIndex, visible }: EditDrawerProps) {
       borderColor="green"
     >
       <Text color="green" bold>Edit File</Text>
-      <Text color="gray" dimColor>Pick a file, then press Tab or Enter to move into edit intent.</Text>
+      <Text color="#707070">Pick a file, then press Tab or Enter to move into edit intent.</Text>
       {files.length > 0 ? (
         files.map((file, index) => {
           const selected = index === selectedIndex;

@@ -23,7 +23,7 @@ export function Composer({
     return (
       <Box paddingX={2} paddingY={1}>
         <Box borderStyle="single" borderLeft={false} borderRight={false} borderBottom={false} borderTop={true} borderColor="gray" paddingX={1} paddingY={0}>
-          <Text color="gray" dimColor>one-shot mode · Ctrl+C to exit</Text>
+          <Text color="#707070">one-shot mode · Ctrl+C to exit</Text>
         </Box>
       </Box>
     );
@@ -44,7 +44,7 @@ export function Composer({
         flexDirection="column"
       >
         <Box marginTop={1}>
-          <Text color="gray" dimColor>❯ </Text>
+          <Text color="#707070">❯ </Text>
           <Text color={query ? "white" : "gray"} dimColor={!query}>
             {query || placeholder}
             {!isThinking && !disabled ? (
@@ -54,7 +54,7 @@ export function Composer({
         </Box>
       </Box>
       <Box marginTop={0} paddingX={2} paddingBottom={1}>
-        <Text color="gray" dimColor>
+        <Text color="#707070">
           {disabled
             ? "Enter to draft · Esc to cancel"
             : "? for shortcuts · / for commands"}

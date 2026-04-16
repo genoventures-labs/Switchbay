@@ -43,20 +43,20 @@ export function Header({ mode, status, workspace }: HeaderProps) {
               </>
             ) : null}
           </Box>
-          <Text color="gray" dimColor>{cwd}</Text>
+          <Text color="#707070">{cwd}</Text>
         </Box>
         <Box flexDirection="column" alignItems="flex-end">
-          <Text color="gray" dimColor>{mode}</Text>
+          <Text color="#707070">{mode}</Text>
           <Text color={isThinking ? "#E57373" : "#00FF7F"} bold>
             {isThinking ? "thinking" : statusLabel}
           </Text>
         </Box>
       </Box>
       <Box marginTop={1} justifyContent="space-between">
-        <Text color="gray" dimColor>
+        <Text color="#707070">
           Ask a question, describe an edit, or use slash commands.
         </Text>
-        <Text color="gray" dimColor>
+        <Text color="#707070">
           / for commands · @ for files
         </Text>
       </Box>

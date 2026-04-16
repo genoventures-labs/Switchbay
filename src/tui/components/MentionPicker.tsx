@@ -25,7 +25,7 @@ export function MentionPicker({ candidates, selectedIndex, visible }: MentionPic
       borderColor="gray"
     >
       <Text color="cyan" bold>Files</Text>
-      <Text color="gray" dimColor>Pick a path to insert into the prompt.</Text>
+      <Text color="#707070">Pick a path to insert into the prompt.</Text>
       {visibleCandidates.map((candidate, i) => {
         const absoluteIndex = startIndex + i;
         const isSelected = absoluteIndex === selectedIndex;
@@ -45,7 +45,7 @@ export function MentionPicker({ candidates, selectedIndex, visible }: MentionPic
         );
       })}
       {candidates.length > visible_count && (
-        <Text color="gray" dimColor>  +{candidates.length - visible_count} more</Text>
+        <Text color="#707070">  +{candidates.length - visible_count} more</Text>
       )}
     </Box>
   );

@@ -19,7 +19,7 @@ import {
   type SessionState,
   type TranscriptEntry,
 } from "./turn-state";
-import { refreshWorkspace, type WorkspaceSnapshot } from "../session/workspace";
+import { loadWorkspaceSnapshot, type WorkspaceSnapshot } from "../session/workspace";
 
 export type BuiltTurn = {
   mode: AgentMode;
@@ -33,6 +33,10 @@ export type ExecutedTurn = {
   response: ChatCompletionResponse;
   toolExecutions: AgentToolExecution[];
 };
+
+export async function refreshWorkspace(): Promise<WorkspaceSnapshot> {
+  return loadWorkspaceSnapshot(process.cwd());
+}
 
 export function buildTurn(input: {
   input: string;
@@ -210,5 +214,3 @@ export async function tryLocalCommand(
 
   return { handled: false };
 }
-
-export { refreshWorkspace };

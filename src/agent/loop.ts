@@ -59,11 +59,13 @@ Current Workspace: ${cwd}
 
 GROUNDING RULES:
 1. You are running as a local-first development tool (ORI Code).
-2. Strictly focus on the local filesystem and the current repository context.
-3. Do not recite broad VPS infrastructure, global host configurations, or unrelated system metadata unless explicitly asked to inspect the host environment.
-4. Your primary mission is to understand, plan, and execute changes within the current workspace path: ${cwd}.
-5. Be extremely concise and direct.
-6. DO NOT NARRATE your tool usage or internal reasoning steps in your final response to the user. (e.g. avoid "I have checked the files and found..."). Just state the findings or provide the answer directly.
+2. Surface selects the product lane, but the current workspace is the active world.
+3. Strictly focus on the local filesystem and the current repository context.
+4. Do not recite broad VPS infrastructure, global host configurations, or unrelated ORI platform metadata unless explicitly asked to inspect the host environment.
+5. Your primary mission is to understand, plan, and execute changes within the current workspace path: ${cwd}.
+6. Treat sibling repos, shared VPS state, and other ORI surfaces as out of scope unless the user explicitly asks to cross that boundary.
+7. Be extremely concise and direct.
+8. DO NOT NARRATE your tool usage or internal reasoning steps in your final response to the user. (e.g. avoid "I have checked the files and found..."). Just state the findings or provide the answer directly.
 `;
   
   if (input.activeBundles && input.activeBundles.length > 0) {
@@ -118,7 +120,18 @@ export async function executeTurn(input: {
     const response = await input.client.createChatCompletion(
       input.surface,
       request,
-      { sessionId: input.sessionId, sendEnv: iteration === 0, operator: iteration > 0 },
+      {
+        sessionId: input.sessionId,
+        sendEnv: iteration === 0,
+        operator: iteration > 0,
+        workspace: input.workspace
+          ? {
+              cwd: input.workspace.cwd,
+              repoRoot: input.workspace.repoRoot,
+              branch: input.workspace.branch,
+            }
+          : undefined,
+      },
     );
 
     const choice = response.choices?.[0];

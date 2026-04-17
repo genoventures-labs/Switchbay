@@ -1,4 +1,5 @@
 import { DEFAULTS } from "../config/defaults";
+import path from "node:path";
 import {
   getApiBase,
   getApiKey,
@@ -21,6 +22,7 @@ import type {
   SpaceInfo,
   RuntimeHealth,
   ToolInfo,
+  WorkspaceFocus,
 } from "./types";
 
 type OriClientOptions = {
@@ -52,7 +54,12 @@ export class OriClient {
   async createChatCompletion(
     surface: string,
     request: ChatCompletionRequest,
-    options: { sessionId?: string; operator?: boolean; sendEnv?: boolean } = {},
+    options: {
+      sessionId?: string;
+      operator?: boolean;
+      sendEnv?: boolean;
+      workspace?: WorkspaceFocus;
+    } = {},
   ): Promise<ChatCompletionResponse> {
     const response = await this.fetchImpl(`${this.apiBase}/chat/completions`, {
       method: "POST",
@@ -60,6 +67,7 @@ export class OriClient {
         ...this.buildHeaders(surface, options.sessionId, {
           operator: options.operator,
           sendEnv: options.sendEnv,
+          workspace: options.workspace,
         }),
         "X-ORI-Include-Scratchpad": "true",
       },
@@ -142,6 +150,7 @@ export class OriClient {
     prompt: string;
     sessionId?: string;
     surface: string;
+    workspace?: WorkspaceFocus;
     workspaceContext?: string;
   }): Promise<string> {
     const mappedEndpoint = mapCapabilityEndpoint(input.capability);
@@ -157,6 +166,7 @@ export class OriClient {
         ),
         sessionId: input.sessionId,
         surface: input.surface,
+        workspace: input.workspace,
       });
 
       return stringifyCapabilityResponse(response);
@@ -177,7 +187,7 @@ export class OriClient {
           content: input.prompt,
         },
       ],
-    }, { sessionId: input.sessionId });
+    }, { sessionId: input.sessionId, workspace: input.workspace });
 
     return response.choices?.[0]?.message?.content ?? "";
   }
@@ -205,7 +215,7 @@ export class OriClient {
       request.input,
       request.surface,
       request.sessionId,
-      { sendEnv: true },
+      { sendEnv: true, workspace: request.workspace },
     );
 
     return response as CapabilityResponse;
@@ -241,11 +251,14 @@ export class OriClient {
     body: unknown,
     surface: string,
     sessionId?: string,
-    options: { sendEnv?: boolean } = {},
+    options: { sendEnv?: boolean; workspace?: WorkspaceFocus } = {},
   ): Promise<unknown> {
     const response = await this.fetchImpl(`${this.apiBase}${path}`, {
       method: "POST",
-      headers: this.buildHeaders(surface, sessionId, { sendEnv: options.sendEnv }),
+      headers: this.buildHeaders(surface, sessionId, {
+        sendEnv: options.sendEnv,
+        workspace: options.workspace,
+      }),
       body: JSON.stringify(body),
     });
 
@@ -278,19 +291,38 @@ export class OriClient {
   private buildHeaders(
     surface: string,
     sessionId?: string,
-    options: { operator?: boolean; sendEnv?: boolean } = {},
+    options: {
+      operator?: boolean;
+      sendEnv?: boolean;
+      workspace?: WorkspaceFocus;
+    } = {},
   ): Record<string, string> {
     if (!this.apiKey) {
       throw new Error("Missing ORI_API_KEY");
     }
 
+    const workspace = resolveWorkspaceFocus(this.environment, options.workspace);
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
       Authorization: `Bearer ${this.apiKey}`,
       "X-Ori-Context": surface,
+      "X-Ori-Surface": surface,
+      "X-Ori-Focus": "workspace",
+      "X-Ori-Workspace-Cwd": workspace.cwd,
+      "X-Ori-Workspace-Project": workspace.project,
     };
 
-    // Only send workspace context on user-initiated turns, not internal tool-loop calls
+    if (workspace.repoRoot) {
+      headers["X-Ori-Workspace-Root"] = workspace.repoRoot;
+      headers["X-Ori-Workspace-Repo"] = path.basename(workspace.repoRoot);
+    }
+
+    if (workspace.branch) {
+      headers["X-Ori-Workspace-Branch"] = workspace.branch;
+    }
+
+    // Only send broader host environment details on user-initiated turns.
+    // Workspace focus headers are always sent so the runtime can stay scoped.
     if (options.sendEnv) {
       headers["X-Env-OS"] = this.environment.os;
       headers["X-Env-PWD"] = this.environment.pwd;
@@ -308,6 +340,26 @@ export class OriClient {
 
     return headers;
   }
+}
+
+function resolveWorkspaceFocus(
+  environment: RuntimeEnvironmentHeaders,
+  workspace?: WorkspaceFocus,
+): Required<Pick<WorkspaceFocus, "cwd" | "project">> &
+  Pick<WorkspaceFocus, "repoRoot" | "branch"> {
+  const cwd = workspace?.cwd ?? environment.pwd;
+  const repoRoot = workspace?.repoRoot ?? null;
+  const branch = workspace?.branch ?? null;
+  const project =
+    workspace?.project ??
+    path.basename(repoRoot || cwd || environment.project || environment.pwd);
+
+  return {
+    cwd,
+    repoRoot,
+    branch,
+    project,
+  };
 }
 
 function getCapabilityInstruction(capability: OriCapabilityName): string {

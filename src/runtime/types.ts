@@ -86,10 +86,18 @@ export type RuntimeEnvironmentHeaders = {
   shell: string;
 };
 
+export type WorkspaceFocus = {
+  cwd: string;
+  repoRoot?: string | null;
+  branch?: string | null;
+  project?: string;
+};
+
 export type CapabilityRequest = {
   input: Record<string, unknown>;
   sessionId?: string;
   surface: string;
+  workspace?: WorkspaceFocus;
 };
 
 export type CapabilityResponse = {

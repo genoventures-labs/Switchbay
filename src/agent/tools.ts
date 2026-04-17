@@ -39,6 +39,22 @@ export const AGENT_TOOLS: ToolDefinition[] = [
   {
     type: "function",
     function: {
+      name: "read_file_range",
+      description: "Read a specific line range from a file in the local workspace.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: { type: "string", description: "The relative path to the file." },
+          start_line: { type: "number", description: "The 1-based starting line number." },
+          end_line: { type: "number", description: "The 1-based ending line number (inclusive)." },
+        },
+        required: ["path", "start_line", "end_line"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "list_directory",
       description: "List contents of a directory. Use recursive=true for a full crawl.",
       parameters: {
@@ -115,7 +131,23 @@ export const AGENT_TOOLS: ToolDefinition[] = [
     type: "function",
     function: {
       name: "diff_stat",
-      description: "Show the current uncommitted changes (git diff).",
+      description: "Show a summary of current uncommitted changes (git diff --stat).",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "diff_patch",
+      description: "Show the full patch for current uncommitted changes (git diff).",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "git_diff_staged",
+      description: "Show the full patch for currently staged changes (git diff --cached).",
       parameters: { type: "object", properties: {} },
     },
   },
@@ -188,6 +220,25 @@ export async function executeToolCall(
         };
       }
 
+      case "read_file_range": {
+        const filePath = path.join(cwd, args.path);
+        const content = await fs.readFile(filePath, "utf-8");
+        const lines = content.split("\n");
+        const startLine = Math.max(1, Number(args.start_line) || 1);
+        const endLine = Math.max(startLine, Number(args.end_line) || startLine);
+        const selected = lines
+          .slice(startLine - 1, endLine)
+          .map((line, index) => `${startLine + index}: ${line}`)
+          .join("\n");
+
+        return {
+          tool: name,
+          ok: true,
+          summary: `Read ${args.path}:${startLine}-${endLine}`,
+          body: selected || "No content in requested range.",
+        };
+      }
+
       case "create_file": {
         const filePath = path.join(cwd, args.path);
         await fs.mkdir(path.dirname(filePath), { recursive: true });
@@ -253,12 +304,32 @@ export async function executeToolCall(
       }
 
       case "diff_stat": {
+        const { stdout } = await execAsync("git diff --stat", { cwd });
+        return {
+          tool: name,
+          ok: true,
+          summary: "Summarized local diff",
+          body: stdout || "No changes detected.",
+        };
+      }
+
+      case "diff_patch": {
         const { stdout } = await execAsync("git diff", { cwd });
         return {
           tool: name,
           ok: true,
-          summary: "Analyzed local diff",
+          summary: "Read local diff patch",
           body: stdout || "No changes detected.",
+        };
+      }
+
+      case "git_diff_staged": {
+        const { stdout } = await execAsync("git diff --cached", { cwd });
+        return {
+          tool: name,
+          ok: true,
+          summary: "Read staged diff patch",
+          body: stdout || "No staged changes detected.",
         };
       }
 

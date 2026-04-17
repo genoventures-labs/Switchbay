@@ -285,6 +285,66 @@ export const AGENT_TOOLS: ToolDefinition[] = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "check_health",
+      description: "Check the ORI runtime health and current surface context.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_key_info",
+      description: "Return tenant, key id, and scopes for the current authenticated ORI key.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_capabilities",
+      description: "Return the full ORI capability manifest from the runtime.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "list_surfaces",
+      description: "List valid ORI product surfaces and their profile sets.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "list_working_styles",
+      description: "List working style profiles available for a given ORI surface.",
+      parameters: {
+        type: "object",
+        properties: {
+          surface: { type: "string", description: "The surface to query: studio, home, dev, or red." },
+        },
+        required: ["surface"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_request_template",
+      description: "Retrieve a request template from the ORI developer portal request catalog.",
+      parameters: {
+        type: "object",
+        properties: {
+          template: { type: "string", description: "The template name to retrieve." },
+        },
+        required: ["template"],
+      },
+    },
+  },
 ];
 
 export type AgentToolExecution = {
@@ -297,6 +357,41 @@ export type AgentToolExecution = {
   draft?: any;
   travel?: { toPath: string; label: string; workspace: any };
 };
+
+async function callRuntimeMCP(
+  toolName: string,
+  args: Record<string, unknown>,
+): Promise<unknown> {
+  const apiBase = getApiBase();
+  const apiKey = getApiKey();
+  const response = await fetch(`${apiBase}/mcp`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+      "X-Ori-Context": "dev",
+    },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: { name: toolName, arguments: args },
+    }),
+  });
+  const data = (await response.json()) as {
+    result?: { content?: Array<{ text?: string }>; isError?: boolean };
+    error?: { message?: string };
+  };
+  if (data.error) {
+    throw new Error(data.error.message ?? "MCP error");
+  }
+  const text = data.result?.content?.[0]?.text ?? "";
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+}
 
 export async function executeToolCall(
   name: string,
@@ -628,6 +723,21 @@ export async function executeToolCall(
           ok: true,
           summary: `Researched: ${args.query}`,
           body: "I've analyzed the repository structure and context. Use list_directory or read_file for specific details.",
+        };
+      }
+
+      case "check_health":
+      case "get_key_info":
+      case "get_capabilities":
+      case "list_surfaces":
+      case "list_working_styles":
+      case "get_request_template": {
+        const result = await callRuntimeMCP(name, args);
+        return {
+          tool: name,
+          ok: true,
+          summary: `ORI runtime: ${name}`,
+          body: typeof result === "string" ? result : JSON.stringify(result, null, 2),
         };
       }
 

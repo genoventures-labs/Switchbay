@@ -133,6 +133,46 @@ export class OriClient {
     return (await this.getJson("/daemons", surface ?? DEFAULTS.surface)) as DaemonHealth;
   }
 
+  async invokeMCPTool(
+    toolName: string,
+    args: Record<string, unknown> = {},
+    surface = DEFAULTS.surface,
+  ): Promise<unknown> {
+    const response = await this.fetchImpl(`${this.apiBase}/mcp`, {
+      method: "POST",
+      headers: {
+        ...this.buildHeaders(surface),
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tools/call",
+        params: { name: toolName, arguments: args },
+      }),
+    });
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      throw new Error(`ORI MCP error: ${response.status}${text ? ` - ${text}` : ""}`);
+    }
+
+    const data = (await response.json()) as {
+      result?: { content?: Array<{ text?: string }>; isError?: boolean };
+      error?: { message?: string };
+    };
+
+    if (data.error) {
+      throw new Error(data.error.message ?? "MCP error");
+    }
+
+    const text = data.result?.content?.[0]?.text ?? "";
+    try {
+      return JSON.parse(text);
+    } catch {
+      return text;
+    }
+  }
+
   async listSpaces(surface?: string): Promise<SpaceInfo[]> {
     const response = await this.getJson("/spaces", surface ?? DEFAULTS.surface);
     if (Array.isArray(response)) {

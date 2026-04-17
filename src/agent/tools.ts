@@ -112,6 +112,23 @@ export const AGENT_TOOLS: ToolDefinition[] = [
   {
     type: "function",
     function: {
+      name: "apply_patch",
+      description: "Apply an exact string replacement to a file. Safer than freeform writes because the target text must already exist.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: { type: "string", description: "The relative path to the file to patch." },
+          search: { type: "string", description: "The exact text to find in the file." },
+          replace: { type: "string", description: "The replacement text." },
+          all_occurrences: { type: "boolean", description: "Whether to replace all matches instead of requiring exactly one." },
+        },
+        required: ["path", "search", "replace"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "draft_edit",
       description: "Propose an edit for a file. This creates a draft patch that the user must approve.",
       parameters: {
@@ -242,6 +259,21 @@ export const AGENT_TOOLS: ToolDefinition[] = [
   {
     type: "function",
     function: {
+      name: "openapi_lookup",
+      description: "Look up a specific endpoint or schema in ORI's OpenAPI document.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: { type: "string", description: "Optional API path to inspect, such as /chat/completions." },
+          method: { type: "string", description: "Optional HTTP method like get or post." },
+          schema: { type: "string", description: "Optional component schema name to inspect." },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "repo_research",
       description: "Ask ORI's backend to perform high-level research across the entire repository.",
       parameters: {
@@ -326,6 +358,38 @@ export async function executeToolCall(
           ok: true,
           summary: `Created ${args.path}`,
           body: `File ${args.path} created successfully.`,
+        };
+      }
+
+      case "apply_patch": {
+        const filePath = path.join(cwd, args.path);
+        const content = await fs.readFile(filePath, "utf-8");
+        const search = String(args.search ?? "");
+        const replace = String(args.replace ?? "");
+        const replaceAll = Boolean(args.all_occurrences);
+
+        if (!search) {
+          throw new Error("apply_patch requires non-empty search text.");
+        }
+
+        const matches = content.split(search).length - 1;
+        if (matches === 0) {
+          throw new Error("Search text not found in file.");
+        }
+        if (!replaceAll && matches !== 1) {
+          throw new Error(`Search text matched ${matches} times. Set all_occurrences=true or provide a more specific search block.`);
+        }
+
+        const updated = replaceAll
+          ? content.split(search).join(replace)
+          : content.replace(search, replace);
+
+        await fs.writeFile(filePath, updated, "utf-8");
+        return {
+          tool: name,
+          ok: true,
+          summary: `Patched ${args.path}`,
+          body: `Applied ${replaceAll ? "all matching" : "one exact"} replacement in ${args.path}.`,
         };
       }
 
@@ -509,6 +573,52 @@ export async function executeToolCall(
               ok: response.ok,
               summary: `Fetched ${args.url}`,
               body: data.content || data.error || "Failed to fetch content.",
+          };
+      }
+
+      case "openapi_lookup": {
+          const apiBase = getApiBase();
+          const apiKey = getApiKey();
+          const response = await fetch(`${apiBase}/openapi.json`, {
+              method: "GET",
+              headers: {
+                  "Authorization": `Bearer ${apiKey}`,
+                  "Content-Type": "application/json",
+              },
+          });
+          const doc = await response.json();
+          const endpointPath = args.path ? String(args.path) : "";
+          const method = args.method ? String(args.method).toLowerCase() : "";
+          const schema = args.schema ? String(args.schema) : "";
+
+          let result: unknown = doc;
+          if (schema) {
+              result = doc?.components?.schemas?.[schema];
+              if (!result) {
+                  throw new Error(`Schema not found: ${schema}`);
+              }
+          } else if (endpointPath) {
+              result = doc?.paths?.[endpointPath];
+              if (!result) {
+                  throw new Error(`Path not found: ${endpointPath}`);
+              }
+              if (method) {
+                  result = (result as Record<string, unknown>)?.[method];
+                  if (!result) {
+                      throw new Error(`Method ${method.toUpperCase()} not found for path ${endpointPath}`);
+                  }
+              }
+          }
+
+          return {
+              tool: name,
+              ok: response.ok,
+              summary: schema
+                ? `Looked up OpenAPI schema ${schema}`
+                : endpointPath
+                  ? `Looked up OpenAPI path ${endpointPath}${method ? ` ${method.toUpperCase()}` : ""}`
+                  : "Read OpenAPI document",
+              body: JSON.stringify(result, null, 2),
           };
       }
 

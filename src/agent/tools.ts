@@ -172,6 +172,22 @@ export const AGENT_TOOLS: ToolDefinition[] = [
   {
     type: "function",
     function: {
+      name: "git_blame",
+      description: "Show blame information for a specific line range in a file.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: { type: "string", description: "The relative path to the file." },
+          start_line: { type: "number", description: "The 1-based starting line number." },
+          end_line: { type: "number", description: "The 1-based ending line number (inclusive)." },
+        },
+        required: ["path", "start_line", "end_line"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "diff_stat",
       description: "Show a summary of current uncommitted changes (git diff --stat).",
       parameters: { type: "object", properties: {} },
@@ -198,6 +214,14 @@ export const AGENT_TOOLS: ToolDefinition[] = [
       function: {
           name: "verify",
           description: "Run verification commands (e.g. tests or build check) to validate the current workspace state.",
+          parameters: { type: "object", properties: {} },
+      },
+  },
+  {
+      type: "function",
+      function: {
+          name: "run_tests",
+          description: "Run the most likely repository test command with lightweight auto-detection.",
           parameters: { type: "object", properties: {} },
       },
   },
@@ -387,6 +411,23 @@ export async function executeToolCall(
         };
       }
 
+      case "git_blame": {
+        const targetPath = String(args.path || "").trim();
+        const startLine = Math.max(1, Number(args.start_line) || 1);
+        const endLine = Math.max(startLine, Number(args.end_line) || startLine);
+        const escapedPath = targetPath.replace(/'/g, "'\\''");
+        const { stdout } = await execAsync(
+          `git blame -L ${startLine},${endLine} -- '${escapedPath}'`,
+          { cwd, maxBuffer: 1024 * 1024 * 4 },
+        );
+        return {
+          tool: name,
+          ok: true,
+          summary: `Read git blame for ${targetPath}:${startLine}-${endLine}`,
+          body: stdout || "No blame data found for requested range.",
+        };
+      }
+
       case "diff_stat": {
         const { stdout } = await execAsync("git diff --stat", { cwd });
         return {
@@ -437,6 +478,20 @@ export async function executeToolCall(
           };
       }
 
+      case "run_tests": {
+          const testCommand = await detectTestCommand(cwd);
+          const { stdout, stderr } = await execAsync(testCommand, {
+              cwd,
+              maxBuffer: 1024 * 1024 * 8,
+          });
+          return {
+              tool: name,
+              ok: true,
+              summary: `Ran tests with: ${testCommand}`,
+              body: [stdout, stderr].filter(Boolean).join("\n") || "Tests completed with no output.",
+          };
+      }
+
       case "web_fetch": {
           const apiBase = getApiBase();
           const apiKey = getApiKey();
@@ -482,4 +537,35 @@ export async function executeToolCall(
       body: err.message,
     };
   }
+}
+
+async function detectTestCommand(cwd: string): Promise<string> {
+  try {
+    const packageJsonPath = path.join(cwd, "package.json");
+    const packageJson = JSON.parse(await fs.readFile(packageJsonPath, "utf-8")) as {
+      scripts?: Record<string, string>;
+    };
+    const scripts = packageJson.scripts ?? {};
+    if (scripts.test) {
+      return "bun test || npm test";
+    }
+  } catch {
+    // ignore missing or invalid package.json
+  }
+
+  try {
+    await fs.access(path.join(cwd, "bun.lock"));
+    return "bun test";
+  } catch {
+    // no bun lock
+  }
+
+  try {
+    await fs.access(path.join(cwd, "go.mod"));
+    return "go test ./...";
+  } catch {
+    // no go.mod
+  }
+
+  return "bun run build || npm run build || true";
 }

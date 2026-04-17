@@ -39,6 +39,20 @@ export const AGENT_TOOLS: ToolDefinition[] = [
   {
     type: "function",
     function: {
+      name: "read_json",
+      description: "Read and pretty-print a JSON file from the local workspace.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: { type: "string", description: "The relative path to the JSON file." },
+        },
+        required: ["path"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "read_file_range",
       description: "Read a specific line range from a file in the local workspace.",
       parameters: {
@@ -114,7 +128,7 @@ export const AGENT_TOOLS: ToolDefinition[] = [
     type: "function",
     function: {
       name: "search_files",
-      description: "Search for a string or regex pattern across all files in the project.",
+      description: "Search for a string or regex pattern across all files in the project using ripgrep.",
       parameters: {
         type: "object",
         properties: {
@@ -248,6 +262,18 @@ export async function executeToolCall(
         };
       }
 
+      case "read_json": {
+        const filePath = path.join(cwd, args.path);
+        const content = await fs.readFile(filePath, "utf-8");
+        const parsed = JSON.parse(content);
+        return {
+          tool: name,
+          ok: true,
+          summary: `Read JSON ${args.path}`,
+          body: JSON.stringify(parsed, null, 2),
+        };
+      }
+
       case "read_file_range": {
         const filePath = path.join(cwd, args.path);
         const content = await fs.readFile(filePath, "utf-8");
@@ -316,8 +342,11 @@ export async function executeToolCall(
       }
 
       case "search_files": {
-          const query = args.query;
-          const { stdout } = await execAsync(`grep -rnE "${query}" . | head -n 50`, { cwd });
+          const query = String(args.query || "").trim();
+          const include = String(args.include || "").trim();
+          const escapedQuery = query.replace(/'/g, "'\\''");
+          const includeArg = include ? ` -g '${include.replace(/'/g, "'\\''")}'` : "";
+          const { stdout } = await execAsync(`rg -n --hidden --glob '!.git'${includeArg} '${escapedQuery}' . | head -n 100`, { cwd, maxBuffer: 1024 * 1024 * 4 });
           return {
               tool: name,
               ok: true,

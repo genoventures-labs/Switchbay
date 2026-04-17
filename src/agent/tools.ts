@@ -69,6 +69,20 @@ export const AGENT_TOOLS: ToolDefinition[] = [
   {
     type: "function",
     function: {
+      name: "glob_files",
+      description: "Find files in the workspace by name or glob-like pattern.",
+      parameters: {
+        type: "object",
+        properties: {
+          pattern: { type: "string", description: "A filename fragment or glob-like pattern to match." },
+        },
+        required: ["pattern"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "create_file",
       description: "Create a new file with the specified content.",
       parameters: {
@@ -125,6 +139,20 @@ export const AGENT_TOOLS: ToolDefinition[] = [
       name: "git_log",
       description: "Show recent commit history for context.",
       parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "git_show",
+      description: "Show details for a commit, tag, or file at a git revision.",
+      parameters: {
+        type: "object",
+        properties: {
+          target: { type: "string", description: "A git target such as HEAD, HEAD~1, v0.9.10, or HEAD:path/to/file." },
+        },
+        required: ["target"],
+      },
     },
   },
   {
@@ -272,6 +300,21 @@ export async function executeToolCall(
         };
       }
 
+      case "glob_files": {
+        const pattern = String(args.pattern || "").trim();
+        const escapedPattern = pattern.replace(/'/g, "'\\''");
+        const { stdout } = await execAsync(
+          `find . -type f -not -path '*/.*' | grep -i '${escapedPattern}' | head -n 200`,
+          { cwd },
+        );
+        return {
+          tool: name,
+          ok: true,
+          summary: `Matched files for "${pattern}"`,
+          body: stdout || "No matching files found.",
+        };
+      }
+
       case "search_files": {
           const query = args.query;
           const { stdout } = await execAsync(`grep -rnE "${query}" . | head -n 50`, { cwd });
@@ -300,6 +343,18 @@ export async function executeToolCall(
           ok: true,
           summary: "Read git log",
           body: stdout || "No git history found.",
+        };
+      }
+
+      case "git_show": {
+        const target = String(args.target || "").trim();
+        const escapedTarget = target.replace(/'/g, "'\\''");
+        const { stdout } = await execAsync(`git show --stat --format=medium '${escapedTarget}'`, { cwd, maxBuffer: 1024 * 1024 * 4 });
+        return {
+          tool: name,
+          ok: true,
+          summary: `Read git show for ${target}`,
+          body: stdout || "No git data found for target.",
         };
       }
 

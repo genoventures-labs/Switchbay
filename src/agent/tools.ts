@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
 import { DEFAULTS } from "../config/defaults";
-import { getApiKey } from "../config/env";
+import { getApiKey, getApiBase } from "../config/env";
 import type { WorkspaceSnapshot } from "../session/workspace";
 
 const execAsync = promisify(exec);
@@ -53,6 +53,21 @@ export const AGENT_TOOLS: ToolDefinition[] = [
   {
     type: "function",
     function: {
+      name: "create_file",
+      description: "Create a new file with the specified content.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: { type: "string", description: "The relative path for the new file." },
+          content: { type: "string", description: "The content to write into the file." },
+        },
+        required: ["path", "content"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "draft_edit",
       description: "Propose an edit for a file. This creates a draft patch that the user must approve.",
       parameters: {
@@ -89,12 +104,42 @@ export const AGENT_TOOLS: ToolDefinition[] = [
     },
   },
   {
+    type: "function",
+    function: {
+      name: "git_log",
+      description: "Show recent commit history for context.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "diff_stat",
+      description: "Show the current uncommitted changes (git diff).",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
       type: "function",
       function: {
           name: "verify",
           description: "Run verification commands (e.g. tests or build check) to validate the current workspace state.",
           parameters: { type: "object", properties: {} },
       },
+  },
+  {
+    type: "function",
+    function: {
+      name: "web_fetch",
+      description: "Fetch and summarize a URL for documentation or research.",
+      parameters: {
+        type: "object",
+        properties: {
+          url: { type: "string", description: "The URL to fetch." },
+        },
+        required: ["url"],
+      },
+    },
   },
   {
     type: "function",
@@ -143,6 +188,18 @@ export async function executeToolCall(
         };
       }
 
+      case "create_file": {
+        const filePath = path.join(cwd, args.path);
+        await fs.mkdir(path.dirname(filePath), { recursive: true });
+        await fs.writeFile(filePath, args.content, "utf-8");
+        return {
+          tool: name,
+          ok: true,
+          summary: `Created ${args.path}`,
+          body: `File ${args.path} created successfully.`,
+        };
+      }
+
       case "list_directory": {
         const targetPath = path.join(cwd, args.path || ".");
         const recursive = !!args.recursive;
@@ -185,6 +242,26 @@ export async function executeToolCall(
         };
       }
 
+      case "git_log": {
+        const { stdout } = await execAsync("git log -n 5 --oneline", { cwd });
+        return {
+          tool: name,
+          ok: true,
+          summary: "Read git log",
+          body: stdout || "No git history found.",
+        };
+      }
+
+      case "diff_stat": {
+        const { stdout } = await execAsync("git diff", { cwd });
+        return {
+          tool: name,
+          ok: true,
+          summary: "Analyzed local diff",
+          body: stdout || "No changes detected.",
+        };
+      }
+
       case "draft_edit": {
         return {
           tool: name,
@@ -205,8 +282,27 @@ export async function executeToolCall(
           };
       }
 
+      case "web_fetch": {
+          const apiBase = getApiBase();
+          const apiKey = getApiKey();
+          const response = await fetch(`${apiBase}/ingest/web`, {
+              method: "POST",
+              headers: {
+                  "Authorization": `Bearer ${apiKey}`,
+                  "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ url: args.url }),
+          });
+          const data = await response.json();
+          return {
+              tool: name,
+              ok: response.ok,
+              summary: `Fetched ${args.url}`,
+              body: data.content || data.error || "Failed to fetch content.",
+          };
+      }
+
       case "repo_research": {
-        // This would call a backend RAG endpoint, for now simulate with a broad search
         return {
           tool: name,
           ok: true,

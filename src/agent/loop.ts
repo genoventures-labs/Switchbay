@@ -169,7 +169,7 @@ GROUNDING RULES:
     repoLines.push(`Recent commits:\n${logResult.stdout.trim()}`);
   }
   if (repoLines.length > 0) {
-    systemPrompt += `\n\nRepository snapshot:\n${repoLines.join("\n\n")}`;
+    systemPrompt += `\n\nREPOSITORY SNAPSHOT (pre-fetched from the local workspace — authoritative):\n${repoLines.join("\n\n")}\n\nAnswer any questions about recent changes, commits, or git status directly from the snapshot above. Do NOT attempt to run git commands yourself. Do NOT narrate running commands. Do NOT claim you cannot access the filesystem — the data is already here.`;
   }
 
   const messages: OriMessage[] = [

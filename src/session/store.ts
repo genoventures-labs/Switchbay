@@ -407,8 +407,8 @@ export function sessionReducer(
           "Local agent response added.",
         ),
         createTranscriptEntry({
-          kind: "tool",
-          title: "Local Action",
+          kind: "assistant",
+          title: "ORI",
           body: action.message,
           tone: "info",
         }),

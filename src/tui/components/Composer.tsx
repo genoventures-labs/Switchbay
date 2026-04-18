@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Box, Text } from "ink";
 import type { SessionStatus } from "../../agent/turn-state";
 
@@ -66,22 +66,18 @@ export function Composer({
   turnTokenCount = 0,
 }: ComposerProps) {
   const isThinking = status === "THINKING";
-  const phraseRef = useRef(PHRASES_CORE[0]);
-  const wasThinking = useRef(false);
+  const [phrase, setPhrase] = useState(pickPhrase());
   const [elapsed, setElapsed] = useState(0);
-
-  if (isThinking && !wasThinking.current) {
-    phraseRef.current = pickPhrase();
-    setElapsed(0);
-  }
-  wasThinking.current = isThinking;
 
   useEffect(() => {
     if (!isThinking || !turnStartedAt) return;
-    const id = setInterval(() => {
+    setPhrase(pickPhrase());
+    setElapsed(0);
+    const ticker = setInterval(() => {
       setElapsed(Math.floor((Date.now() - turnStartedAt) / 1000));
-    }, 1000);
-    return () => clearInterval(id);
+      setPhrase(pickPhrase());
+    }, 2000);
+    return () => clearInterval(ticker);
   }, [isThinking, turnStartedAt]);
 
   const formatTokens = (n: number) =>
@@ -106,7 +102,7 @@ export function Composer({
         <Box flexDirection="column" paddingX={2} marginBottom={0} marginTop={1}>
           <Box gap={1}>
             <Text color={brandColor}>⏺</Text>
-            <Text color="white">{phraseRef.current}…</Text>
+            <Text color="white">{phrase}…</Text>
             <Text color={grayColor}>
               ({elapsed}s · {formatTokens(turnTokenCount)} · thinking)
             </Text>

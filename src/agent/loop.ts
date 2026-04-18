@@ -117,7 +117,7 @@ export async function refreshWorkspace(): Promise<WorkspaceSnapshot> {
   return loadWorkspaceSnapshot(process.cwd());
 }
 
-export function buildTurn(input: {
+export async function buildTurn(input: {
   input: string;
   mode: string;
   previousObjective: string | null;
@@ -125,7 +125,7 @@ export function buildTurn(input: {
   transcript: OriMessage[];
   workspace: WorkspaceSnapshot | null;
   activeBundles?: Bundle[];
-}): BuiltTurn {
+}): Promise<BuiltTurn> {
   const mode = (input.mode as AgentMode) || "build";
   const objective = input.input.slice(0, 100);
   const cwd = input.workspace?.cwd || process.cwd();
@@ -151,6 +151,25 @@ GROUNDING RULES:
     for (const bundle of input.activeBundles) {
       systemPrompt += `\n\n--- BUNDLE: ${bundle.manifest.name} ---\n${bundle.rules}`;
     }
+  }
+
+  // Proactively embed live repo context so ORI can answer git/status questions
+  // without needing a server-side tool call round-trip.
+  const [statusResult, logResult] = await Promise.all([
+    runCommand(["git", "status", "--short"], cwd),
+    runCommand(["git", "log", "-5", "--oneline"], cwd),
+  ]);
+  const repoLines: string[] = [];
+  if (statusResult.ok && statusResult.stdout.trim()) {
+    repoLines.push(`Working tree:\n${statusResult.stdout.trim()}`);
+  } else if (statusResult.ok) {
+    repoLines.push("Working tree: clean");
+  }
+  if (logResult.ok && logResult.stdout.trim()) {
+    repoLines.push(`Recent commits:\n${logResult.stdout.trim()}`);
+  }
+  if (repoLines.length > 0) {
+    systemPrompt += `\n\nRepository snapshot:\n${repoLines.join("\n\n")}`;
   }
 
   const messages: OriMessage[] = [

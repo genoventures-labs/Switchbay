@@ -821,7 +821,7 @@ export function OriApp({
     }
     const effectiveInput = mentionContext ? `${mentionContext}${cleanQuery || value}` : value;
 
-    const turn = buildTurn({
+    const turn = await buildTurn({
       input: effectiveInput,
       mode,
       profile,

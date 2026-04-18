@@ -21,6 +21,8 @@ import {
 } from "./turn-state";
 import { loadWorkspaceSnapshot, type WorkspaceSnapshot } from "../session/workspace";
 import type { Bundle } from "../tools/bundles";
+import { listProjectFiles } from "../tools/files";
+import { runCommand } from "../tools/shell";
 
 export type BuiltTurn = {
   mode: AgentMode;
@@ -352,6 +354,14 @@ export async function tryLocalCommand(
   followUpInput?: string;
 }> {
   const trimmed = input.trim();
+  const localNaturalLanguage = await tryLocalWorkspaceIntent(trimmed, options.workspace);
+  if (localNaturalLanguage) {
+    return {
+      handled: true,
+      assistantMessage: localNaturalLanguage,
+    };
+  }
+
   if (!trimmed.startsWith("/")) return { handled: false };
 
   if (trimmed === "/clear") {
@@ -373,4 +383,87 @@ export async function tryLocalCommand(
   }
 
   return { handled: false };
+}
+
+async function tryLocalWorkspaceIntent(
+  input: string,
+  workspace: WorkspaceSnapshot | null,
+): Promise<string | null> {
+  const lower = input.toLowerCase();
+  const cwd = workspace?.cwd ?? process.cwd();
+
+  if (isDirectoryListingQuery(lower)) {
+    const files = await listProjectFiles(cwd, 30);
+    if (files.length === 0) {
+      return "This directory looks empty, or I couldn't index files from here.";
+    }
+    return `Files in this workspace:\n${files.join("\n")}`;
+  }
+
+  if (isLastCommitQuery(lower)) {
+    const result = await runCommand(["git", "log", "-1", "--oneline"], cwd);
+    if (result.ok && result.stdout) {
+      return `Last commit: ${result.stdout}`;
+    }
+    return "I couldn't read git history from this directory.";
+  }
+
+  if (isRepoChangesQuery(lower)) {
+    const [statusResult, diffResult, logResult] = await Promise.all([
+      runCommand(["git", "status", "--short"], cwd),
+      runCommand(["git", "diff", "--stat"], cwd),
+      runCommand(["git", "log", "-3", "--oneline"], cwd),
+    ]);
+
+    const parts: string[] = [];
+    if (statusResult.ok) {
+      parts.push(
+        statusResult.stdout
+          ? `Working tree status:\n${statusResult.stdout}`
+          : "Working tree is clean.",
+      );
+    }
+    if (diffResult.ok && diffResult.stdout) {
+      parts.push(`Unstaged diff:\n${diffResult.stdout}`);
+    }
+    if (logResult.ok && logResult.stdout) {
+      parts.push(`Recent commits:\n${logResult.stdout}`);
+    }
+    if (parts.length > 0) {
+      return parts.join("\n\n");
+    }
+    return "I couldn't read git changes from this directory.";
+  }
+
+  if (isRepoStatusQuery(lower) && workspace) {
+    const repoRoot = workspace.repoRoot ?? workspace.cwd;
+    return `Current directory: ${workspace.cwd}; Project: ${workspace.repoRoot ? workspace.project ?? "unknown" : workspace.project ?? "unknown"}; Branch: ${workspace.branch ?? "unknown"}; Repo root: ${repoRoot}.`;
+  }
+
+  return null;
+}
+
+function isDirectoryListingQuery(lower: string): boolean {
+  return (
+    (lower.includes("show me") || lower.includes("list") || lower.includes("what are")) &&
+    (lower.includes("files") || lower.includes("file")) &&
+    (lower.includes("dir") || lower.includes("directory") || lower.includes("here") || lower.includes("this"))
+  );
+}
+
+function isLastCommitQuery(lower: string): boolean {
+  return lower.includes("last commit") || lower.includes("recent commit");
+}
+
+function isRepoChangesQuery(lower: string): boolean {
+  return (
+    lower.includes("last repo changes") ||
+    lower.includes("last changes") ||
+    lower.includes("recent changes") ||
+    lower.includes("what changed")
+  );
+}
+
+function isRepoStatusQuery(lower: string): boolean {
+  return lower.includes("repo stat") || lower.includes("repo sitrep") || lower.includes("repo status");
 }

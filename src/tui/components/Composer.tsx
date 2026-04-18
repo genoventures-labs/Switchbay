@@ -76,7 +76,7 @@ export function Composer({
     const ticker = setInterval(() => {
       setElapsed(Math.floor((Date.now() - turnStartedAt) / 1000));
       setPhrase(pickPhrase());
-    }, 2000);
+    }, 10000);
     return () => clearInterval(ticker);
   }, [isThinking, turnStartedAt]);
 

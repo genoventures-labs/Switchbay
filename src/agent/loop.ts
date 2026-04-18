@@ -40,7 +40,49 @@ export function extractAssistantText(
 ): string {
   const choice = response.choices?.[0];
   const content = choice?.message?.content;
-  return typeof content === "string" ? content.trim() : "";
+  const extracted =
+    extractTextFromUnknown(content) ||
+    extractTextFromUnknown((choice as Record<string, unknown> | undefined)?.["text"]) ||
+    extractTextFromUnknown(response.output_text);
+  return extracted.trim();
+}
+
+function extractTextFromUnknown(value: unknown): string {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => extractTextFromUnknown(item))
+      .filter(Boolean)
+      .join("");
+  }
+
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+
+    if (typeof record.text === "string") {
+      return record.text;
+    }
+
+    if (record.text && typeof record.text === "object") {
+      const nestedText = (record.text as Record<string, unknown>).value;
+      if (typeof nestedText === "string") {
+        return nestedText;
+      }
+    }
+
+    if (typeof record.content === "string") {
+      return record.content;
+    }
+
+    if (Array.isArray(record.content)) {
+      return extractTextFromUnknown(record.content);
+    }
+  }
+
+  return "";
 }
 
 export function synthesizeAssistantFallback(

@@ -22,6 +22,11 @@ export function getApiKey(): string | undefined {
   return readEnv("ORI_API_KEY");
 }
 
+export function getDebugEmptyResponses(): boolean {
+  const value = readEnv("ORI_DEBUG_EMPTY_RESPONSES");
+  return value === "1" || value === "true" || value === "yes";
+}
+
 export function getRuntimeEnvironmentHeaders(cwd = process.cwd()) {
   return {
     os: readEnv("ORI_ENV_OS") ?? process.platform,

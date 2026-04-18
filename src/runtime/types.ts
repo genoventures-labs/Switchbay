@@ -2,7 +2,7 @@ export type OriRole = "system" | "user" | "assistant" | "tool";
 
 export type OriMessage = {
   role: OriRole;
-  content: string;
+  content: string | unknown;
   tool_call_id?: string;
   tool_calls?: ToolCall[];
 };
@@ -45,6 +45,8 @@ export type ChatCompletionResponse = {
   id?: string;
   object?: string;
   choices?: ChatCompletionChoice[];
+  output_text?: string;
+  _rawText?: string;
   meta?: {
     provider?: string;
     sass_factor?: number;

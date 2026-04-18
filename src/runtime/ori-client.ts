@@ -3,6 +3,7 @@ import path from "node:path";
 import {
   getApiBase,
   getApiKey,
+  getDebugEmptyResponses,
   getDefaultModel,
   getRuntimeEnvironmentHeaders,
 } from "../config/env";
@@ -88,7 +89,23 @@ export class OriClient {
       );
     }
 
-    return (await response.json()) as ChatCompletionResponse;
+    const rawText = await response.text();
+    const parsed = JSON.parse(rawText) as ChatCompletionResponse;
+    parsed._rawText = rawText;
+
+    if (getDebugEmptyResponses()) {
+      const hasStringContent =
+        typeof parsed.choices?.[0]?.message?.content === "string" &&
+        parsed.choices?.[0]?.message?.content.trim().length > 0;
+      const hasOutputText =
+        typeof parsed.output_text === "string" && parsed.output_text.trim().length > 0;
+      if (!hasStringContent && !hasOutputText) {
+        console.error("[ori-code] empty-looking chat completion response:");
+        console.error(rawText);
+      }
+    }
+
+    return parsed;
   }
 
   async submitFeedback(feedback: FeedbackRequest): Promise<void> {

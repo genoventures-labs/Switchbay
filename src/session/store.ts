@@ -355,38 +355,43 @@ export function sessionReducer(
         streamingText: action.content,
       };
     case "turn/completed": {
-      const nextState = state.streamingText.trim()
-        ? {
+      const trimmed = state.streamingText.trim();
+      const completedState = appendThought(
+        appendActivity(
+          {
             ...state,
-            conversation: [
-              ...state.conversation,
-              {
-                role: "assistant" as const,
-                content: state.streamingText,
-              },
-            ],
-          }
-        : state;
+            conversation: trimmed
+              ? [
+                  ...state.conversation,
+                  {
+                    role: "assistant" as const,
+                    content: trimmed,
+                  },
+                ]
+              : state.conversation,
+            status: "READY",
+            activeCapability: null,
+            streamingText: "",
+          },
+          "status",
+          "Turn complete.",
+        ),
+        "result",
+        trimmed
+          ? "Finished the turn and returned an answer."
+          : "Finished the turn.",
+      );
+
+      if (!trimmed) {
+        return completedState;
+      }
 
       return appendTranscript(
-        appendThought(
-          appendActivity(
-            {
-              ...nextState,
-              status: "READY",
-              activeCapability: null,
-              streamingText: "",
-            },
-            "status",
-            "Turn complete.",
-          ),
-          "result",
-          "Finished the turn and returned an answer.",
-        ),
+        completedState,
         createTranscriptEntry({
           kind: "assistant",
           title: "ORI",
-          body: state.streamingText || "Turn completed with no assistant text.",
+          body: trimmed,
           tone: "info",
         }),
       );

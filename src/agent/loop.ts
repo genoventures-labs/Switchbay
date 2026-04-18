@@ -43,6 +43,74 @@ export function extractAssistantText(
   return typeof content === "string" ? content.trim() : "";
 }
 
+export function synthesizeAssistantFallback(
+  userInput: string,
+  toolExecutions: AgentToolExecution[],
+): string {
+  if (toolExecutions.length === 0) {
+    return "";
+  }
+
+  const lower = userInput.trim().toLowerCase();
+  const byTool = new Map(toolExecutions.map((execution) => [execution.tool, execution]));
+  const gitStatus = byTool.get("git_status")?.body?.trim() ?? "";
+  const diffStat = byTool.get("diff_stat")?.body?.trim() ?? "";
+  const stagedDiff = byTool.get("git_diff_staged")?.body?.trim() ?? "";
+  const gitLog = byTool.get("git_log")?.body?.trim() ?? "";
+
+  if (lower.includes("last commit")) {
+    const firstCommit = gitLog.split("\n").map((line) => line.trim()).find(Boolean);
+    if (firstCommit) {
+      return `Last commit: ${firstCommit}`;
+    }
+  }
+
+  if (
+    lower.includes("last changes") ||
+    lower.includes("recent changes") ||
+    lower.includes("what changed") ||
+    lower.includes("repo sitrep") ||
+    lower.includes("sitrep")
+  ) {
+    const parts: string[] = [];
+
+    if (gitStatus) {
+      parts.push(
+        gitStatus === "Working tree clean."
+          ? "Working tree is clean."
+          : `Working tree status:\n${gitStatus}`,
+      );
+    }
+
+    if (diffStat && diffStat !== "No changes detected.") {
+      parts.push(`Unstaged diff:\n${diffStat}`);
+    }
+
+    if (stagedDiff && stagedDiff !== "No staged changes detected.") {
+      parts.push(`Staged diff:\n${stagedDiff}`);
+    }
+
+    const recentCommits = gitLog
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .slice(0, 3);
+    if (recentCommits.length > 0) {
+      parts.push(`Recent commits:\n${recentCommits.join("\n")}`);
+    }
+
+    if (parts.length > 0) {
+      return parts.join("\n\n");
+    }
+  }
+
+  const firstUsefulBody = toolExecutions
+    .map((execution) => execution.body.trim())
+    .find((body) => body.length > 0);
+
+  return firstUsefulBody ?? "";
+}
+
 export async function refreshWorkspace(): Promise<WorkspaceSnapshot> {
   return loadWorkspaceSnapshot(process.cwd());
 }

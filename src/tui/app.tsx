@@ -7,6 +7,7 @@ import {
   extractAssistantText,
   parseApprovalIntent,
   refreshWorkspace,
+  synthesizeAssistantFallback,
   tryLocalCommand,
 } from "../agent/loop";
 import { resolveAgentPolicy } from "../agent/policy";
@@ -886,7 +887,9 @@ export function OriApp({
         }
       }
 
-      const assistantContent = extractAssistantText(response);
+      const assistantContent =
+        extractAssistantText(response) ||
+        synthesizeAssistantFallback(value, executedTurn.toolExecutions);
 
       if (assistantContent) {
         dispatch({

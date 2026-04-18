@@ -6,7 +6,7 @@ import { OriApp } from "./src/tui/app";
 import { loadOriConfig } from "./src/config/ori-config";
 import { fuzzyMatchLocations, travelTo } from "./src/tools/travel";
 import { listSessions, purgeSessions, loadPersistedSession, savePersistedSession } from "./src/session/persistence";
-import { buildTurn, executeTurn, extractAssistantText, refreshWorkspace } from "./src/agent/loop";
+import { buildTurn, executeTurn, extractAssistantText, refreshWorkspace, synthesizeAssistantFallback } from "./src/agent/loop";
 import { listAvailableBundles } from "./src/tools/bundles";
 
 // ANSI colors for CLI mode
@@ -162,7 +162,9 @@ async function runCliMode(options: any, resumeId: string | null) {
       onStep,
     });
 
-    const content = extractAssistantText(executedTurn.response);
+    const content =
+      extractAssistantText(executedTurn.response) ||
+      synthesizeAssistantFallback(options.initialQuery, executedTurn.toolExecutions);
     if (content) {
       process.stdout.write(`\n${CLR.salmon}⏺${CLR.reset} ${CLR.white}${CLR.bold}ORI${CLR.reset}\n`);
       process.stdout.write(`  ${CLR.gray}└ ${CLR.reset}${content}\n\n`);

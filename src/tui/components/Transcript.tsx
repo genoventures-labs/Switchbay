@@ -70,13 +70,8 @@ export function Transcript({
                   <Text color={brandColor}>⏺</Text>
                   <Text color="white" bold>ORI</Text>
                 </Box>
-                <Box paddingLeft={2} marginTop={0}>
-                  <Box marginRight={1}>
-                    <Text color={grayColor}>└ </Text>
-                  </Box>
-                  <Box flexShrink={1} flexDirection="column">
-                    <MarkdownText content={entry.body} role="assistant" />
-                  </Box>
+                <Box paddingLeft={2} marginTop={0} flexShrink={1} flexDirection="column">
+                  <MarkdownText content={entry.body} role="assistant" />
                 </Box>
               </Box>
             </Box>
@@ -91,15 +86,10 @@ export function Transcript({
           <Box flexDirection="column">
             <Box gap={1}>
               <Text color={brandColor}>⏺</Text>
-              <Text color="white" bold>ORI <Text color={grayColor}>(responding…)</Text></Text>
+              <Text color="white" bold>ORI</Text>
             </Box>
-            <Box paddingLeft={2} marginTop={0}>
-              <Box marginRight={1}>
-                <Text color={grayColor}>└ </Text>
-              </Box>
-              <Box flexShrink={1} flexDirection="column">
-                <MarkdownText content={streamingText} role="assistant" />
-              </Box>
+            <Box paddingLeft={2} marginTop={0} flexShrink={1} flexDirection="column">
+              <MarkdownText content={streamingText} role="assistant" />
             </Box>
           </Box>
         </Box>

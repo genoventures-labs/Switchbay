@@ -1,6 +1,29 @@
-import React, { useState, useEffect } from "react";
+import React, { useRef } from "react";
 import { Box, Text } from "ink";
 import type { SessionStatus } from "../../agent/turn-state";
+
+const THINKING_PHRASES = [
+  "cooking something up…",
+  "staring into the void…",
+  "asking the oracle…",
+  "vibing…",
+  "plotting…",
+  "doing the math…",
+  "checking the vibe…",
+  "connecting the dots…",
+  "summoning an answer…",
+  "thinking thoughts…",
+  "consulting the ancient texts…",
+  "running it back…",
+  "in the lab…",
+  "reading between the lines…",
+  "loading genius…",
+  "on it…",
+  "crunching…",
+  "big brain moment…",
+  "firing neurons…",
+  "channeling the grid…",
+];
 
 type ComposerProps = {
   activeCapability: string | null;
@@ -20,6 +43,13 @@ export function Composer({
   thoughts = [],
 }: ComposerProps) {
   const isThinking = status === "THINKING";
+  const phraseRef = useRef(THINKING_PHRASES[0]);
+  const wasThinking = useRef(false);
+
+  if (isThinking && !wasThinking.current) {
+    phraseRef.current = THINKING_PHRASES[Math.floor(Math.random() * THINKING_PHRASES.length)];
+  }
+  wasThinking.current = isThinking;
 
   if (initialQuery) {
     return (
@@ -41,19 +71,13 @@ export function Composer({
         <Box flexDirection="column" paddingX={2} marginBottom={0} marginTop={1}>
           <Box gap={1}>
             <Text color={brandColor}>⏺</Text>
-            <Text color="white" bold>ORI <Text color={grayColor}>(thinking…)</Text></Text>
+            <Text color="white" bold>ORI <Text color={grayColor}>({phraseRef.current})</Text></Text>
           </Box>
-          {thoughts.length > 0 ? (
-            thoughts.map((t, i) => (
-              <Box key={i} paddingLeft={2}>
-                <Text color={grayColor}>└ {t}</Text>
-              </Box>
-            ))
-          ) : (
-            <Box paddingLeft={2}>
-              <Text color={grayColor}>└ thinking...</Text>
+          {thoughts.map((t, i) => (
+            <Box key={i} paddingLeft={2}>
+              <Text color={grayColor}>└ {t}</Text>
             </Box>
-          )}
+          ))}
         </Box>
       )}
 

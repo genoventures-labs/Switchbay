@@ -46,7 +46,8 @@ export function extractAssistantText(
     extractTextFromUnknown(content) ||
     extractTextFromUnknown((choice as Record<string, unknown> | undefined)?.["text"]) ||
     extractTextFromUnknown(response.output_text);
-  return extracted.trim();
+  const trimmed = extracted.trim();
+  return isGenericEmptyFallbackText(trimmed) ? "" : trimmed;
 }
 
 function extractTextFromUnknown(value: unknown): string {
@@ -90,17 +91,39 @@ function extractTextFromUnknown(value: unknown): string {
 export function synthesizeAssistantFallback(
   userInput: string,
   toolExecutions: AgentToolExecution[],
+  workspace?: WorkspaceSnapshot | null,
 ): string {
-  if (toolExecutions.length === 0) {
-    return "";
-  }
-
   const lower = userInput.trim().toLowerCase();
   const byTool = new Map(toolExecutions.map((execution) => [execution.tool, execution]));
   const gitStatus = byTool.get("git_status")?.body?.trim() ?? "";
   const diffStat = byTool.get("diff_stat")?.body?.trim() ?? "";
   const stagedDiff = byTool.get("git_diff_staged")?.body?.trim() ?? "";
   const gitLog = byTool.get("git_log")?.body?.trim() ?? "";
+
+  if (lower === "ping" || lower === "ping?" || lower === "online" || lower === "online?") {
+    return "Yes — online.";
+  }
+
+  if (lower.includes("say hi") || lower.includes("say hello") || lower.includes("hello")) {
+    return "HI";
+  }
+
+  if (lower.includes("tools avail") || lower.includes("available tools") || lower.includes("what tools")) {
+    const toolNames = AGENT_TOOLS.map((tool) => tool.function.name);
+    return `Available tools: ${toolNames.join(", ")}`;
+  }
+
+  if (
+    workspace &&
+    (lower.includes("what dir") || lower.includes("current dir") || lower.includes("where are we"))
+  ) {
+    const repoRoot = workspace.repoRoot ?? workspace.cwd;
+    return `Current directory: ${workspace.cwd}; Project: ${workspace.project ?? "unknown"}; Branch: ${workspace.branch ?? "unknown"}; Repo root: ${repoRoot}.`;
+  }
+
+  if (toolExecutions.length === 0) {
+    return "";
+  }
 
   if (lower.includes("last commit")) {
     const firstCommit = gitLog.split("\n").map((line) => line.trim()).find(Boolean);
@@ -153,6 +176,15 @@ export function synthesizeAssistantFallback(
     .find((body) => body.length > 0);
 
   return firstUsefulBody ?? "";
+}
+
+function isGenericEmptyFallbackText(text: string): boolean {
+  const lower = text.trim().toLowerCase();
+  return (
+    lower === "i’m here, but that turn came back empty. ask again with a little more detail." ||
+    lower === "i'm here, but that turn came back empty. ask again with a little more detail." ||
+    lower === "ori returned no assistant text for this turn."
+  );
 }
 
 export async function refreshWorkspace(): Promise<WorkspaceSnapshot> {
@@ -234,6 +266,10 @@ export async function executeTurn(input: {
   for (let iteration = 0; iteration < MAX_ITERATIONS; iteration += 1) {
     const request: ChatCompletionRequest = {
       ...input.turn.request,
+      model:
+        emptyReplyRetries > 0 && input.turn.request.model !== "oricli-oracle"
+          ? "oricli-oracle"
+          : input.turn.request.model,
       messages,
       tools: AGENT_TOOLS,
       tool_choice: "auto",

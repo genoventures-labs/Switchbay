@@ -889,7 +889,7 @@ export function OriApp({
 
       const assistantContent =
         extractAssistantText(response) ||
-        synthesizeAssistantFallback(value, executedTurn.toolExecutions);
+        synthesizeAssistantFallback(value, executedTurn.toolExecutions, workspace);
 
       if (assistantContent) {
         dispatch({

@@ -164,7 +164,7 @@ async function runCliMode(options: any, resumeId: string | null) {
 
     const content =
       extractAssistantText(executedTurn.response) ||
-      synthesizeAssistantFallback(options.initialQuery, executedTurn.toolExecutions);
+      synthesizeAssistantFallback(options.initialQuery, executedTurn.toolExecutions, workspace);
     if (content) {
       process.stdout.write(`\n${CLR.salmon}⏺${CLR.reset} ${CLR.white}${CLR.bold}ORI${CLR.reset}\n`);
       process.stdout.write(`  ${CLR.gray}└ ${CLR.reset}${content}\n\n`);

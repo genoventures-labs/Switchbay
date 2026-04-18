@@ -898,6 +898,11 @@ export function OriApp({
           type: "assistant/appended",
           message: "Turn completed after local tool work, but ORI returned no final assistant text.",
         });
+      } else {
+        dispatch({
+          type: "assistant/appended",
+          message: "ORI returned no assistant text for this turn.",
+        });
       }
 
       dispatch({

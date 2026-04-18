@@ -174,6 +174,9 @@ async function runCliMode(options: any, resumeId: string | null) {
     } else if (executedTurn.toolExecutions.length > 0) {
       process.stdout.write(`\n${CLR.salmon}⏺${CLR.reset} ${CLR.white}${CLR.bold}ORI${CLR.reset}\n`);
       process.stdout.write(`  ${CLR.gray}└ ${CLR.reset}Turn completed after local tool work, but ORI returned no final assistant text.\n\n`);
+    } else {
+      process.stdout.write(`\n${CLR.salmon}⏺${CLR.reset} ${CLR.white}${CLR.bold}ORI${CLR.reset}\n`);
+      process.stdout.write(`  ${CLR.gray}└ ${CLR.reset}ORI returned no assistant text for this turn.\n\n`);
     }
   } catch (err) {
     process.stdout.write(`\n${CLR.salmon}⏺${CLR.reset} ${CLR.white}${CLR.bold}Error:${CLR.reset} Request failed.\n`);

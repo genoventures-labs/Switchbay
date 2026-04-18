@@ -1,3 +1,5 @@
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import { DEFAULTS } from "../config/defaults";
 import { getDefaultModel } from "../config/env";
 import type { OriClient } from "../runtime/ori-client";
@@ -153,23 +155,49 @@ GROUNDING RULES:
     }
   }
 
-  // Proactively embed live repo context so ORI can answer git/status questions
-  // without needing a server-side tool call round-trip.
+  // Proactively embed live workspace context so ORI can answer questions about
+  // the project, recent changes, and git state without server-side tool calls.
   const [statusResult, logResult] = await Promise.all([
     runCommand(["git", "status", "--short"], cwd),
     runCommand(["git", "log", "-5", "--oneline"], cwd),
   ]);
-  const repoLines: string[] = [];
+
+  const snapshotLines: string[] = [];
+
+  // Top-level file listing — lets ORI reason about tech stack / project type
+  try {
+    const entries = readdirSync(cwd, { withFileTypes: true });
+    const names = entries
+      .filter(e => !e.name.startsWith(".") && e.name !== "node_modules")
+      .map(e => e.isDirectory() ? `${e.name}/` : e.name)
+      .slice(0, 40);
+    if (names.length > 0) snapshotLines.push(`Top-level files:\n${names.join("  ")}`);
+  } catch { /* ignore */ }
+
+  // package.json summary — name, description, scripts, deps
+  try {
+    const pkg = JSON.parse(readFileSync(join(cwd, "package.json"), "utf8"));
+    const parts: string[] = [];
+    if (pkg.name) parts.push(`name: ${pkg.name}`);
+    if (pkg.description) parts.push(`description: ${pkg.description}`);
+    if (pkg.scripts) parts.push(`scripts: ${Object.keys(pkg.scripts).join(", ")}`);
+    const deps = Object.keys({ ...pkg.dependencies, ...pkg.devDependencies }).slice(0, 20);
+    if (deps.length) parts.push(`deps: ${deps.join(", ")}`);
+    if (parts.length) snapshotLines.push(`package.json:\n${parts.join("\n")}`);
+  } catch { /* not a node project or no package.json */ }
+
+  // Git state
   if (statusResult.ok && statusResult.stdout.trim()) {
-    repoLines.push(`Working tree:\n${statusResult.stdout.trim()}`);
+    snapshotLines.push(`Working tree:\n${statusResult.stdout.trim()}`);
   } else if (statusResult.ok) {
-    repoLines.push("Working tree: clean");
+    snapshotLines.push("Working tree: clean");
   }
   if (logResult.ok && logResult.stdout.trim()) {
-    repoLines.push(`Recent commits:\n${logResult.stdout.trim()}`);
+    snapshotLines.push(`Recent commits:\n${logResult.stdout.trim()}`);
   }
-  if (repoLines.length > 0) {
-    systemPrompt += `\n\nREPOSITORY SNAPSHOT (pre-fetched from the local workspace — authoritative):\n${repoLines.join("\n\n")}\n\nAnswer any questions about recent changes, commits, or git status directly from the snapshot above. Do NOT attempt to run git commands yourself. Do NOT narrate running commands. Do NOT claim you cannot access the filesystem — the data is already here.`;
+
+  if (snapshotLines.length > 0) {
+    systemPrompt += `\n\nWORKSPACE SNAPSHOT (pre-fetched — authoritative, do not re-run these commands):\n${snapshotLines.join("\n\n")}`;
   }
 
   const messages: OriMessage[] = [

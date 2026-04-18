@@ -66,7 +66,7 @@ export function Composer({
   turnTokenCount = 0,
 }: ComposerProps) {
   const isThinking = status === "THINKING";
-  const phraseRef = useRef(THINKING_PHRASES[0]);
+  const phraseRef = useRef(PHRASES_CORE[0]);
   const wasThinking = useRef(false);
   const [elapsed, setElapsed] = useState(0);
 

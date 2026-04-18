@@ -228,6 +228,8 @@ export async function executeTurn(input: {
   const toolExecutions: AgentToolExecution[] = [];
   const messages: OriMessage[] = [...input.turn.request.messages];
   const MAX_ITERATIONS = 12;
+  let emptyReplyRetries = 0;
+  const MAX_EMPTY_REPLY_RETRIES = 1;
 
   for (let iteration = 0; iteration < MAX_ITERATIONS; iteration += 1) {
     const request: ChatCompletionRequest = {
@@ -255,10 +257,21 @@ export async function executeTurn(input: {
     );
 
     const choice = response.choices?.[0];
-    const finishReason = choice?.finish_reason;
     const assistantMessage = choice?.message;
+    const assistantText = extractAssistantText(response);
 
     const toolCalls = assistantMessage?.tool_calls ?? [];
+
+    if (toolCalls.length === 0 && assistantText === "" && emptyReplyRetries < MAX_EMPTY_REPLY_RETRIES) {
+      emptyReplyRetries += 1;
+      if (input.onStep) input.onStep("retrying empty reply...");
+      messages.push({
+        role: "user",
+        content:
+          "Your previous reply was empty. Answer the user's last request directly in plain text now. Do not return an empty message.",
+      });
+      continue;
+    }
 
     // Some ORI / provider combinations can return tool calls with finish_reason="stop".
     // Treat tool presence as authoritative so repo-aware turns don't terminate early

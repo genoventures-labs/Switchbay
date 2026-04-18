@@ -1043,6 +1043,8 @@ export function OriApp({
         query={query}
         status={state.status}
         thoughts={turnThoughts}
+        turnStartedAt={state.turnStartedAt}
+        turnTokenCount={state.turnTokenCount}
       />
     </Box>
   );

@@ -298,6 +298,8 @@ export function sessionReducer(
             streamingText: "",
             activeCapability: null,
             lastError: null,
+            turnStartedAt: Date.now(),
+            turnTokenCount: 0,
           },
           "status",
           "ORI is working the turn.",
@@ -330,6 +332,7 @@ export function sessionReducer(
       return {
         ...state,
         streamingText: state.streamingText + action.token,
+        turnTokenCount: state.turnTokenCount + 1,
       };
     case "tool/executed":
       return appendTranscript(
@@ -372,6 +375,7 @@ export function sessionReducer(
             status: "READY",
             activeCapability: null,
             streamingText: "",
+            turnStartedAt: null,
           },
           "status",
           "Turn complete.",
@@ -423,6 +427,7 @@ export function sessionReducer(
               activeCapability: null,
               streamingText: "",
               lastError: action.error,
+              turnStartedAt: null,
               conversation: [
                 ...state.conversation,
                 {

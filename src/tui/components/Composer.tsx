@@ -1,28 +1,28 @@
-import React, { useRef } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import { Box, Text } from "ink";
 import type { SessionStatus } from "../../agent/turn-state";
 
 const THINKING_PHRASES = [
-  "cooking something up…",
-  "staring into the void…",
-  "asking the oracle…",
-  "vibing…",
-  "plotting…",
-  "doing the math…",
-  "checking the vibe…",
-  "connecting the dots…",
-  "summoning an answer…",
-  "thinking thoughts…",
-  "consulting the ancient texts…",
-  "running it back…",
-  "in the lab…",
-  "reading between the lines…",
-  "loading genius…",
-  "on it…",
-  "crunching…",
-  "big brain moment…",
-  "firing neurons…",
-  "channeling the grid…",
+  "cooking something up",
+  "staring into the void",
+  "asking the oracle",
+  "vibing",
+  "plotting",
+  "doing the math",
+  "checking the vibe",
+  "connecting the dots",
+  "summoning an answer",
+  "thinking thoughts",
+  "consulting the ancient texts",
+  "running it back",
+  "in the lab",
+  "reading between the lines",
+  "loading genius",
+  "on it",
+  "crunching",
+  "big brain moment",
+  "firing neurons",
+  "channeling the grid",
 ];
 
 type ComposerProps = {
@@ -32,6 +32,8 @@ type ComposerProps = {
   query: string;
   status: SessionStatus;
   thoughts?: string[];
+  turnStartedAt?: number | null;
+  turnTokenCount?: number;
 };
 
 export function Composer({
@@ -41,15 +43,30 @@ export function Composer({
   query,
   status,
   thoughts = [],
+  turnStartedAt = null,
+  turnTokenCount = 0,
 }: ComposerProps) {
   const isThinking = status === "THINKING";
   const phraseRef = useRef(THINKING_PHRASES[0]);
   const wasThinking = useRef(false);
+  const [elapsed, setElapsed] = useState(0);
 
   if (isThinking && !wasThinking.current) {
     phraseRef.current = THINKING_PHRASES[Math.floor(Math.random() * THINKING_PHRASES.length)];
+    setElapsed(0);
   }
   wasThinking.current = isThinking;
+
+  useEffect(() => {
+    if (!isThinking || !turnStartedAt) return;
+    const id = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - turnStartedAt) / 1000));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [isThinking, turnStartedAt]);
+
+  const formatTokens = (n: number) =>
+    n >= 1000 ? `${(n / 1000).toFixed(1)}k tok` : `${n} tok`;
 
   if (initialQuery) {
     return (
@@ -61,9 +78,8 @@ export function Composer({
     );
   }
 
-  const brandColor = "#E57373"; // Salmon/Coral
-  const greenColor = "#00FF7F"; // Bright Spring Green
-  const grayColor = "#707070";  // Steel Gray
+  const brandColor = "#E57373";
+  const grayColor = "#707070";
 
   return (
     <Box flexDirection="column">
@@ -71,7 +87,10 @@ export function Composer({
         <Box flexDirection="column" paddingX={2} marginBottom={0} marginTop={1}>
           <Box gap={1}>
             <Text color={brandColor}>⏺</Text>
-            <Text color="white" bold>ORI <Text color={grayColor}>({phraseRef.current})</Text></Text>
+            <Text color="white">{phraseRef.current}…</Text>
+            <Text color={grayColor}>
+              ({elapsed}s · {formatTokens(turnTokenCount)} · thinking)
+            </Text>
           </Box>
           {thoughts.map((t, i) => (
             <Box key={i} paddingLeft={2}>
@@ -82,10 +101,10 @@ export function Composer({
       )}
 
       <Box
-        borderStyle="single" 
-        borderLeft={false} 
-        borderRight={false} 
-        borderBottom={true} 
+        borderStyle="single"
+        borderLeft={false}
+        borderRight={false}
+        borderBottom={true}
         borderTop={true}
         borderColor={grayColor}
         paddingX={2}
@@ -103,7 +122,7 @@ export function Composer({
           </Text>
         </Box>
       </Box>
-      
+
       <Box paddingX={2} paddingTop={0} paddingBottom={1}>
         <Text color={grayColor}>
           {disabled ? (

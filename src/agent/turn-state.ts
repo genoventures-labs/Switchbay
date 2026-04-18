@@ -87,6 +87,8 @@ export type SessionState = {
   updatedAt: number;
   activeBundleIds: string[];
   scratchpad: ScratchpadState | null;
+  turnStartedAt: number | null;
+  turnTokenCount: number;
 };
 
 export function createActivityEvent(
@@ -183,5 +185,7 @@ export function createInitialSessionState(input: {
       createThoughtFrame("goal", `Session booted in ${input.mode} mode.`),
     ],
     scratchpad: null,
+    turnStartedAt: null,
+    turnTokenCount: 0,
   };
 }

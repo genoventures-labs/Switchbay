@@ -42,7 +42,7 @@ export type SessionAction =
   | { type: "turn/token"; token: string }
   | { type: "tool/executed"; tool: string; summary: string; ok: boolean }
   | { type: "turn/response"; content: string }
-  | { type: "turn/completed" }
+  | { type: "turn/completed"; content?: string }
   | { type: "turn/failed"; error: string }
   | { type: "assistant/appended"; message: string }
   | { type: "thought/add"; kind: "goal" | "plan" | "inspect" | "capability" | "result" | "warning"; summary: string }
@@ -355,7 +355,7 @@ export function sessionReducer(
         streamingText: action.content,
       };
     case "turn/completed": {
-      const trimmed = state.streamingText.trim();
+      const trimmed = (action.content ?? state.streamingText).trim();
       const completedState = appendThought(
         appendActivity(
           {

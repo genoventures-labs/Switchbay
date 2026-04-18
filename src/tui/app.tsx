@@ -910,7 +910,7 @@ export function OriApp({
         scratchpad: response.meta?.scratchpad ?? null,
       });
 
-      dispatch({ type: "turn/completed" });
+      dispatch({ type: "turn/completed", content: assistantContent });
       setTurnThoughts([]);
 
       refreshWorkspace().then((ws) => {

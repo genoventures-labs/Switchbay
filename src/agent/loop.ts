@@ -93,82 +93,8 @@ export function synthesizeAssistantFallback(
   toolExecutions: AgentToolExecution[],
   workspace?: WorkspaceSnapshot | null,
 ): string {
-  const lower = userInput.trim().toLowerCase();
-  const byTool = new Map(toolExecutions.map((execution) => [execution.tool, execution]));
-  const gitStatus = byTool.get("git_status")?.body?.trim() ?? "";
-  const diffStat = byTool.get("diff_stat")?.body?.trim() ?? "";
-  const stagedDiff = byTool.get("git_diff_staged")?.body?.trim() ?? "";
-  const gitLog = byTool.get("git_log")?.body?.trim() ?? "";
-
-  if (lower === "ping" || lower === "ping?" || lower === "online" || lower === "online?") {
-    return "Yes — online.";
-  }
-
-  if (lower.includes("say hi") || lower.includes("say hello") || lower.includes("hello")) {
-    return "HI";
-  }
-
-  if (lower.includes("tools avail") || lower.includes("available tools") || lower.includes("what tools")) {
-    const toolNames = AGENT_TOOLS.map((tool) => tool.function.name);
-    return `Available tools: ${toolNames.join(", ")}`;
-  }
-
-  if (
-    workspace &&
-    (lower.includes("what dir") || lower.includes("current dir") || lower.includes("where are we"))
-  ) {
-    const repoRoot = workspace.repoRoot ?? workspace.cwd;
-    return `Current directory: ${workspace.cwd}; Project: ${workspace.project ?? "unknown"}; Branch: ${workspace.branch ?? "unknown"}; Repo root: ${repoRoot}.`;
-  }
-
   if (toolExecutions.length === 0) {
     return "";
-  }
-
-  if (lower.includes("last commit")) {
-    const firstCommit = gitLog.split("\n").map((line) => line.trim()).find(Boolean);
-    if (firstCommit) {
-      return `Last commit: ${firstCommit}`;
-    }
-  }
-
-  if (
-    lower.includes("last changes") ||
-    lower.includes("recent changes") ||
-    lower.includes("what changed") ||
-    lower.includes("repo sitrep") ||
-    lower.includes("sitrep")
-  ) {
-    const parts: string[] = [];
-
-    if (gitStatus) {
-      parts.push(
-        gitStatus === "Working tree clean."
-          ? "Working tree is clean."
-          : `Working tree status:\n${gitStatus}`,
-      );
-    }
-
-    if (diffStat && diffStat !== "No changes detected.") {
-      parts.push(`Unstaged diff:\n${diffStat}`);
-    }
-
-    if (stagedDiff && stagedDiff !== "No staged changes detected.") {
-      parts.push(`Staged diff:\n${stagedDiff}`);
-    }
-
-    const recentCommits = gitLog
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .slice(0, 3);
-    if (recentCommits.length > 0) {
-      parts.push(`Recent commits:\n${recentCommits.join("\n")}`);
-    }
-
-    if (parts.length > 0) {
-      return parts.join("\n\n");
-    }
   }
 
   const firstUsefulBody = toolExecutions
@@ -403,13 +329,6 @@ export async function tryLocalCommand(
   followUpInput?: string;
 }> {
   const trimmed = input.trim();
-  const localNaturalLanguage = await tryLocalWorkspaceIntent(trimmed, options.workspace);
-  if (localNaturalLanguage) {
-    return {
-      handled: true,
-      assistantMessage: localNaturalLanguage,
-    };
-  }
 
   if (!trimmed.startsWith("/")) return { handled: false };
 
@@ -434,85 +353,3 @@ export async function tryLocalCommand(
   return { handled: false };
 }
 
-async function tryLocalWorkspaceIntent(
-  input: string,
-  workspace: WorkspaceSnapshot | null,
-): Promise<string | null> {
-  const lower = input.toLowerCase();
-  const cwd = workspace?.cwd ?? process.cwd();
-
-  if (isDirectoryListingQuery(lower)) {
-    const files = await listProjectFiles(cwd, 30);
-    if (files.length === 0) {
-      return "This directory looks empty, or I couldn't index files from here.";
-    }
-    return `Files in this workspace:\n${files.join("\n")}`;
-  }
-
-  if (isLastCommitQuery(lower)) {
-    const result = await runCommand(["git", "log", "-1", "--oneline"], cwd);
-    if (result.ok && result.stdout) {
-      return `Last commit: ${result.stdout}`;
-    }
-    return "I couldn't read git history from this directory.";
-  }
-
-  if (isRepoChangesQuery(lower)) {
-    const [statusResult, diffResult, logResult] = await Promise.all([
-      runCommand(["git", "status", "--short"], cwd),
-      runCommand(["git", "diff", "--stat"], cwd),
-      runCommand(["git", "log", "-3", "--oneline"], cwd),
-    ]);
-
-    const parts: string[] = [];
-    if (statusResult.ok) {
-      parts.push(
-        statusResult.stdout
-          ? `Working tree status:\n${statusResult.stdout}`
-          : "Working tree is clean.",
-      );
-    }
-    if (diffResult.ok && diffResult.stdout) {
-      parts.push(`Unstaged diff:\n${diffResult.stdout}`);
-    }
-    if (logResult.ok && logResult.stdout) {
-      parts.push(`Recent commits:\n${logResult.stdout}`);
-    }
-    if (parts.length > 0) {
-      return parts.join("\n\n");
-    }
-    return "I couldn't read git changes from this directory.";
-  }
-
-  if (isRepoStatusQuery(lower) && workspace) {
-    const repoRoot = workspace.repoRoot ?? workspace.cwd;
-    return `Current directory: ${workspace.cwd}; Project: ${workspace.repoRoot ? workspace.project ?? "unknown" : workspace.project ?? "unknown"}; Branch: ${workspace.branch ?? "unknown"}; Repo root: ${repoRoot}.`;
-  }
-
-  return null;
-}
-
-function isDirectoryListingQuery(lower: string): boolean {
-  return (
-    (lower.includes("show me") || lower.includes("list") || lower.includes("what are")) &&
-    (lower.includes("files") || lower.includes("file")) &&
-    (lower.includes("dir") || lower.includes("directory") || lower.includes("here") || lower.includes("this"))
-  );
-}
-
-function isLastCommitQuery(lower: string): boolean {
-  return lower.includes("last commit") || lower.includes("recent commit");
-}
-
-function isRepoChangesQuery(lower: string): boolean {
-  return (
-    lower.includes("last repo changes") ||
-    lower.includes("last changes") ||
-    lower.includes("recent changes") ||
-    lower.includes("what changed")
-  );
-}
-
-function isRepoStatusQuery(lower: string): boolean {
-  return lower.includes("repo stat") || lower.includes("repo sitrep") || lower.includes("repo status");
-}

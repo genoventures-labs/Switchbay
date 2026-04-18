@@ -2,7 +2,25 @@ import React, { useRef, useState, useEffect } from "react";
 import { Box, Text } from "ink";
 import type { SessionStatus } from "../../agent/turn-state";
 
-const THINKING_PHRASES = [
+const PHRASES_CORE = [
+  "connecting the dots",
+  "checking context",
+  "validating response",
+  "asking the oracle",
+  "reading between the lines",
+  "consulting the ancient texts",
+  "cooking something up",
+  "loading genius",
+  "firing neurons",
+  "in the lab",
+  "running it back",
+  "doing the math",
+  "channeling the grid",
+  "summoning an answer",
+  "on it",
+];
+
+const PHRASES_WUB = [
   "cranking up the wubs",
   "dropping the bass",
   "building the drop",
@@ -10,20 +28,21 @@ const THINKING_PHRASES = [
   "syncing to 140 BPM",
   "loading the filth",
   "warming up the sub",
-  "dialing in the freq",
-  "pre-drop tension rising",
-  "the wub is loading",
-  "oscillating violently",
   "riding the LFO",
-  "about to go hard",
   "bass cannon primed",
   "summoning the wobble",
-  "checking the wub levels",
-  "tuning the growl",
-  "modulating",
   "the drop is imminent",
   "bwomp incoming",
+  "oscillating violently",
+  "tuning the growl",
+  "pre-drop tension rising",
 ];
+
+function pickPhrase(): string {
+  const wubMode = Math.random() < 0.2;
+  const pool = wubMode ? PHRASES_WUB : PHRASES_CORE;
+  return pool[Math.floor(Math.random() * pool.length)];
+}
 
 type ComposerProps = {
   activeCapability: string | null;
@@ -52,7 +71,7 @@ export function Composer({
   const [elapsed, setElapsed] = useState(0);
 
   if (isThinking && !wasThinking.current) {
-    phraseRef.current = THINKING_PHRASES[Math.floor(Math.random() * THINKING_PHRASES.length)];
+    phraseRef.current = pickPhrase();
     setElapsed(0);
   }
   wasThinking.current = isThinking;

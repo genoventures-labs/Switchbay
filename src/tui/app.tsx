@@ -4,6 +4,7 @@ import { getWebSocketBase } from "../config/env";
 import {
   buildTurn,
   executeTurn,
+  extractAssistantText,
   parseApprovalIntent,
   refreshWorkspace,
   tryLocalCommand,
@@ -885,12 +886,17 @@ export function OriApp({
         }
       }
 
-      const assistantContent = response.choices?.[0]?.message?.content?.trim();
+      const assistantContent = extractAssistantText(response);
 
       if (assistantContent) {
         dispatch({
           type: "turn/response",
           content: assistantContent,
+        });
+      } else if (executedTurn.toolExecutions.length > 0) {
+        dispatch({
+          type: "assistant/appended",
+          message: "Turn completed after local tool work, but ORI returned no final assistant text.",
         });
       }
 

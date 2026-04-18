@@ -35,6 +35,14 @@ export type ExecutedTurn = {
   toolExecutions: AgentToolExecution[];
 };
 
+export function extractAssistantText(
+  response: ChatCompletionResponse,
+): string {
+  const choice = response.choices?.[0];
+  const content = choice?.message?.content;
+  return typeof content === "string" ? content.trim() : "";
+}
+
 export async function refreshWorkspace(): Promise<WorkspaceSnapshot> {
   return loadWorkspaceSnapshot(process.cwd());
 }
@@ -138,7 +146,12 @@ export async function executeTurn(input: {
     const finishReason = choice?.finish_reason;
     const assistantMessage = choice?.message;
 
-    if (finishReason === "stop" || !assistantMessage?.tool_calls?.length) {
+    const toolCalls = assistantMessage?.tool_calls ?? [];
+
+    // Some ORI / provider combinations can return tool calls with finish_reason="stop".
+    // Treat tool presence as authoritative so repo-aware turns don't terminate early
+    // with an empty assistant shell before local tools execute.
+    if (toolCalls.length === 0) {
       if (input.onStep) input.onStep("Done.");
       return { response, toolExecutions };
     }
@@ -146,10 +159,10 @@ export async function executeTurn(input: {
     messages.push({
       role: "assistant",
       content: assistantMessage.content ?? "",
-      tool_calls: assistantMessage.tool_calls,
+      tool_calls: toolCalls,
     });
 
-    for (const toolCall of assistantMessage.tool_calls) {
+    for (const toolCall of toolCalls) {
       const toolName = toolCall.function.name;
       let args: Record<string, unknown> = {};
       try {

@@ -6,7 +6,7 @@ import { OriApp } from "./src/tui/app";
 import { loadOriConfig } from "./src/config/ori-config";
 import { fuzzyMatchLocations, travelTo } from "./src/tools/travel";
 import { listSessions, purgeSessions, loadPersistedSession, savePersistedSession } from "./src/session/persistence";
-import { buildTurn, executeTurn, refreshWorkspace } from "./src/agent/loop";
+import { buildTurn, executeTurn, extractAssistantText, refreshWorkspace } from "./src/agent/loop";
 import { listAvailableBundles } from "./src/tools/bundles";
 
 // ANSI colors for CLI mode
@@ -162,7 +162,7 @@ async function runCliMode(options: any, resumeId: string | null) {
       onStep,
     });
 
-    const content = executedTurn.response.choices?.[0]?.message?.content?.trim();
+    const content = extractAssistantText(executedTurn.response);
     if (content) {
       process.stdout.write(`\n${CLR.salmon}⏺${CLR.reset} ${CLR.white}${CLR.bold}ORI${CLR.reset}\n`);
       process.stdout.write(`  ${CLR.gray}└ ${CLR.reset}${content}\n\n`);
@@ -171,6 +171,9 @@ async function runCliMode(options: any, resumeId: string | null) {
       state.conversation.push({ role: "assistant", content });
       state.updatedAt = Date.now();
       await savePersistedSession(state);
+    } else if (executedTurn.toolExecutions.length > 0) {
+      process.stdout.write(`\n${CLR.salmon}⏺${CLR.reset} ${CLR.white}${CLR.bold}ORI${CLR.reset}\n`);
+      process.stdout.write(`  ${CLR.gray}└ ${CLR.reset}Turn completed after local tool work, but ORI returned no final assistant text.\n\n`);
     }
   } catch (err) {
     process.stdout.write(`\n${CLR.salmon}⏺${CLR.reset} ${CLR.white}${CLR.bold}Error:${CLR.reset} Request failed.\n`);

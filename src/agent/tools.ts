@@ -345,6 +345,64 @@ export const AGENT_TOOLS: ToolDefinition[] = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "shell",
+      description: "Run a shell command on the user's local machine. For write/destructive operations (git commit, git push, npm install, file deletions), set requires_approval=true — the user will confirm before execution.",
+      parameters: {
+        type: "object",
+        properties: {
+          command: { type: "string", description: "The shell command to run." },
+          requires_approval: { type: "boolean", description: "True for write or destructive operations. User will see the command and confirm before it runs." },
+          approval_reason: { type: "string", description: "Human-readable description shown to the user when asking for approval." },
+        },
+        required: ["command"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "git_add",
+      description: "Stage files for commit. Requires user approval.",
+      parameters: {
+        type: "object",
+        properties: {
+          paths: { type: "string", description: "Space-separated file paths to stage, or '.' to stage all changes." },
+        },
+        required: ["paths"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "git_commit",
+      description: "Create a git commit with the staged changes. Requires user approval.",
+      parameters: {
+        type: "object",
+        properties: {
+          message: { type: "string", description: "The commit message." },
+        },
+        required: ["message"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "git_push",
+      description: "Push commits to the remote repository. Requires user approval.",
+      parameters: {
+        type: "object",
+        properties: {
+          remote: { type: "string", description: "Remote name (default: origin)." },
+          branch: { type: "string", description: "Branch name (default: current branch)." },
+        },
+      },
+    },
+  },
 ];
 
 export type AgentToolExecution = {
@@ -356,6 +414,7 @@ export type AgentToolExecution = {
   changedFile?: string;
   draft?: any;
   travel?: { toPath: string; label: string; workspace: any };
+  shellPending?: { command: string; reason: string };
 };
 
 async function callRuntimeMCP(
@@ -723,6 +782,67 @@ export async function executeToolCall(
           ok: true,
           summary: `Researched: ${args.query}`,
           body: "I've analyzed the repository structure and context. Use list_directory or read_file for specific details.",
+        };
+      }
+
+      case "shell": {
+        const command = String(args.command || "").trim();
+        if (!command) throw new Error("shell requires a command.");
+        const requiresApproval = args.requires_approval !== false;
+        const approvalReason = String(args.approval_reason || command);
+        if (requiresApproval) {
+          return {
+            tool: name,
+            ok: true,
+            summary: `Shell pending: ${command.slice(0, 50)}`,
+            body: `Awaiting approval to run:\n\`${command}\`\n\n${approvalReason}`,
+            shellPending: { command, reason: approvalReason },
+          };
+        }
+        const { stdout, stderr } = await execAsync(command, { cwd, maxBuffer: 1024 * 1024 * 4 });
+        return {
+          tool: name,
+          ok: true,
+          summary: `Ran: ${command.split(/\s+/)[0]}`,
+          body: [stdout, stderr].filter(Boolean).join("\n") || "Done.",
+        };
+      }
+
+      case "git_add": {
+        const paths = String(args.paths || ".").trim();
+        const command = `git add ${paths}`;
+        return {
+          tool: name,
+          ok: true,
+          summary: `git add ${paths}`,
+          body: `Awaiting approval to run:\n\`${command}\``,
+          shellPending: { command, reason: `Stage ${paths === "." ? "all changes" : paths} for commit.` },
+        };
+      }
+
+      case "git_commit": {
+        const message = String(args.message || "").trim();
+        if (!message) throw new Error("git_commit requires a message.");
+        const command = `git commit -m ${JSON.stringify(message)}`;
+        return {
+          tool: name,
+          ok: true,
+          summary: `git commit: ${message.slice(0, 40)}`,
+          body: `Awaiting approval to run:\n\`${command}\``,
+          shellPending: { command, reason: `Create a commit: "${message}"` },
+        };
+      }
+
+      case "git_push": {
+        const remote = String(args.remote || "origin").trim();
+        const branch = String(args.branch || "").trim();
+        const command = branch ? `git push ${remote} ${branch}` : `git push ${remote}`;
+        return {
+          tool: name,
+          ok: true,
+          summary: `git push ${remote}`,
+          body: `Awaiting approval to run:\n\`${command}\``,
+          shellPending: { command, reason: `Push commits to ${remote}${branch ? `/${branch}` : ""}.` },
         };
       }
 

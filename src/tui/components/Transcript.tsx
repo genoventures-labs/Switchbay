@@ -71,7 +71,7 @@ export function Transcript({
                   <Text color="white" bold>ORI</Text>
                 </Box>
                 <Box paddingLeft={2} marginTop={0} flexShrink={1} flexDirection="column">
-                  <MarkdownText content={entry.body} role="assistant" />
+                  <MarkdownText content={entry.body} role="assistant" terminalWidth={terminalWidth - 4} />
                 </Box>
               </Box>
             </Box>
@@ -89,7 +89,7 @@ export function Transcript({
               <Text color="white" bold>ORI</Text>
             </Box>
             <Box paddingLeft={2} marginTop={0} flexShrink={1} flexDirection="column">
-              <MarkdownText content={streamingText} role="assistant" />
+              <MarkdownText content={streamingText} role="assistant" terminalWidth={terminalWidth - 4} />
             </Box>
           </Box>
         </Box>

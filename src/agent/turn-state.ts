@@ -50,7 +50,12 @@ export type PlanDraft = {
   executionPrompt: string;
 };
 
-export type ApprovalKind = "draft_edit" | "execution_plan";
+export type ShellCommand = {
+  command: string;
+  reason: string;
+};
+
+export type ApprovalKind = "draft_edit" | "execution_plan" | "shell_command";
 
 export type ApprovalRequest = {
   id: string;
@@ -82,6 +87,7 @@ export type SessionState = {
   lastPatchPreview: PatchPreview | null;
   pendingDraft: DraftEdit | null;
   pendingPlanDraft: PlanDraft | null;
+  pendingShell: ShellCommand | null;
   pendingApproval: ApprovalRequest | null;
   thoughts: ThoughtFrame[];
   updatedAt: number;
@@ -180,6 +186,7 @@ export function createInitialSessionState(input: {
     lastPatchPreview: null,
     pendingDraft: null,
     pendingPlanDraft: null,
+    pendingShell: null,
     pendingApproval: null,
     thoughts: [
       createThoughtFrame("goal", `Session booted in ${input.mode} mode.`),

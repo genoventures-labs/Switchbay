@@ -10,6 +10,7 @@ import {
   type DraftEdit,
   type AgentMode,
   type PlanDraft,
+  type ShellCommand,
   type SessionState,
 } from "../agent/turn-state";
 import type { WorkspaceSnapshot } from "./workspace";
@@ -28,6 +29,8 @@ export type SessionAction =
   | { type: "approval/rejected"; requestId: string }
   | { type: "draft/cleared" }
   | { type: "plan/cleared" }
+  | { type: "shell/staged"; command: string; reason: string }
+  | { type: "shell/cleared" }
   | { type: "verification/updated"; verification: VerificationSummary }
   | {
       type: "turn/submitted";
@@ -40,6 +43,7 @@ export type SessionAction =
   | { type: "turn/started" }
   | { type: "turn/capability"; capability: string | null }
   | { type: "turn/token"; token: string }
+  | { type: "turn/tokens"; count: number }
   | { type: "tool/executed"; tool: string; summary: string; ok: boolean }
   | { type: "turn/response"; content: string }
   | { type: "turn/completed"; content?: string }
@@ -247,6 +251,31 @@ export function sessionReducer(
           tone: "info",
         }),
       );
+    case "shell/staged":
+      return appendTranscript(
+        appendActivity(
+          {
+            ...state,
+            pendingShell: { command: action.command, reason: action.reason },
+            pendingApproval: createApprovalRequest({
+              kind: "shell_command",
+              title: "Run shell command",
+              summary: action.command,
+              commandHint: "/apply to run · /cancel to skip",
+            }),
+          },
+          "tool",
+          `Shell pending: ${action.command.slice(0, 60)}`,
+        ),
+        createTranscriptEntry({
+          kind: "tool",
+          title: "Shell: Awaiting Approval",
+          body: `\`${action.command}\`\n\n${action.reason}`,
+          tone: "warning",
+        }),
+      );
+    case "shell/cleared":
+      return { ...state, pendingShell: null, pendingApproval: null };
     case "verification/updated":
       return appendTranscript(
         appendActivity(
@@ -333,6 +362,11 @@ export function sessionReducer(
         ...state,
         streamingText: state.streamingText + action.token,
         turnTokenCount: state.turnTokenCount + 1,
+      };
+    case "turn/tokens":
+      return {
+        ...state,
+        turnTokenCount: state.turnTokenCount + action.count,
       };
     case "tool/executed":
       return appendTranscript(

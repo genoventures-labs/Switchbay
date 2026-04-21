@@ -659,6 +659,43 @@ export function OriApp({
       return;
     }
 
+    // Shell command approval — handled before tryLocalCommand so we can exec async
+    if (state.pendingShell && state.pendingApproval?.kind === "shell_command") {
+      const intent = parseApprovalIntent(trimmedVal);
+      if (intent === "apply") {
+        const shellCmd = state.pendingShell;
+        const shellCwd = state.workspace?.cwd ?? process.cwd();
+        dispatch({ type: "approval/approved", requestId: state.pendingApproval.id });
+        dispatch({ type: "shell/cleared" });
+        dispatch({
+          type: "turn/submitted",
+          message: { role: "user", content: trimmedVal },
+          objective: `Run: ${shellCmd.command}`,
+          pendingPlan: [],
+          mode: state.mode,
+          resolvedProfile: state.resolvedProfile,
+        });
+        dispatch({ type: "turn/started" });
+        try {
+          const { exec: nodeExec } = await import("node:child_process");
+          const { promisify } = await import("node:util");
+          const execP = promisify(nodeExec);
+          const { stdout, stderr } = await execP(shellCmd.command, { cwd: shellCwd, maxBuffer: 1024 * 1024 * 4 });
+          const output = [stdout, stderr].filter(Boolean).join("\n") || "Done.";
+          dispatch({ type: "turn/completed", content: `\`${shellCmd.command}\`\n\n${output}` });
+        } catch (err: any) {
+          dispatch({ type: "turn/failed", error: `Shell failed: ${err.message}` });
+        }
+        return;
+      }
+      if (intent === "cancel") {
+        dispatch({ type: "approval/rejected", requestId: state.pendingApproval.id });
+        dispatch({ type: "shell/cleared" });
+        dispatch({ type: "assistant/appended", message: "Canceled." });
+        return;
+      }
+    }
+
     const approvalIntent =
       state.pendingApproval || state.pendingDraft || state.pendingPlanDraft
         ? parseApprovalIntent(trimmedVal)
@@ -699,6 +736,9 @@ export function OriApp({
 
     const onStep = (title: string) => {
         setTurnThoughts(prev => [...prev, title]);
+    };
+    const onTokens = (count: number) => {
+        dispatch({ type: "turn/tokens", count });
     };
     setTurnThoughts([]);
 
@@ -776,6 +816,13 @@ export function OriApp({
         dispatch({ type: "plan/cleared" });
       }
 
+      if (localCommand.clearDraft || localCommand.clearPlanDraft) {
+        // also clear any pending shell if co-staged
+        if (state.pendingShell) {
+          dispatch({ type: "shell/cleared" });
+        }
+      }
+
       if (localCommand.verification) {
         dispatch({
           type: "verification/updated",
@@ -851,6 +898,7 @@ export function OriApp({
         turn,
         workspace,
         onStep,
+        onTokens,
       });
       const response = executedTurn.response;
 
@@ -885,6 +933,14 @@ export function OriApp({
             workspace: toolExecution.travel.workspace,
           });
         }
+
+        if (toolExecution.shellPending) {
+          dispatch({
+            type: "shell/staged",
+            command: toolExecution.shellPending.command,
+            reason: toolExecution.shellPending.reason,
+          });
+        }
       }
 
       const assistantContent =
@@ -892,6 +948,7 @@ export function OriApp({
         synthesizeAssistantFallback(value, executedTurn.toolExecutions, workspace);
 
       if (assistantContent) {
+        dispatch({ type: "turn/tokens", count: Math.max(1, Math.round(assistantContent.length / 4)) });
         dispatch({
           type: "turn/response",
           content: assistantContent,

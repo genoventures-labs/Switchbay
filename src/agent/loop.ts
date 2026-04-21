@@ -200,6 +200,33 @@ GROUNDING RULES:
     systemPrompt += `\n\nWORKSPACE SNAPSHOT (pre-fetched — authoritative, do not re-run these commands):\n${snapshotLines.join("\n\n")}`;
   }
 
+  // Inject tool schemas. IMPORTANT: the backend model runs remotely and has no
+  // direct shell access. These tools are executed by the ori-code CLIENT process
+  // on the user's local machine — the model outputs a <tool_call> block and the
+  // client intercepts it, runs it locally, and feeds the result back.
+  const toolList = AGENT_TOOLS.map(t =>
+    `- ${t.function.name}: ${t.function.description}`
+  ).join("\n");
+  systemPrompt += `\n\nCLIENT-SIDE TOOL BRIDGE — CRITICAL:
+You are a remote model. Your own shell/bash is irrelevant here. The ori-code process running on the USER'S machine intercepts <tool_call> blocks you output, executes them LOCALLY on the user's filesystem, and sends you the result. You do not run these yourself — you just output the JSON block.
+
+This means:
+- shell, git_commit, git_push etc. all work — they run on the USER's machine, not on any server.
+- File reads/writes happen on the USER's local filesystem at ${cwd}.
+- You should NEVER say "I don't have shell access" — you have full access via the tool bridge.
+
+Available tools (all run on user's machine):
+${toolList}
+
+To call a tool, output this exact format in your response:
+<tool_call>
+{"name": "tool_name", "args": {"param": "value"}}
+</tool_call>
+
+- Read-only tools (read_file, git_status, git_log, list_directory, search_files): call immediately, no approval needed.
+- Write tools (shell, git_add, git_commit, git_push, create_file, apply_patch): the user sees the command and approves before execution — you do NOT need to ask permission first, just call the tool.
+- Chain multiple tool calls in one response if needed.`;
+
   const messages: OriMessage[] = [
     {
       role: "system",
@@ -221,6 +248,29 @@ GROUNDING RULES:
   };
 }
 
+function parseInlineToolCalls(text: string): Array<{ id: string; function: { name: string; arguments: string } }> {
+  const calls: Array<{ id: string; function: { name: string; arguments: string } }> = [];
+  const regex = /<tool_call>\s*([\s\S]*?)\s*<\/tool_call>/g;
+  let match;
+  let i = 0;
+  while ((match = regex.exec(text)) !== null) {
+    try {
+      const parsed = JSON.parse(match[1]) as { name?: string; args?: Record<string, unknown> };
+      if (parsed.name) {
+        calls.push({
+          id: `inline-${Date.now()}-${i++}`,
+          function: { name: parsed.name, arguments: JSON.stringify(parsed.args ?? {}) },
+        });
+      }
+    } catch { /* ignore malformed */ }
+  }
+  return calls;
+}
+
+function stripInlineToolCalls(text: string): string {
+  return text.replace(/<tool_call>[\s\S]*?<\/tool_call>/g, "").trim();
+}
+
 export async function executeTurn(input: {
   client: OriClient;
   cwd?: string;
@@ -229,6 +279,7 @@ export async function executeTurn(input: {
   surface: string;
   turn: BuiltTurn;
   onStep?: (title: string) => void;
+  onTokens?: (count: number) => void;
 }): Promise<ExecutedTurn> {
   const toolExecutions: AgentToolExecution[] = [];
   const messages: OriMessage[] = [...input.turn.request.messages];
@@ -239,10 +290,6 @@ export async function executeTurn(input: {
   for (let iteration = 0; iteration < MAX_ITERATIONS; iteration += 1) {
     const request: ChatCompletionRequest = {
       ...input.turn.request,
-      model:
-        emptyReplyRetries > 0 && input.turn.request.model !== "oricli-oracle"
-          ? "oricli-oracle"
-          : input.turn.request.model,
       messages,
       tools: AGENT_TOOLS,
       tool_choice: "auto",
@@ -269,9 +316,12 @@ export async function executeTurn(input: {
     const assistantMessage = choice?.message;
     const assistantText = extractAssistantText(response);
 
-    const toolCalls = assistantMessage?.tool_calls ?? [];
+    const nativeToolCalls = assistantMessage?.tool_calls ?? [];
+    const inlineToolCalls = nativeToolCalls.length === 0 ? parseInlineToolCalls(assistantText) : [];
+    const toolCalls = nativeToolCalls.length > 0 ? nativeToolCalls : inlineToolCalls;
+    const cleanedText = inlineToolCalls.length > 0 ? stripInlineToolCalls(assistantText) : assistantText;
 
-    if (toolCalls.length === 0 && assistantText === "" && emptyReplyRetries < MAX_EMPTY_REPLY_RETRIES) {
+    if (toolCalls.length === 0 && cleanedText === "" && emptyReplyRetries < MAX_EMPTY_REPLY_RETRIES) {
       emptyReplyRetries += 1;
       if (input.onStep) input.onStep("retrying empty reply...");
       messages.push({
@@ -282,9 +332,6 @@ export async function executeTurn(input: {
       continue;
     }
 
-    // Some ORI / provider combinations can return tool calls with finish_reason="stop".
-    // Treat tool presence as authoritative so repo-aware turns don't terminate early
-    // with an empty assistant shell before local tools execute.
     if (toolCalls.length === 0) {
       if (input.onStep) input.onStep("Done.");
       return { response, toolExecutions };
@@ -292,7 +339,7 @@ export async function executeTurn(input: {
 
     messages.push({
       role: "assistant",
-      content: assistantMessage.content ?? "",
+      content: inlineToolCalls.length > 0 ? cleanedText : (assistantMessage?.content ?? ""),
       tool_calls: toolCalls,
     });
 
@@ -307,7 +354,10 @@ export async function executeTurn(input: {
 
       if (input.onStep) {
         let label = toolName.toLowerCase();
-        if (toolName === "shell") label = `running ${(args.command as string || "").split(" ")[0]}`;
+        if (toolName === "shell") label = `shell: ${(args.command as string || "").slice(0, 40)}`;
+        else if (toolName === "git_commit") label = `git commit: ${String(args.message || "").slice(0, 40)}`;
+        else if (toolName === "git_add") label = `git add ${args.paths}`;
+        else if (toolName === "git_push") label = `git push ${args.remote || "origin"}`;
         else if (toolName === "read_file") label = `reading ${args.path}`;
         else if (toolName === "write_file") label = `writing ${args.path}`;
         else if (toolName === "patch") label = `patching ${args.path}`;
@@ -333,6 +383,10 @@ export async function executeTurn(input: {
         tool_call_id: toolCall.id,
         content: result.body,
       });
+
+      if (input.onTokens) {
+        input.onTokens(Math.max(1, Math.round(result.body.length / 4)));
+      }
     }
   }
 

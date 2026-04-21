@@ -4,6 +4,7 @@ import { Box, Text } from "ink";
 type MarkdownTextProps = {
   content: string;
   role?: "assistant" | "tool" | "user";
+  terminalWidth?: number;
 };
 
 type InlinePart =
@@ -23,12 +24,12 @@ type Block =
   | { type: "paragraph"; text: string }
   | { type: "blank" };
 
-export function MarkdownText({ content, role = "assistant" }: MarkdownTextProps) {
+export function MarkdownText({ content, role = "assistant", terminalWidth = 120 }: MarkdownTextProps) {
   const blocks = parseBlocks(normalizeDisplaySpacing(content));
 
   return (
-    <Box flexDirection="column">
-      {blocks.map((block, index) => renderBlock(block, index, role))}
+    <Box flexDirection="column" width={terminalWidth}>
+      {blocks.map((block, index) => renderBlock(block, index, role, terminalWidth))}
     </Box>
   );
 }
@@ -37,6 +38,7 @@ function renderBlock(
   block: Block,
   index: number,
   role: NonNullable<MarkdownTextProps["role"]>,
+  terminalWidth = 120,
 ) {
   switch (block.type) {
     case "heading":
@@ -49,14 +51,14 @@ function renderBlock(
       );
     case "bullet":
       return (
-        <Text key={index} color="white">
+        <Text key={index} color="white" wrap="wrap">
           <Text color="cyan">• </Text>
           {renderInline(block.text, role)}
         </Text>
       );
     case "numbered":
       return (
-        <Text key={index} color="white">
+        <Text key={index} color="white" wrap="wrap">
           <Text color="cyan">{block.index} </Text>
           {renderInline(block.text, role)}
         </Text>
@@ -80,7 +82,8 @@ function renderBlock(
           ))}
         </Box>
       );
-    case "code":
+    case "code": {
+      const codeWidth = Math.max(20, terminalWidth - 6);
       return (
         <Box
           key={index}
@@ -89,19 +92,21 @@ function renderBlock(
           borderStyle="round"
           borderColor="gray"
           paddingX={1}
+          width={codeWidth}
         >
           <Text color="gray">
             {block.language ? `code · ${block.language}` : "code"}
           </Text>
           {block.lines.length > 0 ? (
             block.lines.map((line, lineIndex) => (
-              <Text key={lineIndex}>{renderCodeLine(line, block.language, role)}</Text>
+              <Text key={lineIndex} wrap="truncate-end">{renderCodeLine(line, block.language, role)}</Text>
             ))
           ) : (
             <Text color={getCodeDefaultColor(role)}> </Text>
           )}
         </Box>
       );
+    }
     case "paragraph":
       return (
         <Box key={index} marginBottom={1}>

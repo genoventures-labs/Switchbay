@@ -976,10 +976,11 @@ export function OriApp({
       refreshWorkspace().then((ws) => {
         dispatch({ type: "workspace/updated", workspace: ws });
       }).catch(() => {});
-    } catch {
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
       dispatch({
         type: "turn/failed",
-        error: "Request failed. Check ORI_API_KEY and runtime connectivity.",
+        error: `Request failed: ${msg}`,
       });
       setTurnThoughts([]);
     }

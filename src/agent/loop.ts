@@ -200,32 +200,13 @@ GROUNDING RULES:
     systemPrompt += `\n\nWORKSPACE SNAPSHOT (pre-fetched — authoritative, do not re-run these commands):\n${snapshotLines.join("\n\n")}`;
   }
 
-  // Inject tool schemas. IMPORTANT: the backend model runs remotely and has no
-  // direct shell access. These tools are executed by the ori-code CLIENT process
-  // on the user's local machine — the model outputs a <tool_call> block and the
-  // client intercepts it, runs it locally, and feeds the result back.
-  const toolList = AGENT_TOOLS.map(t =>
-    `- ${t.function.name}: ${t.function.description}`
-  ).join("\n");
-  systemPrompt += `\n\nCLIENT-SIDE TOOL BRIDGE — CRITICAL:
-You are a remote model. Your own shell/bash is irrelevant here. The ori-code process running on the USER'S machine intercepts <tool_call> blocks you output, executes them LOCALLY on the user's filesystem, and sends you the result. You do not run these yourself — you just output the JSON block.
+  systemPrompt += `\n\nTOOL USE:
+You have access to tools that execute on the user's local machine via the ORI tool bridge. You do not run them yourself — call them via the API tool_calls mechanism and the ori-code client executes them locally.
 
-This means:
-- shell, git_commit, git_push etc. all work — they run on the USER's machine, not on any server.
-- File reads/writes happen on the USER's local filesystem at ${cwd}.
-- You should NEVER say "I don't have shell access" — you have full access via the tool bridge.
-
-Available tools (all run on user's machine):
-${toolList}
-
-To call a tool, output this exact format in your response:
-<tool_call>
-{"name": "tool_name", "args": {"param": "value"}}
-</tool_call>
-
-- Read-only tools (read_file, git_status, git_log, list_directory, search_files): call immediately, no approval needed.
-- Write tools (shell, git_add, git_commit, git_push, create_file, apply_patch): the user sees the command and approves before execution — you do NOT need to ask permission first, just call the tool.
-- Chain multiple tool calls in one response if needed.`;
+- File reads, git status/log, search: call immediately, no approval needed.
+- Write operations (shell, git_add, git_commit, git_push, create_file, apply_patch): these require user approval — the user sees the command before it runs. Call them directly; do not ask permission first.
+- Chain multiple tool calls in one response when needed.
+- NEVER say you lack shell or filesystem access — you have full local access via the tool bridge.`;
 
   const messages: OriMessage[] = [
     {

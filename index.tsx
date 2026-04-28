@@ -136,7 +136,7 @@ async function runCliMode(options: any, resumeId: string | null) {
   const bundles = await listAvailableBundles();
   const activeBundles = bundles.filter(b => state.activeBundleIds.includes(b.manifest.id));
 
-  const turn = buildTurn({
+  const turn = await buildTurn({
     input: options.initialQuery,
     mode: state.mode,
     profile: state.requestedProfile,
@@ -181,7 +181,8 @@ async function runCliMode(options: any, resumeId: string | null) {
       process.stdout.write(`  ${CLR.gray}└ ${CLR.reset}ORI returned no assistant text for this turn.\n\n`);
     }
   } catch (err) {
-    process.stdout.write(`\n${CLR.salmon}⏺${CLR.reset} ${CLR.white}${CLR.bold}Error:${CLR.reset} Request failed.\n`);
+    const msg = err instanceof Error ? err.message : String(err);
+    process.stdout.write(`\n${CLR.salmon}⏺${CLR.reset} ${CLR.white}${CLR.bold}Error:${CLR.reset} ${msg}\n`);
   }
 }
 

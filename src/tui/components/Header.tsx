@@ -24,6 +24,7 @@ export function Header({ mode, status, workspace, activeAgentId, availableAgents
   const statusLabel = status === "DISCONNECTED" ? "ready" : status.toLowerCase();
   const branchColor = dirty > 0 ? "yellow" : "#00FF7F";
   const hasOriMd = existsSync(path.join(cwd, "ORI.md"));
+  const hasMemory = existsSync(path.join(cwd, ".ori", "memory.md"));
   const activeAgent = activeAgentId ? availableAgents.find(a => a.id === activeAgentId) : null;
 
   return (
@@ -52,6 +53,12 @@ export function Header({ mode, status, workspace, activeAgentId, availableAgents
               <>
                 <Text color="#707070">·</Text>
                 <Text color="#00FF7F" dimColor>ORI.md</Text>
+              </>
+            ) : null}
+            {hasMemory ? (
+              <>
+                <Text color="#707070">·</Text>
+                <Text color="#00FF7F" dimColor>mem</Text>
               </>
             ) : null}
             {activeAgent ? (

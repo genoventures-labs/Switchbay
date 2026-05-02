@@ -50,6 +50,24 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     category: "workspace",
+    command: "/remember",
+    description: "Save a note to memory — injected into every session in this workspace.",
+    example: '/remember "we use pnpm not npm"',
+  },
+  {
+    category: "workspace",
+    command: "/memories",
+    description: "List all memory notes for this workspace.",
+    example: "/memories",
+  },
+  {
+    category: "workspace",
+    command: "/forget",
+    description: "Remove a memory note by index (see /memories for indices).",
+    example: "/forget 2",
+  },
+  {
+    category: "workspace",
     command: "/checkpoint",
     description: "Save a named checkpoint (git stash). Restore later with /restore.",
     example: "/checkpoint before-auth-refactor",

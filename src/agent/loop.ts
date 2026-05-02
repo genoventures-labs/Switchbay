@@ -247,9 +247,17 @@ export async function buildTurn(input: {
   if (existsSync(oriMdPath)) {
     try {
       const oriMd = readFileSync(oriMdPath, "utf-8").trim();
-      if (oriMd) {
-        oriMdBlock = `\n\nPROJECT CONTEXT (ORI.md — treat as authoritative):\n${oriMd}`;
-      }
+      if (oriMd) oriMdBlock = `\n\nPROJECT CONTEXT (ORI.md — treat as authoritative):\n${oriMd}`;
+    } catch { /* ignore */ }
+  }
+
+  // Inject .ori/memory.md if it exists
+  let memoryBlock = "";
+  const memoryPath = join(cwd, ".ori", "memory.md");
+  if (existsSync(memoryPath)) {
+    try {
+      const memory = readFileSync(memoryPath, "utf-8").trim();
+      if (memory) memoryBlock = `\n\nMEMORY (things to always keep in mind):\n${memory}`;
     } catch { /* ignore */ }
   }
 
@@ -264,7 +272,7 @@ export async function buildTurn(input: {
   let systemPrompt = `You are ORI, a sovereign coding agent powered by Thynaptic.
 Current Mode: ${mode}
 Current Profile: ${input.profile}
-Current Workspace: ${cwd}${oriMdBlock}${agentBlock}
+Current Workspace: ${cwd}${oriMdBlock}${memoryBlock}${agentBlock}
 
 GROUNDING RULES:
 1. You are running as a local-first development tool (ORI Code).
@@ -733,6 +741,62 @@ Write only the ORI.md content, starting with # ORI.md`;
         activateAgent: match.id,
         assistantMessage: `${match.emoji} **${match.name}** activated.\n\n${match.description}`,
       };
+    }
+  }
+
+  // ── /remember · /forget · /memories ─────────────────────────────────────
+  if (trimmed.startsWith("/remember ") || trimmed === "/remember") {
+    const note = trimmed.slice("/remember".length).trim();
+    if (!note) return { handled: true, assistantMessage: 'Usage: `/remember "note to keep in mind"`' };
+    const cwd = options.workspace?.cwd ?? process.cwd();
+    const memPath = join(cwd, ".ori", "memory.md");
+    try {
+      const { mkdir, readFile: rf, writeFile: wf } = await import("node:fs/promises");
+      await mkdir(join(cwd, ".ori"), { recursive: true });
+      let existing = "";
+      try { existing = (await rf(memPath, "utf-8")).trim(); } catch { /* new file */ }
+      const lines = existing ? existing.split("\n").filter(l => l.trim()) : [];
+      lines.push(`- ${note}`);
+      await wf(memPath, lines.join("\n") + "\n", "utf-8");
+      return { handled: true, assistantMessage: `Remembered: _${note}_\n\n${lines.length} note${lines.length !== 1 ? "s" : ""} in memory.` };
+    } catch (e: any) {
+      return { handled: true, assistantMessage: `Failed to save: ${e.message}` };
+    }
+  }
+
+  if (trimmed === "/memories") {
+    const cwd = options.workspace?.cwd ?? process.cwd();
+    const memPath = join(cwd, ".ori", "memory.md");
+    try {
+      const content = readFileSync(memPath, "utf-8").trim();
+      const lines = content.split("\n").filter(l => l.trim());
+      if (!lines.length) return { handled: true, assistantMessage: "Memory is empty. Add notes with `/remember`." };
+      const indexed = lines.map((l, i) => `${i}. ${l.replace(/^-\s*/, "")}`).join("\n");
+      return { handled: true, assistantMessage: `**Memory** (${lines.length} notes):\n\n${indexed}\n\nRemove with \`/forget <n>\`` };
+    } catch {
+      return { handled: true, assistantMessage: "Memory is empty. Add notes with `/remember`." };
+    }
+  }
+
+  if (trimmed.startsWith("/forget ") || trimmed === "/forget") {
+    const indexStr = trimmed.slice("/forget".length).trim();
+    const index = parseInt(indexStr, 10);
+    if (isNaN(index)) return { handled: true, assistantMessage: "Usage: `/forget <index>` — use `/memories` to see indices." };
+    const cwd = options.workspace?.cwd ?? process.cwd();
+    const memPath = join(cwd, ".ori", "memory.md");
+    try {
+      const { writeFile: wf } = await import("node:fs/promises");
+      const content = readFileSync(memPath, "utf-8").trim();
+      const lines = content.split("\n").filter(l => l.trim());
+      if (index < 0 || index >= lines.length) {
+        return { handled: true, assistantMessage: `No memory at index ${index}. Run \`/memories\` to list.` };
+      }
+      const removed = lines[index].replace(/^-\s*/, "");
+      lines.splice(index, 1);
+      await wf(memPath, lines.join("\n") + (lines.length ? "\n" : ""), "utf-8");
+      return { handled: true, assistantMessage: `Forgot: _${removed}_\n\n${lines.length} note${lines.length !== 1 ? "s" : ""} remaining.` };
+    } catch {
+      return { handled: true, assistantMessage: "Memory is empty — nothing to forget." };
     }
   }
 

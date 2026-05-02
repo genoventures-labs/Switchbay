@@ -92,6 +92,7 @@ export type SessionState = {
   thoughts: ThoughtFrame[];
   updatedAt: number;
   activeBundleIds: string[];
+  activeAgentId: string | null;
   scratchpad: ScratchpadState | null;
   turnStartedAt: number | null;
   turnTokenCount: number;
@@ -179,6 +180,7 @@ export function createInitialSessionState(input: {
     surface: input.surface,
     updatedAt: Date.now(),
     activeBundleIds: [],
+    activeAgentId: null,
     lastError: null,
     workspace: null,
     verification: null,

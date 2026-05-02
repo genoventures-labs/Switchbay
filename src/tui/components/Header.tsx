@@ -4,15 +4,18 @@ import path from "node:path";
 import { existsSync } from "node:fs";
 import type { SessionStatus } from "../../agent/turn-state";
 import type { WorkspaceSnapshot } from "../../session/workspace";
+import type { Agent } from "../../agent/agents";
 
 type HeaderProps = {
   mode: string;
   profile: string;
   status: SessionStatus;
   workspace: WorkspaceSnapshot | null;
+  activeAgentId?: string | null;
+  availableAgents?: Agent[];
 };
 
-export function Header({ mode, status, workspace }: HeaderProps) {
+export function Header({ mode, status, workspace, activeAgentId, availableAgents = [] }: HeaderProps) {
   const cwd = workspace?.cwd ?? process.cwd();
   const project = path.basename(cwd);
   const branch = workspace?.branch ?? null;
@@ -21,6 +24,7 @@ export function Header({ mode, status, workspace }: HeaderProps) {
   const statusLabel = status === "DISCONNECTED" ? "ready" : status.toLowerCase();
   const branchColor = dirty > 0 ? "yellow" : "#00FF7F";
   const hasOriMd = existsSync(path.join(cwd, "ORI.md"));
+  const activeAgent = activeAgentId ? availableAgents.find(a => a.id === activeAgentId) : null;
 
   return (
     <Box
@@ -48,6 +52,12 @@ export function Header({ mode, status, workspace }: HeaderProps) {
               <>
                 <Text color="#707070">·</Text>
                 <Text color="#00FF7F" dimColor>ORI.md</Text>
+              </>
+            ) : null}
+            {activeAgent ? (
+              <>
+                <Text color="#707070">·</Text>
+                <Text color="#E57373">{activeAgent.emoji} {activeAgent.name}</Text>
               </>
             ) : null}
           </Box>

@@ -53,7 +53,8 @@ export type SessionAction =
   | { type: "activity/add"; kind: "info" | "tool" | "status" | "error"; message: string }
   | { type: "travel/completed"; toPath: string; label: string; workspace: WorkspaceSnapshot | null }
   | { type: "transcript/cleared" }
-  | { type: "conversation/replaced"; messages: import("../runtime/types").OriMessage[] };
+  | { type: "conversation/replaced"; messages: import("../runtime/types").OriMessage[] }
+  | { type: "agent/activated"; agentId: string | null };
 
 function appendActivity(
   state: SessionState,
@@ -525,6 +526,8 @@ export function sessionReducer(
       };
     case "conversation/replaced":
       return { ...state, conversation: action.messages };
+    case "agent/activated":
+      return { ...state, activeAgentId: action.agentId };
     default:
       return state;
   }

@@ -16,6 +16,11 @@ import {
   executeToolCall,
 } from "./tools";
 import {
+  loadAllAgents,
+  findAgent,
+  agentSystemPrompt,
+} from "./agents";
+import {
   type AgentMode,
   createThoughtFrame,
   createTranscriptEntry,
@@ -128,6 +133,7 @@ export async function buildTurn(input: {
   transcript: OriMessage[];
   workspace: WorkspaceSnapshot | null;
   activeBundles?: Bundle[];
+  activeAgentId?: string | null;
 }): Promise<BuiltTurn> {
   const mode = (input.mode as AgentMode) || "build";
   const objective = input.input.slice(0, 100);
@@ -145,10 +151,18 @@ export async function buildTurn(input: {
     } catch { /* ignore */ }
   }
 
+  // Inject active agent persona if one is set
+  let agentBlock = "";
+  if (input.activeAgentId) {
+    const allAgents = await loadAllAgents();
+    const activeAgent = findAgent(input.activeAgentId, allAgents);
+    if (activeAgent) agentBlock = agentSystemPrompt(activeAgent);
+  }
+
   let systemPrompt = `You are ORI, a sovereign coding agent powered by Thynaptic.
 Current Mode: ${mode}
 Current Profile: ${input.profile}
-Current Workspace: ${cwd}${oriMdBlock}
+Current Workspace: ${cwd}${oriMdBlock}${agentBlock}
 
 GROUNDING RULES:
 1. You are running as a local-first development tool (ORI Code).
@@ -418,6 +432,7 @@ export async function tryLocalCommand(
     pendingPlanDraft?: any;
     conversation?: import("../runtime/types").OriMessage[];
     lastChangedFile?: string | null;
+    activeAgentId?: string | null;
   }
 ): Promise<{
   handled: boolean;
@@ -432,6 +447,8 @@ export async function tryLocalCommand(
   clearPlanDraft?: boolean;
   clearTranscript?: boolean;
   compactedConversation?: import("../runtime/types").OriMessage[];
+  activateAgent?: string | null;
+  openAgentPicker?: boolean;
   verification?: any;
   travel?: { toPath: string; label: string; workspace: WorkspaceSnapshot };
   followUpInput?: string;
@@ -568,6 +585,45 @@ Write only the ORI.md content, starting with # ORI.md`;
       };
     } catch (e: any) {
       return { handled: true, assistantMessage: `Init failed: ${e.message}` };
+    }
+  }
+
+  // Agent commands — /agents picker, /agent <id>, direct /<agent-id>
+  if (trimmed === "/agents" || trimmed === "/agent") {
+    return { handled: true, openAgentPicker: true };
+  }
+
+  if (trimmed === "/agent off" || trimmed === "/agent none") {
+    return {
+      handled: true,
+      activateAgent: null,
+      assistantMessage: "Agent deactivated. Back to default ORI mode.",
+    };
+  }
+
+  // Direct agent activation: /ui-designer, /backend, etc.
+  // Also handles /agent <id>
+  const agentCandidateId = trimmed.startsWith("/agent ")
+    ? trimmed.slice(7).trim()
+    : trimmed.slice(1); // strip leading /
+
+  if (agentCandidateId) {
+    const allAgents = await loadAllAgents();
+    const match = findAgent(agentCandidateId, allAgents);
+    if (match) {
+      const wasActive = options.activeAgentId === match.id;
+      if (wasActive) {
+        return {
+          handled: true,
+          activateAgent: null,
+          assistantMessage: `${match.emoji} ${match.name} deactivated.`,
+        };
+      }
+      return {
+        handled: true,
+        activateAgent: match.id,
+        assistantMessage: `${match.emoji} **${match.name}** activated.\n\n${match.description}`,
+      };
     }
   }
 

@@ -22,6 +22,7 @@ import {
   type MentionCandidate,
 } from "../tools/mentions";
 import { listAvailableBundles, type Bundle } from "../tools/bundles";
+import { loadAllAgents, type Agent } from "../agent/agents";
 import { CommandDrawer } from "./components/CommandDrawer";
 import { Composer } from "./components/Composer";
 import { EditDrawer } from "./components/EditDrawer";
@@ -31,6 +32,7 @@ import { MentionPicker } from "./components/MentionPicker";
 import { Transcript } from "./components/Transcript";
 import { ResumeDrawer } from "./components/ResumeDrawer";
 import { BundleDrawer } from "./components/BundleDrawer";
+import { AgentDrawer } from "./components/AgentDrawer";
 import { ShortcutDrawer } from "./components/ShortcutDrawer";
 import { getCommandMatches } from "./commands";
 
@@ -49,7 +51,7 @@ type StreamEvent =
   | { type: "token"; content?: string }
   | { type: "done" };
 
-type ComposerMode = "default" | "edit_file_picker" | "edit_intent" | "resume_picker" | "bundle_picker" | "shortcut_picker";
+type ComposerMode = "default" | "edit_file_picker" | "edit_intent" | "resume_picker" | "bundle_picker" | "agent_picker" | "shortcut_picker";
 
 export function OriApp({
   client,
@@ -101,6 +103,8 @@ export function OriApp({
   const [selectedResumeIndex, setSelectedResumeIndex] = useState(0);
   const [availableBundles, setAvailableBundles] = useState<Bundle[]>([]);
   const [selectedBundleIndex, setSelectedBundleIndex] = useState(0);
+  const [availableAgents, setAvailableAgents] = useState<Agent[]>([]);
+  const [selectedAgentIndex, setSelectedAgentIndex] = useState(0);
   const [turnThoughts, setTurnThoughts] = useState<string[]>([]);
   
   const didHydrateRef = useRef(false);
@@ -210,6 +214,39 @@ export function OriApp({
         if (selected) {
            void handleToggleBundle(selected.manifest.id);
         }
+        return;
+      }
+      if (key.escape) {
+        setComposerMode("default");
+        setQuerySync("");
+        return;
+      }
+    }
+
+    const agentPickerVisible = composerMode === "agent_picker";
+    if (agentPickerVisible) {
+      if (key.upArrow) {
+        setSelectedAgentIndex((prev) => prev <= 0 ? availableAgents.length - 1 : prev - 1);
+        return;
+      }
+      if (key.downArrow) {
+        setSelectedAgentIndex((prev) => prev >= availableAgents.length - 1 ? 0 : prev + 1);
+        return;
+      }
+      if (key.return || key.tab) {
+        const selected = availableAgents[selectedAgentIndex];
+        if (selected) {
+          const isActive = state.activeAgentId === selected.id;
+          dispatch({ type: "agent/activated", agentId: isActive ? null : selected.id });
+          dispatch({
+            type: "assistant/appended",
+            message: isActive
+              ? `${selected.emoji} ${selected.name} deactivated.`
+              : `${selected.emoji} **${selected.name}** activated.\n\n${selected.description}`,
+          });
+        }
+        setComposerMode("default");
+        setQuerySync("");
         return;
       }
       if (key.escape) {
@@ -472,6 +509,9 @@ export function OriApp({
     
     void listAvailableBundles().then((bundles) => {
       setAvailableBundles(bundles);
+    });
+    void loadAllAgents().then((agents) => {
+      setAvailableAgents(agents);
     });
 
     let ws: WebSocket | null = null;
@@ -781,6 +821,7 @@ export function OriApp({
       pendingPlanDraft: state.pendingPlanDraft,
       conversation: state.conversation,
       lastChangedFile: state.changedFiles[state.changedFiles.length - 1] ?? null,
+      activeAgentId: state.activeAgentId,
     });
     if (localCommand.handled) {
       dispatch({
@@ -868,6 +909,24 @@ export function OriApp({
         });
       }
 
+      if (localCommand.openAgentPicker) {
+        const agents = await loadAllAgents();
+        setAvailableAgents(agents);
+        setSelectedAgentIndex(0);
+        setComposerMode("agent_picker");
+        setQuerySync("");
+        return;
+      }
+
+      if ("activateAgent" in localCommand) {
+        dispatch({ type: "agent/activated", agentId: localCommand.activateAgent ?? null });
+        dispatch({
+          type: "assistant/appended",
+          message: localCommand.assistantMessage ?? (localCommand.activateAgent ? "Agent activated." : "Agent deactivated."),
+        });
+        return;
+      }
+
       if (localCommand.clearTranscript) {
         dispatch({ type: "transcript/cleared" });
         if (localCommand.compactedConversation) {
@@ -914,6 +973,7 @@ export function OriApp({
       transcript: state.conversation,
       workspace,
       activeBundles,
+      activeAgentId: state.activeAgentId,
     });
 
     dispatch({
@@ -1049,7 +1109,7 @@ export function OriApp({
   useEffect(() => {
     const trimmed = query.trim();
 
-    if (composerMode === "edit_intent" || composerMode === "resume_picker" || composerMode === "bundle_picker" || composerMode === "shortcut_picker") {
+    if (composerMode === "edit_intent" || composerMode === "resume_picker" || composerMode === "bundle_picker" || composerMode === "agent_picker" || composerMode === "shortcut_picker") {
       return;
     }
 
@@ -1084,6 +1144,8 @@ export function OriApp({
           profile={state.resolvedProfile}
           status={state.status}
           workspace={state.workspace}
+          activeAgentId={state.activeAgentId}
+          availableAgents={availableAgents}
         />
       )}
       <Box flexGrow={1} flexDirection="column">
@@ -1122,6 +1184,12 @@ export function OriApp({
         activeBundleIds={state.activeBundleIds}
         selectedIndex={selectedBundleIndex}
         visible={bundleDrawerVisible}
+      />
+      <AgentDrawer
+        agents={availableAgents}
+        activeAgentId={state.activeAgentId}
+        selectedIndex={selectedAgentIndex}
+        visible={composerMode === "agent_picker"}
       />
       <ShortcutDrawer
         visible={shortcutDrawerVisible}

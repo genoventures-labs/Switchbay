@@ -50,6 +50,30 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     category: "workspace",
+    command: "/init",
+    description: "Generate an ORI.md project context file for this workspace.",
+    example: "/init",
+  },
+  {
+    category: "workspace",
+    command: "/init --update",
+    description: "Regenerate ORI.md, preserving any hand-edited sections.",
+    example: "/init --update",
+  },
+  {
+    category: "workspace",
+    command: "/compact",
+    description: "Summarize the current session into compressed context and reset the transcript.",
+    example: "/compact",
+  },
+  {
+    category: "workspace",
+    command: "/undo",
+    description: "Restore the last changed file to HEAD (git checkout HEAD -- <file>).",
+    example: "/undo",
+  },
+  {
+    category: "workspace",
     command: "/clear",
     description: "Clear the current conversation and session view.",
     example: "/clear",

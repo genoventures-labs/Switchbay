@@ -1,4 +1,5 @@
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync } from "node:fs";
+import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { DEFAULTS } from "../config/defaults";
 import { getDefaultModel } from "../config/env";
@@ -132,10 +133,22 @@ export async function buildTurn(input: {
   const objective = input.input.slice(0, 100);
   const cwd = input.workspace?.cwd || process.cwd();
 
+  // Inject ORI.md as authoritative project context if it exists
+  let oriMdBlock = "";
+  const oriMdPath = join(cwd, "ORI.md");
+  if (existsSync(oriMdPath)) {
+    try {
+      const oriMd = readFileSync(oriMdPath, "utf-8").trim();
+      if (oriMd) {
+        oriMdBlock = `\n\nPROJECT CONTEXT (ORI.md — treat as authoritative):\n${oriMd}`;
+      }
+    } catch { /* ignore */ }
+  }
+
   let systemPrompt = `You are ORI, a sovereign coding agent powered by Thynaptic.
 Current Mode: ${mode}
 Current Profile: ${input.profile}
-Current Workspace: ${cwd}
+Current Workspace: ${cwd}${oriMdBlock}
 
 GROUNDING RULES:
 1. You are running as a local-first development tool (ORI Code).
@@ -443,6 +456,118 @@ export async function tryLocalCommand(
       return { handled: true, assistantMessage: `Undid changes to \`${file}\` — restored to HEAD.` };
     } catch (e: any) {
       return { handled: true, assistantMessage: `Undo failed: ${e.message}` };
+    }
+  }
+
+  if (trimmed === "/init" || trimmed === "/init --update") {
+    const cwd = options.workspace?.cwd ?? process.cwd();
+    const oriMdPath = join(cwd, "ORI.md");
+    const isUpdate = trimmed === "/init --update";
+
+    if (existsSync(oriMdPath) && !isUpdate) {
+      return {
+        handled: true,
+        assistantMessage: `ORI.md already exists in this workspace. Use \`/init --update\` to regenerate it.`,
+      };
+    }
+
+    // Gather project signals for the prompt
+    const signals: string[] = [];
+
+    // Directory structure (top-level, non-hidden, no node_modules)
+    try {
+      const entries = readdirSync(cwd, { withFileTypes: true });
+      const names = entries
+        .filter(e => !e.name.startsWith(".") && e.name !== "node_modules" && e.name !== "dist" && e.name !== ".git")
+        .map(e => e.isDirectory() ? `${e.name}/` : e.name)
+        .slice(0, 50);
+      signals.push(`Top-level structure:\n${names.join("  ")}`);
+    } catch { /* ignore */ }
+
+    // package.json
+    try {
+      const pkg = JSON.parse(readFileSync(join(cwd, "package.json"), "utf-8"));
+      const parts: string[] = [];
+      if (pkg.name) parts.push(`name: ${pkg.name}`);
+      if (pkg.description) parts.push(`description: ${pkg.description}`);
+      if (pkg.scripts) parts.push(`scripts: ${JSON.stringify(pkg.scripts)}`);
+      const deps = Object.keys({ ...pkg.dependencies, ...pkg.devDependencies });
+      if (deps.length) parts.push(`dependencies: ${deps.join(", ")}`);
+      signals.push(`package.json:\n${parts.join("\n")}`);
+    } catch { /* not a node project */ }
+
+    // go.mod
+    try {
+      const goMod = readFileSync(join(cwd, "go.mod"), "utf-8").split("\n").slice(0, 10).join("\n");
+      signals.push(`go.mod:\n${goMod}`);
+    } catch { /* not a go project */ }
+
+    // Cargo.toml
+    try {
+      const cargo = readFileSync(join(cwd, "Cargo.toml"), "utf-8").split("\n").slice(0, 20).join("\n");
+      signals.push(`Cargo.toml:\n${cargo}`);
+    } catch { /* not a rust project */ }
+
+    // README (first 60 lines)
+    for (const readmeName of ["README.md", "README.txt", "README"]) {
+      try {
+        const readme = readFileSync(join(cwd, readmeName), "utf-8").split("\n").slice(0, 60).join("\n");
+        signals.push(`README:\n${readme}`);
+        break;
+      } catch { /* no readme */ }
+    }
+
+    // Existing ORI.md if updating
+    if (isUpdate && existsSync(oriMdPath)) {
+      try {
+        const existing = readFileSync(oriMdPath, "utf-8");
+        signals.push(`Existing ORI.md (preserve any hand-edited sections):\n${existing}`);
+      } catch { /* ignore */ }
+    }
+
+    // git log
+    try {
+      const { runCommand: rc } = await import("../tools/shell");
+      const log = await rc(["git", "log", "--oneline", "-10"], cwd);
+      if (log.stdout) signals.push(`Recent commits:\n${log.stdout}`);
+    } catch { /* ignore */ }
+
+    const prompt = `You are generating an ORI.md file for a software project. This file is injected at the top of every ORI Code session for this workspace — it's the agent's persistent project brain.
+
+Analyze the project signals below and write a concise, dense ORI.md. It should cover:
+1. **What this project is** — one tight paragraph, no fluff
+2. **Stack** — languages, frameworks, key deps (be specific, include versions if visible)
+3. **Key commands** — build, test, run, lint (exact commands)
+4. **Project layout** — 5-10 bullet points on the most important dirs/files and what they do
+5. **Gotchas & conventions** — things that would trip up a new engineer: naming conventions, env vars, non-obvious config, known footguns
+6. **Do not** — anything the agent should never do in this repo (e.g. don't push to main, don't touch X)
+
+Format: use markdown headers (##). Be terse. No filler sentences. Max 400 words.
+
+Project signals:
+${signals.join("\n\n")}
+
+Write only the ORI.md content, starting with # ORI.md`;
+
+    try {
+      const resp = await options.client.createChatCompletion(options.surface, {
+        model: undefined,
+        messages: [
+          { role: "system", content: "You are a technical documentation writer. Output only the requested file content, no preamble or explanation." },
+          { role: "user", content: prompt },
+        ],
+      });
+      const content = resp.choices?.[0]?.message?.content ?? "";
+      if (!content) {
+        return { handled: true, assistantMessage: "Init failed — ORI returned no content." };
+      }
+      await writeFile(oriMdPath, content, "utf-8");
+      return {
+        handled: true,
+        assistantMessage: `ORI.md ${isUpdate ? "updated" : "created"} ✓\n\nThis file will be loaded into every session in this workspace. Edit it anytime to refine the context.\n\n\`\`\`\n${content.slice(0, 600)}${content.length > 600 ? "\n… (truncated)" : ""}\n\`\`\``,
+      };
+    } catch (e: any) {
+      return { handled: true, assistantMessage: `Init failed: ${e.message}` };
     }
   }
 

@@ -1,6 +1,7 @@
 import React from "react";
 import { Box, Text } from "ink";
 import path from "node:path";
+import { existsSync } from "node:fs";
 import type { SessionStatus } from "../../agent/turn-state";
 import type { WorkspaceSnapshot } from "../../session/workspace";
 
@@ -19,6 +20,7 @@ export function Header({ mode, status, workspace }: HeaderProps) {
   const isThinking = status === "THINKING";
   const statusLabel = status === "DISCONNECTED" ? "ready" : status.toLowerCase();
   const branchColor = dirty > 0 ? "yellow" : "#00FF7F";
+  const hasOriMd = existsSync(path.join(cwd, "ORI.md"));
 
   return (
     <Box
@@ -40,6 +42,12 @@ export function Header({ mode, status, workspace }: HeaderProps) {
                 <Text color="gray">·</Text>
                 <Text color={branchColor}>{branch}</Text>
                 {dirty > 0 ? <Text color="yellow" dimColor>{dirty} dirty</Text> : null}
+              </>
+            ) : null}
+            {hasOriMd ? (
+              <>
+                <Text color="#707070">·</Text>
+                <Text color="#00FF7F" dimColor>ORI.md</Text>
               </>
             ) : null}
           </Box>

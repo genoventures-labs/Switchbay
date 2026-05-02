@@ -144,6 +144,8 @@ export function Composer({
         <Text color={grayColor}>
           {pendingApprovalKind === "shell_command" ? (
             <Text><Text color="yellow">y</Text> run · <Text color="red">n</Text> skip</Text>
+          ) : pendingApprovalKind === "agent_draft" ? (
+            <Text><Text color={brandColor}>y</Text> save agent · <Text color="red">n</Text> discard</Text>
           ) : disabled ? (
             <Text>Enter to <Text color={brandColor}>draft</Text> · Esc to <Text color={brandColor}>cancel</Text></Text>
           ) : (

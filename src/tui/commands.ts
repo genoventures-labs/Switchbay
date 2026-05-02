@@ -50,6 +50,12 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     category: "agents",
+    command: "/create-agent",
+    description: "Guided wizard to create a custom ORI agent — ORI writes the definition, you approve before saving.",
+    example: "/create-agent",
+  },
+  {
+    category: "agents",
     command: "/agents",
     description: "Open the agent picker — browse and activate ORI's built-in specialist agents.",
     example: "/agents",

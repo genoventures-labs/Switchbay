@@ -32,6 +32,66 @@ import type { Bundle } from "../tools/bundles";
 import { listProjectFiles } from "../tools/files";
 import { runCommand } from "../tools/shell";
 
+export type PendingAgentDraft = {
+  id: string;
+  name: string;
+  content: string;
+  savePath: string;
+};
+
+export async function generateAgentDefinition(
+  client: OriClient,
+  surface: string,
+  answers: { name: string; specialty: string; approach: string; rules: string },
+): Promise<PendingAgentDraft> {
+  const id = answers.name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 40);
+
+  const prompt = `You are writing an ORI agent definition file. ORI agents inject a focused system prompt into a coding assistant session to give it a specialist mindset.
+
+Create a concise, dense agent definition for:
+- Name: ${answers.name}
+- Core expertise: ${answers.specialty}
+${answers.approach ? `- Communication style / approach: ${answers.approach}` : ""}
+${answers.rules ? `- Hard rules (must flag / must never do): ${answers.rules}` : ""}
+
+Write the agent's system prompt injection. It should:
+1. Start with "You are operating as a [role]."
+2. State priorities clearly (3-5 bullet points or "Priorities: ..." lines)
+3. State preferences ("Prefer: ...")
+4. State what to always flag or call out ("Always call out: ...")
+5. State hard constraints if any ("Avoid: ..." or "Never: ...")
+
+Be dense and direct. No filler. Max 200 words. Output ONLY the system prompt text — no markdown headers, no preamble, no explanation.`;
+
+  const resp = await client.createChatCompletion(surface, {
+    model: undefined,
+    messages: [
+      {
+        role: "system",
+        content: "You write tight, actionable system prompt injections for AI coding agents. Output only the prompt text.",
+      },
+      { role: "user", content: prompt },
+    ],
+  });
+
+  const generatedPrompt = resp.choices?.[0]?.message?.content?.trim() ?? "";
+  if (!generatedPrompt) throw new Error("ORI returned no content.");
+
+  const savePath = join(process.cwd(), ".ori", "agents", `${id}.md`);
+
+  const fileContent = `# ${answers.name}
+description: ${answers.specialty.slice(0, 100)}
+
+${generatedPrompt}
+`;
+
+  return { id, name: answers.name, content: fileContent, savePath };
+}
+
 export type BuiltTurn = {
   mode: AgentMode;
   objective: string;
@@ -449,6 +509,7 @@ export async function tryLocalCommand(
   compactedConversation?: import("../runtime/types").OriMessage[];
   activateAgent?: string | null;
   openAgentPicker?: boolean;
+  openCreateAgent?: boolean;
   verification?: any;
   travel?: { toPath: string; label: string; workspace: WorkspaceSnapshot };
   followUpInput?: string;
@@ -586,6 +647,10 @@ Write only the ORI.md content, starting with # ORI.md`;
     } catch (e: any) {
       return { handled: true, assistantMessage: `Init failed: ${e.message}` };
     }
+  }
+
+  if (trimmed === "/create-agent") {
+    return { handled: true, openCreateAgent: true };
   }
 
   // Agent commands — /agents picker, /agent <id>, direct /<agent-id>

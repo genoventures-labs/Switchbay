@@ -2,6 +2,7 @@ import React from "react";
 import { Box, Text } from "ink";
 import type { TranscriptEntry } from "../../agent/turn-state";
 import type { DraftEdit, ApprovalRequest } from "../../agent/turn-state";
+import type { PendingAgentDraft } from "../../agent/loop";
 import { MarkdownText } from "./MarkdownText";
 import { WelcomeBoard } from "./WelcomeBoard";
 
@@ -12,6 +13,7 @@ type TranscriptProps = {
   hasMoreBelow?: boolean;
   pendingApproval: ApprovalRequest | null;
   pendingDraft: DraftEdit | null;
+  pendingAgentDraft?: PendingAgentDraft | null;
   scrollOffset?: number;
   streamingText: string;
   thinking: string | null;
@@ -24,6 +26,7 @@ export function Transcript({
   hasMoreBelow = false,
   pendingApproval,
   pendingDraft,
+  pendingAgentDraft,
   streamingText,
   thinking,
   terminalWidth = 120,
@@ -145,6 +148,21 @@ export function Transcript({
           <Box marginTop={1} gap={3}>
             <Text color={greenColor}>y → run</Text>
             <Text color="red">n → skip</Text>
+          </Box>
+        </Box>
+      )}
+
+      {pendingAgentDraft && (
+        <Box flexDirection="column" marginTop={1} borderStyle="round" borderColor={brandColor} paddingX={2} paddingY={1}>
+          <Box gap={1} marginBottom={1}>
+            <Text color={brandColor} bold>🤖 Save Agent</Text>
+            <Text color={grayColor}>·</Text>
+            <Text color="white" bold>{pendingAgentDraft.name}</Text>
+          </Box>
+          <Text color={grayColor}>{pendingAgentDraft.savePath}</Text>
+          <Box marginTop={1} gap={3}>
+            <Text color={greenColor}>y → save</Text>
+            <Text color="red">n → discard</Text>
           </Box>
         </Box>
       )}

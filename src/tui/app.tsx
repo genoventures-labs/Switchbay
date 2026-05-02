@@ -33,6 +33,8 @@ import { Transcript } from "./components/Transcript";
 import { ResumeDrawer } from "./components/ResumeDrawer";
 import { BundleDrawer } from "./components/BundleDrawer";
 import { AgentDrawer } from "./components/AgentDrawer";
+import { CreateAgentDrawer, type CreateAgentAnswers } from "./components/CreateAgentDrawer";
+import { generateAgentDefinition, type PendingAgentDraft } from "../agent/loop";
 import { ShortcutDrawer } from "./components/ShortcutDrawer";
 import { getCommandMatches } from "./commands";
 
@@ -51,7 +53,7 @@ type StreamEvent =
   | { type: "token"; content?: string }
   | { type: "done" };
 
-type ComposerMode = "default" | "edit_file_picker" | "edit_intent" | "resume_picker" | "bundle_picker" | "agent_picker" | "shortcut_picker";
+type ComposerMode = "default" | "edit_file_picker" | "edit_intent" | "resume_picker" | "bundle_picker" | "agent_picker" | "create_agent" | "shortcut_picker";
 
 export function OriApp({
   client,
@@ -105,6 +107,8 @@ export function OriApp({
   const [selectedBundleIndex, setSelectedBundleIndex] = useState(0);
   const [availableAgents, setAvailableAgents] = useState<Agent[]>([]);
   const [selectedAgentIndex, setSelectedAgentIndex] = useState(0);
+  const [createAgentGenerating, setCreateAgentGenerating] = useState(false);
+  const [pendingAgentDraft, setPendingAgentDraft] = useState<PendingAgentDraft | null>(null);
   const [turnThoughts, setTurnThoughts] = useState<string[]>([]);
   
   const didHydrateRef = useRef(false);
@@ -721,6 +725,36 @@ export function OriApp({
       return;
     }
 
+    // Pending agent draft approval — y to save, n to discard
+    if (pendingAgentDraft) {
+      const intent = parseApprovalIntent(trimmedVal);
+      if (intent === "apply") {
+        try {
+          const dir = pendingAgentDraft.savePath.replace(/\/[^/]+$/, "");
+          const { mkdir, writeFile: wf } = await import("node:fs/promises");
+          await mkdir(dir, { recursive: true });
+          await wf(pendingAgentDraft.savePath, pendingAgentDraft.content, "utf-8");
+          const agents = await loadAllAgents();
+          setAvailableAgents(agents);
+          dispatch({
+            type: "assistant/appended",
+            message: `✓ Agent **${pendingAgentDraft.name}** saved to \`${pendingAgentDraft.savePath}\`\n\nActivate it with \`/${pendingAgentDraft.id}\` or via \`/agents\`.`,
+          });
+        } catch (e: any) {
+          dispatch({ type: "assistant/appended", message: `Save failed: ${e.message}` });
+        }
+        setPendingAgentDraft(null);
+        setQuerySync("");
+        return;
+      }
+      if (intent === "cancel") {
+        setPendingAgentDraft(null);
+        dispatch({ type: "assistant/appended", message: "Agent discarded." });
+        setQuerySync("");
+        return;
+      }
+    }
+
     // Shell command approval — handled before tryLocalCommand so we can exec async
     if (state.pendingShell && state.pendingApproval?.kind === "shell_command") {
       const intent = parseApprovalIntent(trimmedVal);
@@ -909,6 +943,12 @@ export function OriApp({
         });
       }
 
+      if (localCommand.openCreateAgent) {
+        setComposerMode("create_agent");
+        setQuerySync("");
+        return;
+      }
+
       if (localCommand.openAgentPicker) {
         const agents = await loadAllAgents();
         setAvailableAgents(agents);
@@ -1088,6 +1128,24 @@ export function OriApp({
     }
   }
 
+  async function handleCreateAgentComplete(answers: CreateAgentAnswers) {
+    setCreateAgentGenerating(true);
+    try {
+      const draft = await generateAgentDefinition(client, surface, answers);
+      setComposerMode("default");
+      setCreateAgentGenerating(false);
+      setPendingAgentDraft(draft);
+      dispatch({
+        type: "assistant/appended",
+        message: `Here's your **${draft.name}** agent definition:\n\n\`\`\`\n${draft.content}\n\`\`\`\n\nSave path: \`${draft.savePath}\`\n\n**y** to save · **n** to discard`,
+      });
+    } catch (e: any) {
+      setComposerMode("default");
+      setCreateAgentGenerating(false);
+      dispatch({ type: "assistant/appended", message: `Failed to generate agent: ${e.message}` });
+    }
+  }
+
   async function handleEditIntentSubmit(value: string) {
     if (!selectedEditFile || !value.trim()) {
       return;
@@ -1109,7 +1167,7 @@ export function OriApp({
   useEffect(() => {
     const trimmed = query.trim();
 
-    if (composerMode === "edit_intent" || composerMode === "resume_picker" || composerMode === "bundle_picker" || composerMode === "agent_picker" || composerMode === "shortcut_picker") {
+    if (composerMode === "edit_intent" || composerMode === "resume_picker" || composerMode === "bundle_picker" || composerMode === "agent_picker" || composerMode === "create_agent" || composerMode === "shortcut_picker") {
       return;
     }
 
@@ -1156,6 +1214,7 @@ export function OriApp({
           hasMoreBelow={transcriptEndIndex < totalTranscriptEntries}
           pendingApproval={state.pendingApproval}
           pendingDraft={state.pendingDraft}
+          pendingAgentDraft={pendingAgentDraft}
           scrollOffset={clampedScrollOffset}
           streamingText={state.streamingText}
           thinking={thinkingCollapsed ? null : (state.thoughts[0]?.summary ?? null)}
@@ -1191,6 +1250,12 @@ export function OriApp({
         selectedIndex={selectedAgentIndex}
         visible={composerMode === "agent_picker"}
       />
+      <CreateAgentDrawer
+        visible={composerMode === "create_agent" || createAgentGenerating}
+        generating={createAgentGenerating}
+        onComplete={handleCreateAgentComplete}
+        onCancel={() => { setComposerMode("default"); setQuerySync(""); }}
+      />
       <ShortcutDrawer
         visible={shortcutDrawerVisible}
       />
@@ -1208,7 +1273,7 @@ export function OriApp({
         activeCapability={state.activeCapability}
         disabled={composerMode === "edit_intent"}
         initialQuery={initialQuery}
-        pendingApprovalKind={state.pendingApproval?.kind ?? null}
+        pendingApprovalKind={pendingAgentDraft ? "agent_draft" : (state.pendingApproval?.kind ?? null)}
         query={query}
         status={state.status}
         thoughts={turnThoughts}

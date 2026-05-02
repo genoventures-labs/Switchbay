@@ -49,6 +49,36 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     example: "/save",
   },
   {
+    category: "workspace",
+    command: "/checkpoint",
+    description: "Save a named checkpoint (git stash). Restore later with /restore.",
+    example: "/checkpoint before-auth-refactor",
+  },
+  {
+    category: "workspace",
+    command: "/checkpoints",
+    description: "List all ORI checkpoints in this repo.",
+    example: "/checkpoints",
+  },
+  {
+    category: "workspace",
+    command: "/restore",
+    description: "Restore the most recent checkpoint, or /restore <n> for a specific one.",
+    example: "/restore 0",
+  },
+  {
+    category: "workspace",
+    command: "/plan",
+    description: "Generate and execute a multi-step plan. ORI breaks the goal into steps and runs them one by one.",
+    example: '/plan "add pagination to the users API"',
+  },
+  {
+    category: "workspace",
+    command: "/stop",
+    description: "Stop the active plan mid-execution.",
+    example: "/stop",
+  },
+  {
     category: "agents",
     command: "/create-agent",
     description: "Guided wizard to create a custom ORI agent — ORI writes the definition, you approve before saving.",

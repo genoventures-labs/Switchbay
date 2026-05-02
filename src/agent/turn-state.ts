@@ -57,6 +57,22 @@ export type ShellCommand = {
 
 export type ApprovalKind = "draft_edit" | "execution_plan" | "shell_command";
 
+export type PlanStatus =
+  | "pending_approval"  // generated, waiting for user to say y
+  | "running"           // step currently executing
+  | "awaiting_continue" // step done, waiting for y/skip/stop
+  | "complete"
+  | "stopped";
+
+export type ActivePlan = {
+  id: string;
+  goal: string;
+  steps: string[];
+  currentStep: number;
+  completedSteps: number[];
+  status: PlanStatus;
+};
+
 export type ApprovalRequest = {
   id: string;
   kind: ApprovalKind;
@@ -93,6 +109,7 @@ export type SessionState = {
   updatedAt: number;
   activeBundleIds: string[];
   activeAgentId: string | null;
+  activePlan: ActivePlan | null;
   scratchpad: ScratchpadState | null;
   turnStartedAt: number | null;
   turnTokenCount: number;
@@ -181,6 +198,7 @@ export function createInitialSessionState(input: {
     updatedAt: Date.now(),
     activeBundleIds: [],
     activeAgentId: null,
+    activePlan: null,
     lastError: null,
     workspace: null,
     verification: null,

@@ -32,6 +32,48 @@ import type { Bundle } from "../tools/bundles";
 import { listProjectFiles } from "../tools/files";
 import { runCommand } from "../tools/shell";
 
+export async function generatePlan(
+  client: OriClient,
+  surface: string,
+  goal: string,
+  cwd: string,
+): Promise<string[]> {
+  // Embed workspace context so the plan is grounded in the actual project
+  let context = "";
+  try {
+    const entries = readdirSync(cwd, { withFileTypes: true });
+    const names = entries
+      .filter(e => !e.name.startsWith(".") && e.name !== "node_modules")
+      .map(e => e.isDirectory() ? `${e.name}/` : e.name)
+      .slice(0, 30)
+      .join("  ");
+    context = `Workspace: ${cwd}\nTop-level: ${names}`;
+  } catch { /* ignore */ }
+
+  const resp = await client.createChatCompletion(surface, {
+    model: undefined,
+    messages: [
+      {
+        role: "system",
+        content: "You are a precise task planner for a coding agent. Break the goal into 3–7 concrete, sequential steps. Each step must be actionable by a coding agent in a single pass — search, read, write, run a command, or make a specific change. No vague steps like 'refactor everything'. Output ONLY a numbered list, one step per line, no preamble.",
+      },
+      {
+        role: "user",
+        content: `Goal: ${goal}\n\n${context}\n\nBreak this into concrete steps:`,
+      },
+    ],
+  });
+
+  const text = resp.choices?.[0]?.message?.content ?? "";
+  const steps = text
+    .split("\n")
+    .map(l => l.replace(/^\d+[\.\)]\s*/, "").trim())
+    .filter(l => l.length > 5);
+
+  if (steps.length === 0) throw new Error("ORI returned no steps.");
+  return steps;
+}
+
 export type PendingAgentDraft = {
   id: string;
   name: string;
@@ -510,6 +552,8 @@ export async function tryLocalCommand(
   activateAgent?: string | null;
   openAgentPicker?: boolean;
   openCreateAgent?: boolean;
+  planGoal?: string;
+  checkpointOp?: { op: "create"; name: string } | { op: "list" } | { op: "restore"; index: number };
   verification?: any;
   travel?: { toPath: string; label: string; workspace: WorkspaceSnapshot };
   followUpInput?: string;
@@ -690,6 +734,33 @@ Write only the ORI.md content, starting with # ORI.md`;
         assistantMessage: `${match.emoji} **${match.name}** activated.\n\n${match.description}`,
       };
     }
+  }
+
+  // ── /checkpoint ──────────────────────────────────────────────────────────
+  if (trimmed === "/checkpoint" || trimmed.startsWith("/checkpoint ")) {
+    const name = trimmed.slice("/checkpoint".length).trim() || `checkpoint-${Date.now()}`;
+    return { handled: true, checkpointOp: { op: "create", name } };
+  }
+
+  if (trimmed === "/checkpoints") {
+    return { handled: true, checkpointOp: { op: "list" } };
+  }
+
+  if (trimmed === "/restore" || trimmed.startsWith("/restore ")) {
+    const indexStr = trimmed.slice("/restore".length).trim();
+    const index = indexStr ? parseInt(indexStr, 10) : 0;
+    return { handled: true, checkpointOp: { op: "restore", index: isNaN(index) ? 0 : index } };
+  }
+
+  // ── /plan ─────────────────────────────────────────────────────────────────
+  if (trimmed.startsWith("/plan ") || trimmed === "/plan") {
+    const goal = trimmed.slice("/plan".length).trim();
+    if (!goal) return { handled: true, assistantMessage: 'Usage: `/plan "describe what you want to accomplish"`' };
+    return { handled: true, planGoal: goal };
+  }
+
+  if (trimmed === "/stop") {
+    return { handled: true, assistantMessage: "Plan stopped.", activateAgent: undefined };
   }
 
   if (trimmed === "/compact") {

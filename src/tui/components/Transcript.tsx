@@ -3,8 +3,10 @@ import { Box, Text } from "ink";
 import type { TranscriptEntry } from "../../agent/turn-state";
 import type { DraftEdit, ApprovalRequest } from "../../agent/turn-state";
 import type { PendingAgentDraft } from "../../agent/loop";
+import type { ActivePlan } from "../../agent/turn-state";
 import { MarkdownText } from "./MarkdownText";
 import { WelcomeBoard } from "./WelcomeBoard";
+import { PlanPanel } from "./PlanPanel";
 
 type TranscriptProps = {
   activeCapability: string | null;
@@ -14,6 +16,7 @@ type TranscriptProps = {
   pendingApproval: ApprovalRequest | null;
   pendingDraft: DraftEdit | null;
   pendingAgentDraft?: PendingAgentDraft | null;
+  activePlan?: ActivePlan | null;
   scrollOffset?: number;
   streamingText: string;
   thinking: string | null;
@@ -27,6 +30,7 @@ export function Transcript({
   pendingApproval,
   pendingDraft,
   pendingAgentDraft,
+  activePlan,
   streamingText,
   thinking,
   terminalWidth = 120,
@@ -122,6 +126,10 @@ export function Transcript({
             </Box>
           </Box>
         </Box>
+      )}
+
+      {activePlan && (
+        <PlanPanel plan={activePlan} />
       )}
 
       {pendingApproval && pendingDraft && (

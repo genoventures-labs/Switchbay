@@ -34,7 +34,8 @@ import { ResumeDrawer } from "./components/ResumeDrawer";
 import { BundleDrawer } from "./components/BundleDrawer";
 import { AgentDrawer } from "./components/AgentDrawer";
 import { CreateAgentDrawer, type CreateAgentAnswers } from "./components/CreateAgentDrawer";
-import { generateAgentDefinition, type PendingAgentDraft } from "../agent/loop";
+import { generateAgentDefinition, generatePlan, type PendingAgentDraft } from "../agent/loop";
+import type { ActivePlan } from "../agent/turn-state";
 import { ShortcutDrawer } from "./components/ShortcutDrawer";
 import { getCommandMatches } from "./commands";
 
@@ -725,6 +726,54 @@ export function OriApp({
       return;
     }
 
+    // ── Plan flow — approval, continue, skip, stop ────────────────────────
+    if (state.activePlan) {
+      const { activePlan } = state;
+
+      if (activePlan.status === "pending_approval") {
+        const intent = parseApprovalIntent(trimmedVal);
+        if (intent === "apply") {
+          dispatch({ type: "plan/started" });
+          setQuerySync("");
+          // Execute step 0 immediately
+          void handleSubmit(activePlan.steps[0]);
+          return;
+        }
+        if (intent === "cancel") {
+          dispatch({ type: "plan/stopped" });
+          dispatch({ type: "assistant/appended", message: "Plan cancelled." });
+          setQuerySync("");
+          return;
+        }
+      }
+
+      if (activePlan.status === "awaiting_continue") {
+        if (trimmedVal === "stop" || trimmedVal === "/stop") {
+          dispatch({ type: "plan/stopped" });
+          dispatch({ type: "assistant/appended", message: `Plan stopped at step ${activePlan.currentStep + 1}/${activePlan.steps.length}.` });
+          setQuerySync("");
+          return;
+        }
+        if (trimmedVal === "skip") {
+          dispatch({ type: "plan/step-skipped" });
+          setQuerySync("");
+          const next = activePlan.currentStep + 1;
+          if (next < activePlan.steps.length) {
+            dispatch({ type: "plan/started" });
+            void handleSubmit(activePlan.steps[next]);
+          }
+          return;
+        }
+        const intent = parseApprovalIntent(trimmedVal);
+        if (intent === "apply") {
+          dispatch({ type: "plan/started" });
+          setQuerySync("");
+          void handleSubmit(activePlan.steps[activePlan.currentStep]);
+          return;
+        }
+      }
+    }
+
     // Pending agent draft approval — y to save, n to discard
     if (pendingAgentDraft) {
       const intent = parseApprovalIntent(trimmedVal);
@@ -943,6 +992,87 @@ export function OriApp({
         });
       }
 
+      // ── /plan ────────────────────────────────────────────────────────────
+      if (localCommand.planGoal) {
+        const goal = localCommand.planGoal;
+        const cwd = state.workspace?.cwd ?? process.cwd();
+        dispatch({ type: "assistant/appended", message: `Planning: _${goal}_…` });
+        try {
+          const steps = await generatePlan(client, surface, goal, cwd);
+          const plan: ActivePlan = {
+            id: `plan-${Date.now()}`,
+            goal,
+            steps,
+            currentStep: 0,
+            completedSteps: [],
+            status: "pending_approval",
+          };
+          dispatch({ type: "plan/created", plan });
+          const stepList = steps.map((s, i) => `${i + 1}. ${s}`).join("\n");
+          dispatch({
+            type: "assistant/appended",
+            message: `**Plan: ${goal}**\n\n${stepList}\n\n**y** to execute · **n** to cancel`,
+          });
+        } catch (e: any) {
+          dispatch({ type: "assistant/appended", message: `Failed to generate plan: ${e.message}` });
+        }
+        return;
+      }
+
+      // ── /checkpoint ──────────────────────────────────────────────────────
+      if (localCommand.checkpointOp) {
+        const cwd = state.workspace?.cwd ?? process.cwd();
+        const { op } = localCommand.checkpointOp;
+        try {
+          const { exec } = await import("node:child_process");
+          const run = (cmd: string) => new Promise<string>((res, rej) =>
+            exec(cmd, { cwd }, (err, out) => err ? rej(err) : res(out.trim()))
+          );
+
+          if (op === "create") {
+            const { name } = localCommand.checkpointOp as { op: "create"; name: string };
+            await run(`git stash push --include-untracked -m "ori: ${name}"`);
+            dispatch({ type: "assistant/appended", message: `Checkpoint saved: **${name}**\n\nRestore with \`/restore\` or \`/checkpoints\` to list all.` });
+          }
+
+          if (op === "list") {
+            const out = await run("git stash list");
+            const checkpoints = out
+              .split("\n")
+              .filter(l => l.includes("ori:"))
+              .map((l, i) => {
+                const match = l.match(/ori:\s*(.+)$/);
+                return `${i}. ${match?.[1] ?? l}`;
+              });
+            dispatch({
+              type: "assistant/appended",
+              message: checkpoints.length
+                ? `**Checkpoints:**\n\n${checkpoints.join("\n")}\n\nUse \`/restore <n>\` to restore one.`
+                : "No ORI checkpoints found. Create one with `/checkpoint <name>`.",
+            });
+          }
+
+          if (op === "restore") {
+            const { index } = localCommand.checkpointOp as { op: "restore"; index: number };
+            const out = await run("git stash list");
+            const oriStashes = out.split("\n").filter(l => l.includes("ori:"));
+            if (index >= oriStashes.length) {
+              dispatch({ type: "assistant/appended", message: `No checkpoint at index ${index}. Run \`/checkpoints\` to list.` });
+            } else {
+              const stashRef = oriStashes[index].match(/^(stash@\{\d+\})/)?.[1];
+              if (stashRef) {
+                await run(`git stash apply ${stashRef}`);
+                const nameMatch = oriStashes[index].match(/ori:\s*(.+)$/);
+                dispatch({ type: "assistant/appended", message: `Restored checkpoint: **${nameMatch?.[1] ?? stashRef}**` });
+              }
+            }
+          }
+        } catch (e: any) {
+          dispatch({ type: "assistant/appended", message: `Checkpoint failed: ${e.message}` });
+        }
+        return;
+      }
+
       if (localCommand.openCreateAgent) {
         setComposerMode("create_agent");
         setQuerySync("");
@@ -1115,6 +1245,11 @@ export function OriApp({
       dispatch({ type: "turn/completed", content: didStream ? undefined : assistantContent });
       setTurnThoughts([]);
 
+      // If a plan is running, advance it after the turn completes
+      if (state.activePlan?.status === "running") {
+        dispatch({ type: "plan/step-complete" });
+      }
+
       refreshWorkspace().then((ws) => {
         dispatch({ type: "workspace/updated", workspace: ws });
       }).catch(() => {});
@@ -1215,6 +1350,7 @@ export function OriApp({
           pendingApproval={state.pendingApproval}
           pendingDraft={state.pendingDraft}
           pendingAgentDraft={pendingAgentDraft}
+          activePlan={state.activePlan}
           scrollOffset={clampedScrollOffset}
           streamingText={state.streamingText}
           thinking={thinkingCollapsed ? null : (state.thoughts[0]?.summary ?? null)}
@@ -1273,7 +1409,12 @@ export function OriApp({
         activeCapability={state.activeCapability}
         disabled={composerMode === "edit_intent"}
         initialQuery={initialQuery}
-        pendingApprovalKind={pendingAgentDraft ? "agent_draft" : (state.pendingApproval?.kind ?? null)}
+        pendingApprovalKind={
+          pendingAgentDraft ? "agent_draft" :
+          state.activePlan?.status === "pending_approval" ? "plan_approval" :
+          state.activePlan?.status === "awaiting_continue" ? "plan_continue" :
+          (state.pendingApproval?.kind ?? null)
+        }
         query={query}
         status={state.status}
         thoughts={turnThoughts}

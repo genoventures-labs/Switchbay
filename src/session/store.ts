@@ -54,7 +54,12 @@ export type SessionAction =
   | { type: "travel/completed"; toPath: string; label: string; workspace: WorkspaceSnapshot | null }
   | { type: "transcript/cleared" }
   | { type: "conversation/replaced"; messages: import("../runtime/types").OriMessage[] }
-  | { type: "agent/activated"; agentId: string | null };
+  | { type: "agent/activated"; agentId: string | null }
+  | { type: "plan/created"; plan: import("../agent/turn-state").ActivePlan }
+  | { type: "plan/started" }
+  | { type: "plan/step-complete" }
+  | { type: "plan/step-skipped" }
+  | { type: "plan/stopped" };
 
 function appendActivity(
   state: SessionState,
@@ -519,6 +524,7 @@ export function sessionReducer(
         pendingPlanDraft: null,
         pendingShell: null,
         pendingApproval: null,
+        activePlan: null,
         thoughts: [],
         recentActivity: [],
         changedFiles: [],
@@ -528,6 +534,43 @@ export function sessionReducer(
       return { ...state, conversation: action.messages };
     case "agent/activated":
       return { ...state, activeAgentId: action.agentId };
+    case "plan/created":
+      return { ...state, activePlan: action.plan };
+    case "plan/started":
+      if (!state.activePlan) return state;
+      return { ...state, activePlan: { ...state.activePlan, status: "running" } };
+    case "plan/step-complete": {
+      if (!state.activePlan) return state;
+      const { activePlan } = state;
+      const completedSteps = [...activePlan.completedSteps, activePlan.currentStep];
+      const nextStep = activePlan.currentStep + 1;
+      const done = nextStep >= activePlan.steps.length;
+      return {
+        ...state,
+        activePlan: {
+          ...activePlan,
+          completedSteps,
+          currentStep: nextStep,
+          status: done ? "complete" : "awaiting_continue",
+        },
+      };
+    }
+    case "plan/step-skipped": {
+      if (!state.activePlan) return state;
+      const { activePlan } = state;
+      const nextStep = activePlan.currentStep + 1;
+      const done = nextStep >= activePlan.steps.length;
+      return {
+        ...state,
+        activePlan: {
+          ...activePlan,
+          currentStep: nextStep,
+          status: done ? "complete" : "awaiting_continue",
+        },
+      };
+    }
+    case "plan/stopped":
+      return { ...state, activePlan: null };
     default:
       return state;
   }

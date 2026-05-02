@@ -146,6 +146,10 @@ export function Composer({
             <Text><Text color="yellow">y</Text> run · <Text color="red">n</Text> skip</Text>
           ) : pendingApprovalKind === "agent_draft" ? (
             <Text><Text color={brandColor}>y</Text> save agent · <Text color="red">n</Text> discard</Text>
+          ) : pendingApprovalKind === "plan_approval" ? (
+            <Text><Text color={brandColor}>y</Text> execute plan · <Text color="red">n</Text> cancel</Text>
+          ) : pendingApprovalKind === "plan_continue" ? (
+            <Text><Text color={brandColor}>y</Text> next step · <Text color="gray">skip</Text> · <Text color="red">stop</Text></Text>
           ) : disabled ? (
             <Text>Enter to <Text color={brandColor}>draft</Text> · Esc to <Text color={brandColor}>cancel</Text></Text>
           ) : (

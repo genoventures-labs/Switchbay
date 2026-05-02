@@ -60,8 +60,11 @@ export class OriClient {
       operator?: boolean;
       sendEnv?: boolean;
       workspace?: WorkspaceFocus;
+      onToken?: (token: string) => void;
     } = {},
   ): Promise<ChatCompletionResponse> {
+    const useStream = typeof options.onToken === "function";
+
     const response = await this.fetchImpl(`${this.apiBase}/chat/completions`, {
       method: "POST",
       headers: {
@@ -76,7 +79,7 @@ export class OriClient {
         model: request.model ?? getDefaultModel(),
         messages: request.messages,
         profile: request.profile,
-        stream: request.stream ?? false,
+        stream: useStream,
         ...(request.tools && request.tools.length > 0 ? { tools: request.tools } : {}),
         ...(request.tool_choice !== undefined ? { tool_choice: request.tool_choice } : {}),
       }),
@@ -89,23 +92,119 @@ export class OriClient {
       );
     }
 
-    const rawText = await response.text();
-    const parsed = JSON.parse(rawText) as ChatCompletionResponse;
-    parsed._rawText = rawText;
+    if (!useStream) {
+      const rawText = await response.text();
+      const parsed = JSON.parse(rawText) as ChatCompletionResponse;
+      parsed._rawText = rawText;
 
-    if (getDebugEmptyResponses()) {
-      const hasStringContent =
-        typeof parsed.choices?.[0]?.message?.content === "string" &&
-        parsed.choices?.[0]?.message?.content.trim().length > 0;
-      const hasOutputText =
-        typeof parsed.output_text === "string" && parsed.output_text.trim().length > 0;
-      if (!hasStringContent && !hasOutputText) {
-        console.error("[ori-code] empty-looking chat completion response:");
-        console.error(rawText);
+      if (getDebugEmptyResponses()) {
+        const hasStringContent =
+          typeof parsed.choices?.[0]?.message?.content === "string" &&
+          parsed.choices?.[0]?.message?.content.trim().length > 0;
+        const hasOutputText =
+          typeof parsed.output_text === "string" && parsed.output_text.trim().length > 0;
+        if (!hasStringContent && !hasOutputText) {
+          console.error("[ori-code] empty-looking chat completion response:");
+          console.error(rawText);
+        }
+      }
+
+      return parsed;
+    }
+
+    // ── SSE streaming path ──────────────────────────────────────────────────
+    // Accumulate tool_call chunks; dispatch text deltas live via onToken.
+    // If tool_calls are present the model doesn't emit text, so we never
+    // need to retract dispatched tokens.
+    const onToken = options.onToken!;
+
+    let accText = "";
+    const toolCallMap: Record<number, { id: string; name: string; arguments: string }> = {};
+    let hasToolCalls = false;
+
+    const reader = response.body!.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    outer: while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith("data:")) continue;
+
+        const payload = trimmed.slice(5).trim();
+        if (payload === "[DONE]") break outer;
+
+        let chunk: {
+          choices?: Array<{
+            delta?: {
+              content?: string;
+              tool_calls?: Array<{
+                index: number;
+                id?: string;
+                function?: { name?: string; arguments?: string };
+              }>;
+            };
+          }>;
+        };
+        try {
+          chunk = JSON.parse(payload);
+        } catch {
+          continue;
+        }
+
+        const delta = chunk.choices?.[0]?.delta;
+        if (!delta) continue;
+
+        if (delta.content) {
+          accText += delta.content;
+          onToken(delta.content);
+        }
+
+        if (delta.tool_calls) {
+          hasToolCalls = true;
+          for (const tc of delta.tool_calls) {
+            if (!toolCallMap[tc.index]) {
+              toolCallMap[tc.index] = { id: tc.id ?? "", name: "", arguments: "" };
+            }
+            if (tc.id) toolCallMap[tc.index].id = tc.id;
+            if (tc.function?.name) toolCallMap[tc.index].name += tc.function.name;
+            if (tc.function?.arguments) toolCallMap[tc.index].arguments += tc.function.arguments;
+          }
+        }
       }
     }
 
-    return parsed;
+    // Reconstruct a synthetic ChatCompletionResponse matching the non-streaming shape
+    const toolCalls = hasToolCalls
+      ? Object.entries(toolCallMap).map(([, tc]) => ({
+          id: tc.id,
+          type: "function" as const,
+          function: { name: tc.name, arguments: tc.arguments },
+        }))
+      : undefined;
+
+    const reconstructed: ChatCompletionResponse = {
+      choices: [
+        {
+          message: {
+            role: "assistant",
+            content: accText || null,
+            tool_calls: toolCalls,
+          },
+          finish_reason: hasToolCalls ? "tool_calls" : "stop",
+        },
+      ],
+    };
+
+    return reconstructed;
   }
 
   async submitFeedback(feedback: FeedbackRequest): Promise<void> {

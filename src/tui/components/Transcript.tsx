@@ -31,6 +31,7 @@ export function Transcript({
   const brandColor = "#E57373"; // Salmon/Coral
   const greenColor = "#00FF7F"; // Bright Spring Green
   const grayColor = "#707070";  // Steel Gray
+  const dimColor = "#505050";   // Dimmer gray for tool steps
 
   return (
     <Box flexDirection="column" flexGrow={1} paddingTop={1}>
@@ -78,6 +79,31 @@ export function Transcript({
           );
         }
 
+        if (entry.kind === "tool") {
+          if (entry.tone === "warning") {
+            return (
+              <Box key={entry.id} flexDirection="column" marginBottom={1}>
+                <Text color="yellow">⚠ <Text color={grayColor}>{entry.title}</Text></Text>
+              </Box>
+            );
+          }
+          if (entry.tone === "error") {
+            return (
+              <Box key={entry.id} flexDirection="column" marginBottom={0}>
+                <Text color="red">✗ <Text color={grayColor}>{entry.body || entry.title}</Text></Text>
+              </Box>
+            );
+          }
+          if (entry.tone === "info" && entry.body) {
+            return (
+              <Box key={entry.id} flexDirection="column" marginBottom={0}>
+                <Text color={dimColor}>↳ {entry.body}</Text>
+              </Box>
+            );
+          }
+          return null;
+        }
+
         return null;
       })}
 
@@ -106,6 +132,19 @@ export function Transcript({
           <Box marginTop={1} gap={3}>
             <Text color={greenColor}>y / yes → apply</Text>
             <Text color="red">n / no → discard</Text>
+          </Box>
+        </Box>
+      )}
+
+      {pendingApproval?.kind === "shell_command" && (
+        <Box flexDirection="column" marginTop={1} borderStyle="round" borderColor="yellow" paddingX={2} paddingY={1}>
+          <Box gap={1} marginBottom={1}>
+            <Text color="yellow" bold>⚡ Run Command</Text>
+          </Box>
+          <Text color="white">{pendingApproval.summary}</Text>
+          <Box marginTop={1} gap={3}>
+            <Text color={greenColor}>y → run</Text>
+            <Text color="red">n → skip</Text>
           </Box>
         </Box>
       )}

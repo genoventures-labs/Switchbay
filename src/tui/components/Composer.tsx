@@ -48,6 +48,7 @@ type ComposerProps = {
   activeCapability: string | null;
   disabled?: boolean;
   initialQuery: string;
+  pendingApprovalKind?: string | null;
   query: string;
   status: SessionStatus;
   thoughts?: string[];
@@ -59,6 +60,7 @@ export function Composer({
   activeCapability,
   disabled = false,
   initialQuery,
+  pendingApprovalKind = null,
   query,
   status,
   thoughts = [],
@@ -140,7 +142,9 @@ export function Composer({
 
       <Box paddingX={2} paddingTop={0} paddingBottom={1}>
         <Text color={grayColor}>
-          {disabled ? (
+          {pendingApprovalKind === "shell_command" ? (
+            <Text><Text color="yellow">y</Text> run · <Text color="red">n</Text> skip</Text>
+          ) : disabled ? (
             <Text>Enter to <Text color={brandColor}>draft</Text> · Esc to <Text color={brandColor}>cancel</Text></Text>
           ) : (
             <Text>? for <Text color={brandColor}>shortcuts</Text> · / for <Text color={brandColor}>commands</Text></Text>

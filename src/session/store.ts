@@ -51,7 +51,9 @@ export type SessionAction =
   | { type: "assistant/appended"; message: string }
   | { type: "thought/add"; kind: "goal" | "plan" | "inspect" | "capability" | "result" | "warning"; summary: string }
   | { type: "activity/add"; kind: "info" | "tool" | "status" | "error"; message: string }
-  | { type: "travel/completed"; toPath: string; label: string; workspace: WorkspaceSnapshot | null };
+  | { type: "travel/completed"; toPath: string; label: string; workspace: WorkspaceSnapshot | null }
+  | { type: "transcript/cleared" }
+  | { type: "conversation/replaced"; messages: import("../runtime/types").OriMessage[] };
 
 function appendActivity(
   state: SessionState,
@@ -506,6 +508,23 @@ export function sessionReducer(
         conversation: [...state.conversation, systemNote],
       };
     }
+    case "transcript/cleared":
+      return {
+        ...state,
+        transcript: [],
+        conversation: [],
+        streamingText: "",
+        pendingDraft: null,
+        pendingPlanDraft: null,
+        pendingShell: null,
+        pendingApproval: null,
+        thoughts: [],
+        recentActivity: [],
+        changedFiles: [],
+        lastPatchPreview: null,
+      };
+    case "conversation/replaced":
+      return { ...state, conversation: action.messages };
     default:
       return state;
   }

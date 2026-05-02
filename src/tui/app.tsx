@@ -104,6 +104,8 @@ export function OriApp({
   const [turnThoughts, setTurnThoughts] = useState<string[]>([]);
   
   const didHydrateRef = useRef(false);
+  const historyRef = useRef<string[]>([]);
+  const historyIndexRef = useRef<number>(-1);
   const initialPolicy = resolveAgentPolicy({ mode, profile });
   const [state, dispatch] = useReducer(
     sessionReducer,
@@ -375,7 +377,26 @@ export function OriApp({
 
     if (!initialQuery) {
       if (key.return) {
+        const val = queryRef.current.trim();
+        if (val) {
+          historyRef.current = [val, ...historyRef.current.filter(h => h !== val)].slice(0, 100);
+          historyIndexRef.current = -1;
+        }
         void handleSubmit(queryRef.current);
+        return;
+      }
+      if (key.upArrow && queryRef.current === "") {
+        const next = historyIndexRef.current + 1;
+        if (next < historyRef.current.length) {
+          historyIndexRef.current = next;
+          setQuerySync(historyRef.current[next]);
+        }
+        return;
+      }
+      if (key.downArrow && historyIndexRef.current >= 0) {
+        const next = historyIndexRef.current - 1;
+        historyIndexRef.current = next;
+        setQuerySync(next >= 0 ? historyRef.current[next] : "");
         return;
       }
       if (key.escape) {
@@ -383,6 +404,7 @@ export function OriApp({
         setSelectedCommandIndex(0);
         setComposerMode("default");
         setTranscriptScrollOffset(0);
+        historyIndexRef.current = -1;
         return;
       }
       if (key.backspace || key.delete) {
@@ -735,10 +757,15 @@ export function OriApp({
     }
 
     const onStep = (title: string) => {
-        setTurnThoughts(prev => [...prev, title]);
+        setTurnThoughts([title]);
     };
     const onTokens = (count: number) => {
         dispatch({ type: "turn/tokens", count });
+    };
+    let didStream = false;
+    const onToken = (token: string) => {
+      didStream = true;
+      dispatch({ type: "turn/token", token });
     };
     setTurnThoughts([]);
 
@@ -752,6 +779,8 @@ export function OriApp({
       workspace,
       pendingDraft: state.pendingDraft,
       pendingPlanDraft: state.pendingPlanDraft,
+      conversation: state.conversation,
+      lastChangedFile: state.changedFiles[state.changedFiles.length - 1] ?? null,
     });
     if (localCommand.handled) {
       dispatch({
@@ -839,6 +868,15 @@ export function OriApp({
         });
       }
 
+      if (localCommand.clearTranscript) {
+        dispatch({ type: "transcript/cleared" });
+        if (localCommand.compactedConversation) {
+          dispatch({ type: "conversation/replaced", messages: localCommand.compactedConversation });
+          dispatch({ type: "assistant/appended", message: localCommand.assistantMessage ?? "Session compacted." });
+        }
+        return;
+      }
+
       dispatch({
         type: "assistant/appended",
         message:
@@ -898,6 +936,7 @@ export function OriApp({
         turn,
         workspace,
         onStep,
+        onToken,
         onTokens,
       });
       const response = executedTurn.response;
@@ -949,10 +988,11 @@ export function OriApp({
 
       if (assistantContent) {
         dispatch({ type: "turn/tokens", count: Math.max(1, Math.round(assistantContent.length / 4)) });
-        dispatch({
-          type: "turn/response",
-          content: assistantContent,
-        });
+        // Streaming already populated streamingText token-by-token — don't overwrite.
+        // Only set it explicitly for tool-only turns where onToken never fired.
+        if (!didStream) {
+          dispatch({ type: "turn/response", content: assistantContent });
+        }
       } else if (executedTurn.toolExecutions.length > 0) {
         dispatch({
           type: "assistant/appended",
@@ -970,7 +1010,9 @@ export function OriApp({
         scratchpad: response.meta?.scratchpad ?? null,
       });
 
-      dispatch({ type: "turn/completed", content: assistantContent });
+      // When streaming fired, streamingText already has the content — pass undefined
+      // so turn/completed falls back to state.streamingText in the reducer.
+      dispatch({ type: "turn/completed", content: didStream ? undefined : assistantContent });
       setTurnThoughts([]);
 
       refreshWorkspace().then((ws) => {
@@ -1098,6 +1140,7 @@ export function OriApp({
         activeCapability={state.activeCapability}
         disabled={composerMode === "edit_intent"}
         initialQuery={initialQuery}
+        pendingApprovalKind={state.pendingApproval?.kind ?? null}
         query={query}
         status={state.status}
         thoughts={turnThoughts}

@@ -8,6 +8,10 @@ import type { WorkspaceSnapshot } from "../session/workspace";
 
 const execAsync = promisify(exec);
 
+// Commands that always require approval regardless of requires_approval flag.
+// Covers mutations that can't be undone or have broad blast radius.
+const ALWAYS_APPROVE_PATTERN = /\b(rm|rmdir|git\s+push|git\s+reset|git\s+clean|npm\s+publish|bun\s+publish|pip\s+install|sudo|chmod|chown|dd|mkfs|fdisk|curl\s.*\|\s*(?:bash|sh)|wget\s.*\|\s*(?:bash|sh))\b/i;
+
 export type ToolDefinition = {
   type: "function";
   function: {
@@ -104,6 +108,21 @@ export const AGENT_TOOLS: ToolDefinition[] = [
         properties: {
           path: { type: "string", description: "The relative path for the new file." },
           content: { type: "string", description: "The content to write into the file." },
+        },
+        required: ["path", "content"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "write_file",
+      description: "Overwrite an existing file with new content. Use this for full rewrites. For targeted edits to a specific block, prefer apply_patch instead.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: { type: "string", description: "The relative path to the file." },
+          content: { type: "string", description: "The full new content to write." },
         },
         required: ["path", "content"],
       },
@@ -268,20 +287,6 @@ export const AGENT_TOOLS: ToolDefinition[] = [
           method: { type: "string", description: "Optional HTTP method like get or post." },
           schema: { type: "string", description: "Optional component schema name to inspect." },
         },
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "repo_research",
-      description: "Ask ORI's backend to perform high-level research across the entire repository.",
-      parameters: {
-        type: "object",
-        properties: {
-          query: { type: "string", description: "The research question or objective." },
-        },
-        required: ["query"],
       },
     },
   },
@@ -507,11 +512,39 @@ export async function executeToolCall(
         const filePath = path.join(cwd, args.path);
         await fs.mkdir(path.dirname(filePath), { recursive: true });
         await fs.writeFile(filePath, args.content, "utf-8");
+        const lines = String(args.content).split("\n");
+        const preview = lines.slice(0, 6).map((l, i) => `+ ${i + 1}: ${l}`).join("\n")
+          + (lines.length > 6 ? `\n  … (+${lines.length - 6} more lines)` : "");
         return {
           tool: name,
           ok: true,
           summary: `Created ${args.path}`,
-          body: `File ${args.path} created successfully.`,
+          body: `Created ${args.path} (${lines.length} lines)\n\n${preview}`,
+          changedFile: args.path,
+        };
+      }
+
+      case "write_file": {
+        const filePath = path.join(cwd, args.path);
+        let before = "";
+        try { before = await fs.readFile(filePath, "utf-8"); } catch { /* new file */ }
+        await fs.mkdir(path.dirname(filePath), { recursive: true });
+        await fs.writeFile(filePath, args.content, "utf-8");
+        const beforeLines = before.split("\n");
+        const afterLines = String(args.content).split("\n");
+        const preview = [
+          `- ${beforeLines.length} lines before`,
+          `+ ${afterLines.length} lines after`,
+          ...afterLines.slice(0, 5).map(l => `+ ${l}`),
+          ...(afterLines.length > 5 ? [`  … (+${afterLines.length - 5} more)`] : []),
+        ].join("\n");
+        return {
+          tool: name,
+          ok: true,
+          summary: `Wrote ${args.path}`,
+          body: `Rewrote ${args.path}\n\n${preview}`,
+          changedFile: args.path,
+          patch: preview,
         };
       }
 
@@ -539,11 +572,24 @@ export async function executeToolCall(
           : content.replace(search, replace);
 
         await fs.writeFile(filePath, updated, "utf-8");
+
+        // Show a compact before/after snippet (up to 4 lines each side)
+        const beforeLines = search.split("\n").slice(0, 4);
+        const afterLines = replace.split("\n").slice(0, 4);
+        const diffPreview = [
+          ...beforeLines.map(l => `- ${l}`),
+          ...(search.split("\n").length > 4 ? [`  … (${search.split("\n").length - 4} more)`] : []),
+          ...afterLines.map(l => `+ ${l}`),
+          ...(replace.split("\n").length > 4 ? [`  … (${replace.split("\n").length - 4} more)`] : []),
+        ].join("\n");
+
         return {
           tool: name,
           ok: true,
           summary: `Patched ${args.path}`,
-          body: `Applied ${replaceAll ? "all matching" : "one exact"} replacement in ${args.path}.`,
+          body: `Patched ${args.path}\n\n${diffPreview}`,
+          changedFile: args.path,
+          patch: diffPreview,
         };
       }
 
@@ -776,20 +822,11 @@ export async function executeToolCall(
           };
       }
 
-      case "repo_research": {
-        return {
-          tool: name,
-          ok: true,
-          summary: `Researched: ${args.query}`,
-          body: "I've analyzed the repository structure and context. Use list_directory or read_file for specific details.",
-        };
-      }
-
       case "shell": {
         const command = String(args.command || "").trim();
         if (!command) throw new Error("shell requires a command.");
-        const requiresApproval = args.requires_approval !== false;
         const approvalReason = String(args.approval_reason || command);
+        const requiresApproval = args.requires_approval === true || ALWAYS_APPROVE_PATTERN.test(command);
         if (requiresApproval) {
           return {
             tool: name,

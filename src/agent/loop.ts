@@ -203,8 +203,10 @@ GROUNDING RULES:
   systemPrompt += `\n\nTOOL USE:
 You have access to tools that execute on the user's local machine via the ORI tool bridge. You do not run them yourself — call them via the API tool_calls mechanism and the ori-code client executes them locally.
 
-- File reads, git status/log, search: call immediately, no approval needed.
-- Write operations (shell, git_add, git_commit, git_push, create_file, apply_patch): these require user approval — the user sees the command before it runs. Call them directly; do not ask permission first.
+- Read-only commands (ls, cat, pwd, grep, find, echo, wc, head, tail, curl for GET, etc.): call shell immediately — do NOT set requires_approval.
+- Write or destructive commands (npm install, bun add, git commit, git push, rm, mv, file writes): set requires_approval=true — the user confirms before it runs.
+- git_add, git_commit, git_push always require approval.
+- create_file and apply_patch run immediately (they are file edits, not shell mutations).
 - Chain multiple tool calls in one response when needed.
 - NEVER say you lack shell or filesystem access — you have full local access via the tool bridge.`;
 
@@ -260,6 +262,7 @@ export async function executeTurn(input: {
   surface: string;
   turn: BuiltTurn;
   onStep?: (title: string) => void;
+  onToken?: (token: string) => void;
   onTokens?: (count: number) => void;
 }): Promise<ExecutedTurn> {
   const toolExecutions: AgentToolExecution[] = [];
@@ -290,6 +293,10 @@ export async function executeTurn(input: {
               branch: input.workspace.branch,
             }
           : undefined,
+        // Stream text tokens live on every iteration. When the model calls tools
+        // it emits tool_call deltas (not text), so onToken never fires mid-loop.
+        // It only fires on the final text-only response — exactly when we want it.
+        onToken: input.onToken,
       },
     );
 
@@ -341,6 +348,8 @@ export async function executeTurn(input: {
         else if (toolName === "git_push") label = `git push ${args.remote || "origin"}`;
         else if (toolName === "read_file") label = `reading ${args.path}`;
         else if (toolName === "write_file") label = `writing ${args.path}`;
+        else if (toolName === "apply_patch") label = `patching ${args.path}`;
+        else if (toolName === "create_file") label = `creating ${args.path}`;
         else if (toolName === "patch") label = `patching ${args.path}`;
         input.onStep(`${label}...`);
       }
@@ -394,6 +403,8 @@ export async function tryLocalCommand(
     workspace: WorkspaceSnapshot | null;
     pendingDraft?: any;
     pendingPlanDraft?: any;
+    conversation?: import("../runtime/types").OriMessage[];
+    lastChangedFile?: string | null;
   }
 ): Promise<{
   handled: boolean;
@@ -406,6 +417,8 @@ export async function tryLocalCommand(
   planDraft?: any;
   clearDraft?: boolean;
   clearPlanDraft?: boolean;
+  clearTranscript?: boolean;
+  compactedConversation?: import("../runtime/types").OriMessage[];
   verification?: any;
   travel?: { toPath: string; label: string; workspace: WorkspaceSnapshot };
   followUpInput?: string;
@@ -415,7 +428,60 @@ export async function tryLocalCommand(
   if (!trimmed.startsWith("/")) return { handled: false };
 
   if (trimmed === "/clear") {
-     return { handled: true, assistantMessage: "I’ve cleared the session for you." };
+    return { handled: true, clearTranscript: true };
+  }
+
+  if (trimmed === "/undo") {
+    const file = options.lastChangedFile;
+    if (!file) {
+      return { handled: true, assistantMessage: "Nothing to undo — no file has been changed this session." };
+    }
+    const cwd = options.workspace?.cwd ?? process.cwd();
+    try {
+      const { execAsync: exec } = await import("node:child_process").then(m => ({ execAsync: (cmd: string) => new Promise<string>((res, rej) => m.exec(cmd, { cwd }, (err, out) => err ? rej(err) : res(out))) }));
+      await exec(`git checkout HEAD -- ${JSON.stringify(file)}`);
+      return { handled: true, assistantMessage: `Undid changes to \`${file}\` — restored to HEAD.` };
+    } catch (e: any) {
+      return { handled: true, assistantMessage: `Undo failed: ${e.message}` };
+    }
+  }
+
+  if (trimmed === "/compact") {
+    const conversation = options.conversation ?? [];
+    if (conversation.length < 4) {
+      return { handled: true, assistantMessage: "Nothing to compact yet — conversation is short." };
+    }
+    const transcript = conversation
+      .filter(m => m.role === "user" || m.role === "assistant")
+      .map(m => `${m.role === "user" ? "User" : "ORI"}: ${String(m.content).slice(0, 400)}`)
+      .join("\n");
+    try {
+      const summaryResp = await options.client.createChatCompletion(options.surface, {
+        model: undefined,
+        messages: [
+          {
+            role: "system",
+            content: "You are a conversation compactor. Summarize the following conversation into a concise context block (max 300 words) that preserves all decisions made, files changed, current objectives, and any unresolved issues. Output only the summary, no preamble.",
+          },
+          { role: "user", content: transcript },
+        ],
+      });
+      const summary = summaryResp.choices?.[0]?.message?.content ?? "";
+      if (!summary) {
+        return { handled: true, assistantMessage: "Compact failed — ORI returned no summary." };
+      }
+      const compacted: import("../runtime/types").OriMessage[] = [
+        { role: "system", content: `[COMPACTED CONTEXT]\n${summary}` },
+      ];
+      return {
+        handled: true,
+        assistantMessage: `Session compacted. Summary:\n\n${summary}`,
+        clearTranscript: true,
+        compactedConversation: compacted,
+      };
+    } catch {
+      return { handled: true, assistantMessage: "Compact failed — could not reach ORI." };
+    }
   }
   
   if (trimmed === "/apply") {

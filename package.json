@@ -1,6 +1,6 @@
 {
   "name": "ori-code",
-  "version": "0.9.38",
+  "version": "0.9.39",
   "description": "ORI Code — terminal coding agent powered by ORI",
   "module": "index.ts",
   "type": "module",

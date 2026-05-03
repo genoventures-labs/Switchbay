@@ -1,7 +1,7 @@
 import React from "react";
 import { Box, Text } from "ink";
 import path from "node:path";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync as readFileSyncNode } from "node:fs";
 import type { SessionStatus } from "../../agent/turn-state";
 import type { WorkspaceSnapshot } from "../../session/workspace";
 import type { Agent } from "../../agent/agents";
@@ -25,6 +25,13 @@ export function Header({ mode, status, workspace, activeAgentId, availableAgents
   const branchColor = dirty > 0 ? "yellow" : "#00FF7F";
   const hasOriMd = existsSync(path.join(cwd, "ORI.md"));
   const hasMemory = existsSync(path.join(cwd, ".ori", "memory.md"));
+  const pinCount = (() => {
+    try {
+      const p = path.join(cwd, ".ori", "pins.json");
+      if (!existsSync(p)) return 0;
+      return (JSON.parse(readFileSyncNode(p, "utf-8")) as string[]).length;
+    } catch { return 0; }
+  })();
   const activeAgent = activeAgentId ? availableAgents.find(a => a.id === activeAgentId) : null;
 
   return (
@@ -59,6 +66,12 @@ export function Header({ mode, status, workspace, activeAgentId, availableAgents
               <>
                 <Text color="#707070">·</Text>
                 <Text color="#00FF7F" dimColor>mem</Text>
+              </>
+            ) : null}
+            {pinCount > 0 ? (
+              <>
+                <Text color="#707070">·</Text>
+                <Text color="#00FF7F" dimColor>{pinCount} pinned</Text>
               </>
             ) : null}
             {activeAgent ? (

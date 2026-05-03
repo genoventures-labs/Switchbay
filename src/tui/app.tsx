@@ -1250,6 +1250,18 @@ export function OriApp({
         dispatch({ type: "plan/step-complete" });
       }
 
+      // Auto-title on the first real turn, then auto-save
+      if (!state.sessionTitle) {
+        const firstReal = state.conversation.find(m => m.role === "user" && !String(m.content).startsWith("/"));
+        if (firstReal) {
+          const raw = String(firstReal.content);
+          const title = raw.slice(0, 60) + (raw.length > 60 ? "…" : "");
+          dispatch({ type: "session/title-set", title });
+        }
+      }
+      // Auto-save after every completed turn
+      void savePersistedSession({ ...state, updatedAt: Date.now() });
+
       refreshWorkspace().then((ws) => {
         dispatch({ type: "workspace/updated", workspace: ws });
       }).catch(() => {});

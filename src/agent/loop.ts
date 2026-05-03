@@ -261,6 +261,25 @@ export async function buildTurn(input: {
     } catch { /* ignore */ }
   }
 
+  // Inject pinned files
+  let pinsBlock = "";
+  const pinsJsonPath = join(cwd, ".ori", "pins.json");
+  if (existsSync(pinsJsonPath)) {
+    try {
+      const pins: string[] = JSON.parse(readFileSync(pinsJsonPath, "utf-8"));
+      const parts: string[] = [];
+      for (const p of pins.slice(0, 10)) {
+        try {
+          const abs = p.startsWith("/") ? p : join(cwd, p);
+          const content = readFileSync(abs, "utf-8");
+          const trimmedContent = content.length > 3000 ? content.slice(0, 3000) + "\n… [truncated]" : content;
+          parts.push(`### ${p}\n\`\`\`\n${trimmedContent}\n\`\`\``);
+        } catch { /* file missing — skip silently */ }
+      }
+      if (parts.length) pinsBlock = `\n\nPINNED FILES (always in context):\n${parts.join("\n\n")}`;
+    } catch { /* ignore malformed */ }
+  }
+
   // Inject active agent persona if one is set
   let agentBlock = "";
   if (input.activeAgentId) {
@@ -272,7 +291,7 @@ export async function buildTurn(input: {
   let systemPrompt = `You are ORI, a sovereign coding agent powered by Thynaptic.
 Current Mode: ${mode}
 Current Profile: ${input.profile}
-Current Workspace: ${cwd}${oriMdBlock}${memoryBlock}${agentBlock}
+Current Workspace: ${cwd}${oriMdBlock}${memoryBlock}${pinsBlock}${agentBlock}
 
 GROUNDING RULES:
 1. You are running as a local-first development tool (ORI Code).
@@ -574,6 +593,28 @@ export async function tryLocalCommand(
     return { handled: true, clearTranscript: true };
   }
 
+  if (trimmed === "/undo-turn") {
+    const cwd = options.workspace?.cwd ?? process.cwd();
+    try {
+      const { execAsync: execA } = await import("node:child_process").then(m => ({
+        execAsync: (cmd: string) => new Promise<string>((res, rej) =>
+          m.exec(cmd, { cwd }, (err, out) => err ? rej(err) : res(out.trim()))
+        ),
+      }));
+      const changed = await execA("git diff HEAD --name-only").catch(() => "");
+      const files = changed.split("\n").map(f => f.trim()).filter(Boolean);
+      if (!files.length) {
+        return { handled: true, assistantMessage: "Nothing to undo — no uncommitted changes vs HEAD." };
+      }
+      const quoted = files.map(f => JSON.stringify(f)).join(" ");
+      await execA(`git checkout HEAD -- ${quoted}`);
+      const list = files.map(f => `- \`${f}\``).join("\n");
+      return { handled: true, assistantMessage: `Reverted ${files.length} file${files.length !== 1 ? "s" : ""} to HEAD:\n\n${list}` };
+    } catch (e: any) {
+      return { handled: true, assistantMessage: `Undo failed: ${e.message}` };
+    }
+  }
+
   if (trimmed === "/undo") {
     const file = options.lastChangedFile;
     if (!file) {
@@ -741,6 +782,93 @@ Write only the ORI.md content, starting with # ORI.md`;
         activateAgent: match.id,
         assistantMessage: `${match.emoji} **${match.name}** activated.\n\n${match.description}`,
       };
+    }
+  }
+
+  // ── /review ──────────────────────────────────────────────────────────────
+  if (trimmed === "/review" || trimmed.startsWith("/review ")) {
+    const cwd = options.workspace?.cwd ?? process.cwd();
+    const focus = trimmed.slice("/review".length).trim(); // optional e.g. "security" or "performance"
+    try {
+      const { execAsync: execR } = await import("node:child_process").then(m => ({
+        execAsync: (cmd: string) => new Promise<string>((res, rej) =>
+          m.exec(cmd, { cwd, maxBuffer: 1024 * 1024 * 4 }, (err, out) => err ? rej(err) : res(out.trim()))
+        ),
+      }));
+
+      let diff = await execR("git diff HEAD").catch(() => "");
+      if (!diff) diff = await execR("git diff HEAD~1").catch(() => "");
+      if (!diff) return { handled: true, assistantMessage: "Nothing to review — no uncommitted changes and no previous commit diff." };
+
+      // Truncate very large diffs
+      const maxDiff = 8000;
+      const truncated = diff.length > maxDiff;
+      const diffBlock = truncated ? diff.slice(0, maxDiff) + "\n\n… [diff truncated]" : diff;
+
+      const focusLine = focus ? ` Focus specifically on ${focus} concerns.` : "";
+      const reviewPrompt = `Review the following diff.${focusLine} Structure your feedback as:
+1. **Issues** (blocking — must fix before merging)
+2. **Suggestions** (non-blocking improvements)
+3. **Nits** (style, naming, minor things)
+
+Be specific: cite file and line context. Be direct. Skip praise unless something is genuinely worth noting.
+
+\`\`\`diff
+${diffBlock}
+\`\`\``;
+
+      return { handled: true, followUpInput: reviewPrompt };
+    } catch (e: any) {
+      return { handled: true, assistantMessage: `Review failed: ${e.message}` };
+    }
+  }
+
+  // ── /pin · /unpin · /pins ────────────────────────────────────────────────
+  if (trimmed.startsWith("/pin ") || trimmed === "/pin") {
+    const filePath = trimmed.slice("/pin".length).trim();
+    if (!filePath) return { handled: true, assistantMessage: 'Usage: `/pin <path>` — e.g. `/pin src/config.ts`' };
+    const cwd = options.workspace?.cwd ?? process.cwd();
+    const pinsPath = join(cwd, ".ori", "pins.json");
+    try {
+      const { mkdir, readFile: rf, writeFile: wf } = await import("node:fs/promises");
+      await mkdir(join(cwd, ".ori"), { recursive: true });
+      let pins: string[] = [];
+      try { pins = JSON.parse(await rf(pinsPath, "utf-8")); } catch { /* new */ }
+      if (!pins.includes(filePath)) pins.push(filePath);
+      await wf(pinsPath, JSON.stringify(pins, null, 2), "utf-8");
+      return { handled: true, assistantMessage: `Pinned \`${filePath}\` — will be injected into every turn context.` };
+    } catch (e: any) {
+      return { handled: true, assistantMessage: `Pin failed: ${e.message}` };
+    }
+  }
+
+  if (trimmed.startsWith("/unpin ") || trimmed === "/unpin") {
+    const filePath = trimmed.slice("/unpin".length).trim();
+    if (!filePath) return { handled: true, assistantMessage: 'Usage: `/unpin <path>`' };
+    const cwd = options.workspace?.cwd ?? process.cwd();
+    const pinsPath = join(cwd, ".ori", "pins.json");
+    try {
+      const { writeFile: wf } = await import("node:fs/promises");
+      let pins: string[] = [];
+      try { pins = JSON.parse(readFileSync(pinsPath, "utf-8")); } catch { /* none */ }
+      const filtered = pins.filter(p => p !== filePath);
+      if (filtered.length === pins.length) return { handled: true, assistantMessage: `\`${filePath}\` wasn't pinned.` };
+      await wf(pinsPath, JSON.stringify(filtered, null, 2), "utf-8");
+      return { handled: true, assistantMessage: `Unpinned \`${filePath}\`.` };
+    } catch (e: any) {
+      return { handled: true, assistantMessage: `Unpin failed: ${e.message}` };
+    }
+  }
+
+  if (trimmed === "/pins") {
+    const cwd = options.workspace?.cwd ?? process.cwd();
+    const pinsPath = join(cwd, ".ori", "pins.json");
+    try {
+      const pins: string[] = JSON.parse(readFileSync(pinsPath, "utf-8"));
+      if (!pins.length) return { handled: true, assistantMessage: "No pinned files. Use `/pin <path>` to pin one." };
+      return { handled: true, assistantMessage: `**Pinned files** (injected every turn):\n\n${pins.map(p => `- \`${p}\``).join("\n")}\n\nRemove with \`/unpin <path>\`` };
+    } catch {
+      return { handled: true, assistantMessage: "No pinned files. Use `/pin <path>` to pin one." };
     }
   }
 

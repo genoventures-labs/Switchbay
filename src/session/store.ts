@@ -59,7 +59,8 @@ export type SessionAction =
   | { type: "plan/started" }
   | { type: "plan/step-complete" }
   | { type: "plan/step-skipped" }
-  | { type: "plan/stopped" };
+  | { type: "plan/stopped" }
+  | { type: "session/title-set"; title: string };
 
 function appendActivity(
   state: SessionState,
@@ -571,6 +572,8 @@ export function sessionReducer(
     }
     case "plan/stopped":
       return { ...state, activePlan: null };
+    case "session/title-set":
+      return { ...state, sessionTitle: action.title };
     default:
       return state;
   }

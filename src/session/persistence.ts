@@ -68,10 +68,16 @@ export async function listSessions(): Promise<{ id: string; title: string; updat
         const text = await file.text();
         const data = JSON.parse(text);
         
-        let title = "Untitled Session";
-        const firstUserMsg = data.conversation?.find((m: any) => m.role === "user");
-        if (firstUserMsg) {
-          title = firstUserMsg.content.slice(0, 50) + (firstUserMsg.content.length > 50 ? "..." : "");
+        // Use stored sessionTitle if available, else derive from first real user message
+        let title: string = data.sessionTitle ?? "";
+        if (!title) {
+          const firstUserMsg = data.conversation?.find((m: any) => m.role === "user" && !String(m.content).startsWith("/"));
+          if (firstUserMsg) {
+            const content = String(firstUserMsg.content);
+            title = content.slice(0, 60) + (content.length > 60 ? "…" : "");
+          } else {
+            title = "Untitled Session";
+          }
         }
         
         const id = fname.replace("session-", "").replace(".json", "");

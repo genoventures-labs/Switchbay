@@ -110,6 +110,7 @@ export type SessionState = {
   activeBundleIds: string[];
   activeAgentId: string | null;
   activePlan: ActivePlan | null;
+  sessionTitle: string | null;
   scratchpad: ScratchpadState | null;
   turnStartedAt: number | null;
   turnTokenCount: number;
@@ -199,6 +200,7 @@ export function createInitialSessionState(input: {
     activeBundleIds: [],
     activeAgentId: null,
     activePlan: null,
+    sessionTitle: null,
     lastError: null,
     workspace: null,
     verification: null,

@@ -50,6 +50,36 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     category: "workspace",
+    command: "/review",
+    description: "Review current uncommitted diff with ORI. Optionally focus: /review security",
+    example: "/review",
+  },
+  {
+    category: "workspace",
+    command: "/pin",
+    description: "Pin a file — injected into every turn context automatically.",
+    example: "/pin src/config.ts",
+  },
+  {
+    category: "workspace",
+    command: "/pins",
+    description: "List all pinned files for this workspace.",
+    example: "/pins",
+  },
+  {
+    category: "workspace",
+    command: "/unpin",
+    description: "Unpin a file.",
+    example: "/unpin src/config.ts",
+  },
+  {
+    category: "workspace",
+    command: "/undo-turn",
+    description: "Revert all uncommitted changes in one shot (git checkout HEAD on every changed file).",
+    example: "/undo-turn",
+  },
+  {
+    category: "workspace",
     command: "/remember",
     description: "Save a note to memory — injected into every session in this workspace.",
     example: '/remember "we use pnpm not npm"',

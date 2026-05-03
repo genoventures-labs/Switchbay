@@ -733,27 +733,40 @@ export async function executeToolCall(
       }
       
       case "verify": {
-          const { stdout, stderr } = await execAsync("bun run build || npm run build || true", { cwd });
-          return {
-              tool: name,
-              ok: true,
-              summary: "Ran verification suite",
-              body: stdout + "\n" + stderr,
-          };
+          const buildCmd = await (async () => {
+            try {
+              const pkg = JSON.parse(await fs.readFile(path.join(cwd, "package.json"), "utf-8")) as { scripts?: Record<string, string> };
+              if (pkg.scripts?.build) return "bun run build";
+            } catch { /* no package.json */ }
+            try { await fs.access(path.join(cwd, "go.mod")); return "go build ./..."; } catch { /* not go */ }
+            try { await fs.access(path.join(cwd, "Cargo.toml")); return "cargo build"; } catch { /* not rust */ }
+            return null;
+          })();
+
+          if (!buildCmd) {
+            return { tool: name, ok: true, summary: "No build command detected", body: "No build system detected in this workspace." };
+          }
+
+          try {
+            const { stdout, stderr } = await execAsync(buildCmd, { cwd, maxBuffer: 1024 * 1024 * 4 });
+            const output = [stdout, stderr].filter(Boolean).join("\n").trim();
+            return { tool: name, ok: true, summary: `Build passed: ${buildCmd}`, body: output || "Build succeeded with no output." };
+          } catch (err: any) {
+            const output = [err.stdout, err.stderr].filter(Boolean).join("\n").trim();
+            return { tool: name, ok: false, summary: `Build FAILED: ${buildCmd}`, body: `Build failed:\n\n${output}` };
+          }
       }
 
       case "run_tests": {
           const testCommand = await detectTestCommand(cwd);
-          const { stdout, stderr } = await execAsync(testCommand, {
-              cwd,
-              maxBuffer: 1024 * 1024 * 8,
-          });
-          return {
-              tool: name,
-              ok: true,
-              summary: `Ran tests with: ${testCommand}`,
-              body: [stdout, stderr].filter(Boolean).join("\n") || "Tests completed with no output.",
-          };
+          try {
+            const { stdout, stderr } = await execAsync(testCommand, { cwd, maxBuffer: 1024 * 1024 * 8 });
+            const output = [stdout, stderr].filter(Boolean).join("\n").trim();
+            return { tool: name, ok: true, summary: `Tests passed: ${testCommand}`, body: output || "Tests passed with no output." };
+          } catch (err: any) {
+            const output = [err.stdout, err.stderr].filter(Boolean).join("\n").trim();
+            return { tool: name, ok: false, summary: `Tests FAILED: ${testCommand}`, body: `Tests failed:\n\n${output}` };
+          }
       }
 
       case "web_fetch": {

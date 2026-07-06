@@ -54,7 +54,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
       console.log("  bun install -g github:genoventures-labs/ori-code#main\n");
       process.exit(0);
     } else if (arg === "version" || arg === "--version" || arg === "-v") {
-      console.log("code-harness 0.9.45");
+      console.log("code-harness 0.9.46");
       process.exit(0);
     } else if (arg === undefined || arg === "help" || arg === "--help" || arg === "-h") {
       return { surface, profile, mode, lane, initialQuery: "", hop: null, resume: false, newSession: false, purge: null, subcommand: "help" };

@@ -1,6 +1,6 @@
 {
   "name": "ori-code",
-  "version": "0.9.45",
+  "version": "0.9.46",
   "description": "Terminal coding agent harness with cloud and local model lanes",
   "module": "index.tsx",
   "type": "module",

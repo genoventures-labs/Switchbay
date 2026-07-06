@@ -1,13 +1,13 @@
 import React from "react";
 import { render } from "ink";
 import { parseCliArgs } from "./src/cli/args";
-import { OriClient } from "./src/runtime/ori-client";
+import { createRuntimeClient } from "./src/runtime/client";
+import { normalizeRuntimeLane } from "./src/config/env";
 import { OriApp } from "./src/tui/app";
-import { loadOriConfig } from "./src/config/ori-config";
+import { loadHarnessConfig } from "./src/config/harness-config";
 import { fuzzyMatchLocations, travelTo } from "./src/tools/travel";
 import { listSessions, purgeSessions, loadPersistedSession, savePersistedSession } from "./src/session/persistence";
 import { buildTurn, executeTurn, extractAssistantText, refreshWorkspace, synthesizeAssistantFallback } from "./src/agent/loop";
-import { listAvailableBundles } from "./src/tools/bundles";
 
 // ANSI colors for CLI mode
 const CLR = {
@@ -20,30 +20,31 @@ const CLR = {
 };
 
 // Ensure config is initialized on first boot
-loadOriConfig();
+loadHarnessConfig();
 
 const options = parseCliArgs(process.argv);
 
 async function boot() {
   if (options.subcommand === "help") {
     console.log(`
-ORI Code — terminal coding agent powered by ORI
+Code Harness — terminal coding agent shell
 
 Usage:
-  ori-code                          Launch the TUI (interactive mode)
-  ori-code "query"                  One-shot request
-  ori-code "query" --hop <name>     Launch in a different workspace
-  ori-code --resume                 Resume the last session
-  ori-code --resume <id|index>      Resume a specific session by ID or index
-  ori-code --new                    Start a fresh session
-  ori-code --purge <duration>       Clean up old sessions (e.g. 1d, 1w)
-  ori-code update                   Print update instructions
-  ori-code version                  Print version
+  code-harness                          Launch the TUI (interactive mode)
+  code-harness "query"                  One-shot request
+  code-harness "query" --hop <name>     Launch in a different workspace
+  code-harness --resume                 Resume the last session
+  code-harness --resume <id|index>      Resume a specific session by ID or index
+  code-harness --new                    Start a fresh session
+  code-harness --purge <duration>       Clean up old sessions (e.g. 1d, 1w)
+  code-harness update                   Print update instructions
+  code-harness version                  Print version
 
 Options:
   -s, --surface <type>   Surface context (default: dev)
   -p, --profile <name>   Working style (default: ori_code)
   -m, --mode <name>      Agent mode: build | design | debug (default: build)
+  --lane <name>          Runtime lane: cloud | local | lmstudio (default: HARNESS_LANE or cloud)
   --hop <name>           Travel to a whitelisted location before launching
   --resume <val>         Resume last saved session, or specific ID/Index (0=latest)
   --new                  Force a fresh session even if a saved one exists
@@ -58,18 +59,18 @@ Options:
     const duration = options.purge.toLowerCase();
     let ms = 0;
     const match = duration.match(/^(\d+)([dw])$/);
-    if (match) {
+    if (match?.[1] && match[2]) {
       const count = parseInt(match[1], 10);
       const unit = match[2];
       if (unit === "d") ms = count * 24 * 60 * 60 * 1000;
       else if (unit === "w") ms = count * 7 * 24 * 60 * 60 * 1000;
     } else {
-      console.error(`ori-code: invalid purge duration "${options.purge}". Use e.g. 1d, 5d, 2w.`);
+      console.error(`code-harness: invalid purge duration "${options.purge}". Use e.g. 1d, 5d, 2w.`);
       process.exit(1);
     }
     
     const count = await purgeSessions(ms);
-    console.log(`ori-code: purged ${count} old session(s).`);
+    console.log(`code-harness: purged ${count} old session(s).`);
     if (!options.resume && !options.initialQuery) {
         process.exit(0);
     }
@@ -84,7 +85,7 @@ Options:
         if (sessions[index]) {
           resumeId = sessions[index].id;
         } else {
-          console.error(`ori-code: session index ${index} not found. Use /sessions to see history.`);
+          console.error(`code-harness: session index ${index} not found. Use /sessions to see history.`);
           process.exit(1);
         }
       } else {
@@ -102,10 +103,12 @@ Options:
   }
 
   // TUI Mode: No query, launch interactive app
-  const client = new OriClient();
+  const lane = normalizeRuntimeLane(options.lane);
+  const client = createRuntimeClient(lane);
   render(
     <OriApp
       client={client}
+      lane={lane}
       initialHopLabel={null}
       initialQuery=""
       mode={options.mode}
@@ -117,7 +120,7 @@ Options:
 }
 
 async function runCliMode(options: any, resumeId: string | null) {
-  const client = new OriClient();
+  const client = createRuntimeClient(normalizeRuntimeLane(options.lane));
   const workspace = await refreshWorkspace();
   
   let state = await loadPersistedSession(resumeId === "latest" ? undefined : resumeId || undefined);
@@ -133,9 +136,6 @@ async function runCliMode(options: any, resumeId: string | null) {
     });
   }
 
-  const bundles = await listAvailableBundles();
-  const activeBundles = bundles.filter(b => state.activeBundleIds.includes(b.manifest.id));
-
   const turn = await buildTurn({
     input: options.initialQuery,
     mode: state.mode,
@@ -143,10 +143,9 @@ async function runCliMode(options: any, resumeId: string | null) {
     previousObjective: state.currentObjective,
     transcript: state.conversation,
     workspace,
-    activeBundles,
   });
 
-  process.stdout.write(`\n${CLR.salmon}⏺${CLR.reset} ${CLR.white}${CLR.bold}ORI${CLR.reset} ${CLR.gray}(thinking…)${CLR.reset}\n`);
+  process.stdout.write(`\n${CLR.salmon}⏺${CLR.reset} ${CLR.white}${CLR.bold}Assistant${CLR.reset} ${CLR.gray}(thinking...)${CLR.reset}\n`);
   
   const onStep = (title: string) => {
     process.stdout.write(`  ${CLR.gray}└ ${title}${CLR.reset}\n`);
@@ -166,7 +165,7 @@ async function runCliMode(options: any, resumeId: string | null) {
       extractAssistantText(executedTurn.response) ||
       synthesizeAssistantFallback(options.initialQuery, executedTurn.toolExecutions, workspace);
     if (content) {
-      process.stdout.write(`\n${CLR.salmon}⏺${CLR.reset} ${CLR.white}${CLR.bold}ORI${CLR.reset}\n`);
+      process.stdout.write(`\n${CLR.salmon}⏺${CLR.reset} ${CLR.white}${CLR.bold}Assistant${CLR.reset}\n`);
       process.stdout.write(`  ${CLR.gray}└ ${CLR.reset}${content}\n\n`);
       
       state.conversation.push({ role: "user", content: options.initialQuery });
@@ -174,11 +173,11 @@ async function runCliMode(options: any, resumeId: string | null) {
       state.updatedAt = Date.now();
       await savePersistedSession(state);
     } else if (executedTurn.toolExecutions.length > 0) {
-      process.stdout.write(`\n${CLR.salmon}⏺${CLR.reset} ${CLR.white}${CLR.bold}ORI${CLR.reset}\n`);
-      process.stdout.write(`  ${CLR.gray}└ ${CLR.reset}Turn completed after local tool work, but ORI returned no final assistant text.\n\n`);
+      process.stdout.write(`\n${CLR.salmon}⏺${CLR.reset} ${CLR.white}${CLR.bold}Assistant${CLR.reset}\n`);
+      process.stdout.write(`  ${CLR.gray}└ ${CLR.reset}Turn completed after local tool work, but the model returned no final assistant text.\n\n`);
     } else {
-      process.stdout.write(`\n${CLR.salmon}⏺${CLR.reset} ${CLR.white}${CLR.bold}ORI${CLR.reset}\n`);
-      process.stdout.write(`  ${CLR.gray}└ ${CLR.reset}ORI returned no assistant text for this turn.\n\n`);
+      process.stdout.write(`\n${CLR.salmon}⏺${CLR.reset} ${CLR.white}${CLR.bold}Assistant${CLR.reset}\n`);
+      process.stdout.write(`  ${CLR.gray}└ ${CLR.reset}The model returned no assistant text for this turn.\n\n`);
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -187,6 +186,6 @@ async function runCliMode(options: any, resumeId: string | null) {
 }
 
 boot().catch((err) => {
-  console.error("ori-code: fatal boot error:", err);
+  console.error("code-harness: fatal boot error:", err);
   process.exit(1);
 });

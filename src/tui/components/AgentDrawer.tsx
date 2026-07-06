@@ -26,7 +26,7 @@ export function AgentDrawer({ agents, activeAgentId, selectedIndex, visible }: A
       borderColor={grayColor}
     >
       <Box marginBottom={1} gap={2}>
-        <Text color={brandColor} bold>ORI Agents</Text>
+        <Text color={brandColor} bold>Agents</Text>
         <Text color={grayColor}>↑↓ navigate · Enter activate · Esc close</Text>
       </Box>
 

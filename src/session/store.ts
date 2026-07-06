@@ -1,15 +1,12 @@
 import type { OriMessage } from "../runtime/types";
 import type { PatchPreview } from "../tools/patch";
-import type { VerificationSummary } from "../tools/verify";
 import {
   createApprovalRequest,
   createActivityEvent,
   createInitialSessionState,
   createThoughtFrame,
   createTranscriptEntry,
-  type DraftEdit,
   type AgentMode,
-  type PlanDraft,
   type ShellCommand,
   type SessionState,
 } from "../agent/turn-state";
@@ -18,20 +15,14 @@ import type { WorkspaceSnapshot } from "./workspace";
 export type SessionAction =
   | { type: "session/reset"; state: SessionState }
   | { type: "session/hydrated"; state: SessionState }
-  | { type: "scratchpad/updated"; scratchpad: SessionState["scratchpad"] }
   | { type: "connection/opened" }
   | { type: "connection/closed" }
   | { type: "workspace/updated"; workspace: WorkspaceSnapshot }
   | { type: "patch/updated"; patch: PatchPreview; changedFile: string }
-  | { type: "draft/staged"; draft: DraftEdit }
-  | { type: "plan/staged"; plan: PlanDraft }
   | { type: "approval/approved"; requestId: string }
   | { type: "approval/rejected"; requestId: string }
-  | { type: "draft/cleared" }
-  | { type: "plan/cleared" }
   | { type: "shell/staged"; command: string; reason: string }
   | { type: "shell/cleared" }
-  | { type: "verification/updated"; verification: VerificationSummary }
   | {
       type: "turn/submitted";
       message: OriMessage;
@@ -41,7 +32,6 @@ export type SessionAction =
       resolvedProfile: string;
     }
   | { type: "turn/started" }
-  | { type: "turn/capability"; capability: string | null }
   | { type: "turn/token"; token: string }
   | { type: "turn/tokens"; count: number }
   | { type: "tool/executed"; tool: string; summary: string; ok: boolean }
@@ -103,17 +93,6 @@ export function sessionReducer(
       return action.state;
     case "session/hydrated":
       return action.state;
-    case "scratchpad/updated":
-      return appendActivity(
-        {
-          ...state,
-          scratchpad: action.scratchpad,
-        },
-        "info",
-        action.scratchpad?.task
-          ? `Scratchpad ${action.scratchpad.status}: ${action.scratchpad.task}`
-          : "Scratchpad cleared.",
-      );
     case "connection/opened":
       return { ...state, status: "CONNECTED" };
     case "connection/closed":
@@ -140,61 +119,6 @@ export function sessionReducer(
         },
         "tool",
         `Updated ${action.changedFile}.`,
-      );
-    case "draft/staged":
-      return appendTranscript(
-        appendThought(
-          appendActivity(
-            {
-              ...state,
-              pendingDraft: action.draft,
-              pendingApproval: createApprovalRequest({
-                kind: "draft_edit",
-                title: `Approve edit for ${action.draft.targetPath}`,
-                summary: action.draft.reason,
-                commandHint: "/apply or /cancel",
-              }),
-              lastPatchPreview: action.draft.patch,
-            },
-            "tool",
-            `Drafted edit for ${action.draft.targetPath}.`,
-          ),
-          "result",
-          `Prepared a patch for ${action.draft.targetPath}.`,
-        ),
-        createTranscriptEntry({
-          kind: "tool",
-          title: "Draft Patch Ready",
-          body: `${action.draft.reason}\n\nTarget: ${action.draft.targetPath}`,
-          tone: "warning",
-        }),
-      );
-    case "plan/staged":
-      return appendTranscript(
-        appendThought(
-          appendActivity(
-            {
-              ...state,
-              pendingPlanDraft: action.plan,
-              pendingApproval: createApprovalRequest({
-                kind: "execution_plan",
-                title: `Approve execution plan: ${action.plan.title}`,
-                summary: "Review the proposed implementation plan. Approve to start building.",
-                commandHint: "/apply or /cancel",
-              }),
-            },
-            "tool",
-            `Drafted execution plan: ${action.plan.title}.`,
-          ),
-          "plan",
-          `Prepared an execution plan for ${action.plan.title}.`,
-        ),
-        createTranscriptEntry({
-          kind: "tool",
-          title: "Execution Plan Ready",
-          body: action.plan.content,
-          tone: "warning",
-        }),
       );
     case "approval/approved":
       return appendTranscript(
@@ -232,34 +156,6 @@ export function sessionReducer(
           tone: "warning",
         }),
       );
-    case "draft/cleared":
-      return appendTranscript(
-        {
-          ...state,
-          pendingDraft: null,
-          pendingApproval: null,
-        },
-        createTranscriptEntry({
-          kind: "tool",
-          title: "Draft Cleared",
-          body: "The pending draft was canceled.",
-          tone: "info",
-        }),
-      );
-    case "plan/cleared":
-      return appendTranscript(
-        {
-          ...state,
-          pendingPlanDraft: null,
-          pendingApproval: null,
-        },
-        createTranscriptEntry({
-          kind: "tool",
-          title: "Plan Cleared",
-          body: "The pending execution plan was canceled.",
-          tone: "info",
-        }),
-      );
     case "shell/staged":
       return appendTranscript(
         appendActivity(
@@ -270,7 +166,7 @@ export function sessionReducer(
               kind: "shell_command",
               title: "Run shell command",
               summary: action.command,
-              commandHint: "/apply to run · /cancel to skip",
+              commandHint: "y to run · n to skip",
             }),
           },
           "tool",
@@ -285,23 +181,6 @@ export function sessionReducer(
       );
     case "shell/cleared":
       return { ...state, pendingShell: null, pendingApproval: null };
-    case "verification/updated":
-      return appendTranscript(
-        appendActivity(
-          {
-            ...state,
-            verification: action.verification,
-          },
-          action.verification.ok ? "status" : "error",
-          action.verification.summary,
-        ),
-        createTranscriptEntry({
-          kind: "tool",
-          title: "Verification",
-          body: `${action.verification.summary}\n\nCommand: ${action.verification.command}`,
-          tone: action.verification.ok ? "success" : "error",
-        }),
-      );
     case "turn/submitted":
       return appendTranscript(
         appendThought(
@@ -324,7 +203,7 @@ export function sessionReducer(
         createTranscriptEntry({
           kind: "user",
           title: "User",
-          body: action.message.content,
+          body: String(action.message.content),
         }),
       );
     case "turn/started":
@@ -334,37 +213,15 @@ export function sessionReducer(
             ...state,
             status: "THINKING",
             streamingText: "",
-            activeCapability: null,
             lastError: null,
             turnStartedAt: Date.now(),
             turnTokenCount: 0,
           },
           "status",
-          "ORI is working the turn.",
+          "Assistant is working the turn.",
         ),
         "plan",
         "Planning the next step.",
-      );
-    case "turn/capability":
-      return appendThought(
-        appendActivity(
-          {
-            ...state,
-            activeCapability: action.capability,
-          },
-          "tool",
-          action.capability
-            ? `Agent capability active: ${action.capability}`
-            : "Agent capability cleared.",
-        ),
-        "capability",
-        action.capability
-          ? action.capability.startsWith("local:")
-            ? `local:${action.capability.slice(6)} inspection in progress.`
-            : action.capability.startsWith("ori:")
-              ? `ori:${action.capability.slice(4)} reasoning helper in progress.`
-              : `Using ${action.capability}.`
-          : "Capability cleared.",
       );
     case "turn/token":
       return {
@@ -386,7 +243,7 @@ export function sessionReducer(
             `Executed tool: ${action.tool}`,
           ),
           "inspect",
-          `${action.tool.startsWith("local:") ? "local" : "ori"} capability ${action.tool} returned ${action.ok ? "usable" : "failed"} output.`,
+          `${action.tool.startsWith("local:") ? "local" : "tool"} capability ${action.tool} returned ${action.ok ? "usable" : "failed"} output.`,
         ),
         createTranscriptEntry({
           kind: "tool",
@@ -416,7 +273,6 @@ export function sessionReducer(
                 ]
               : state.conversation,
             status: "READY",
-            activeCapability: null,
             streamingText: "",
             turnStartedAt: null,
           },
@@ -437,7 +293,7 @@ export function sessionReducer(
         completedState,
         createTranscriptEntry({
           kind: "assistant",
-          title: "ORI",
+          title: "Assistant",
           body: trimmed,
           tone: "info",
         }),
@@ -455,7 +311,7 @@ export function sessionReducer(
         ),
         createTranscriptEntry({
           kind: "assistant",
-          title: "ORI",
+          title: "Assistant",
           body: action.message,
           tone: "info",
         }),
@@ -467,7 +323,6 @@ export function sessionReducer(
             {
               ...state,
               status: "ERROR",
-              activeCapability: null,
               streamingText: "",
               lastError: action.error,
               turnStartedAt: null,
@@ -475,7 +330,7 @@ export function sessionReducer(
                 ...state.conversation,
                 {
                   role: "assistant",
-                  content: "Sorry honey, backbone's acting up.",
+                  content: "The provider failed before returning a usable response.",
                 },
               ],
             },
@@ -503,10 +358,10 @@ export function sessionReducer(
         body: `Now operating in ${action.toPath}`,
         tone: "info",
       });
-      // Inject a system note into conversation so ORI knows the workspace changed
+      // Inject a system note into conversation so the provider knows the workspace changed.
       const systemNote: OriMessage = {
         role: "system",
-        content: `[LOCATION CHANGE] ORI has traveled to a new workspace.\nPath: ${action.toPath}\nLabel: ${action.label}\nAll subsequent file operations and context apply to this new location.`,
+        content: `[LOCATION CHANGE] The harness has switched to a new workspace.\nPath: ${action.toPath}\nLabel: ${action.label}\nAll subsequent file operations and context apply to this new location.`,
       };
       return {
         ...state,
@@ -521,8 +376,6 @@ export function sessionReducer(
         transcript: [],
         conversation: [],
         streamingText: "",
-        pendingDraft: null,
-        pendingPlanDraft: null,
         pendingShell: null,
         pendingApproval: null,
         activePlan: null,

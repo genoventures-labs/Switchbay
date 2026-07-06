@@ -6,46 +6,21 @@ const PHRASES_CORE = [
   "connecting the dots",
   "checking context",
   "validating response",
-  "asking the oracle",
   "reading between the lines",
-  "consulting the ancient texts",
   "cooking something up",
-  "loading genius",
-  "firing neurons",
-  "in the lab",
-  "running it back",
+  "checking the workspace",
+  "reading the diff",
+  "planning the next step",
   "doing the math",
-  "channeling the grid",
-  "summoning an answer",
+  "lining up the tools",
   "on it",
 ];
 
-const PHRASES_WUB = [
-  "cranking up the wubs",
-  "dropping the bass",
-  "building the drop",
-  "charging the wobble",
-  "syncing to 140 BPM",
-  "loading the filth",
-  "warming up the sub",
-  "riding the LFO",
-  "bass cannon primed",
-  "summoning the wobble",
-  "the drop is imminent",
-  "bwomp incoming",
-  "oscillating violently",
-  "tuning the growl",
-  "pre-drop tension rising",
-];
-
 function pickPhrase(): string {
-  const wubMode = Math.random() < 0.2;
-  const pool = wubMode ? PHRASES_WUB : PHRASES_CORE;
-  return pool[Math.floor(Math.random() * pool.length)];
+  return PHRASES_CORE[Math.floor(Math.random() * PHRASES_CORE.length)] ?? "thinking";
 }
 
 type ComposerProps = {
-  activeCapability: string | null;
   disabled?: boolean;
   initialQuery: string;
   pendingApprovalKind?: string | null;
@@ -57,7 +32,6 @@ type ComposerProps = {
 };
 
 export function Composer({
-  activeCapability,
   disabled = false,
   initialQuery,
   pendingApprovalKind = null,
@@ -132,7 +106,7 @@ export function Composer({
         <Box marginY={0}>
           <Text color={grayColor}>❯ </Text>
           <Text color={query ? "white" : brandColor}>
-            {query || (disabled ? "Describe what you want to change..." : "Ask ORI a question or describe an edit...")}
+            {query || (disabled ? "Describe what you want to change..." : "Ask a question or describe an edit...")}
             {!isThinking && !disabled ? (
               <Text backgroundColor="white" color="black"> </Text>
             ) : null}

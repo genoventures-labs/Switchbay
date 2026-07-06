@@ -1,16 +1,13 @@
 import path from "node:path";
 import fs from "node:fs/promises";
-import { exec } from "node:child_process";
-import { promisify } from "node:util";
-import { DEFAULTS } from "../config/defaults";
-import { getApiKey, getApiBase } from "../config/env";
 import type { WorkspaceSnapshot } from "../session/workspace";
+import type { ShellCommand } from "./turn-state";
+import { buildPatchPreview, type PatchPreview } from "../tools/patch";
+import { runCommand, runShellString } from "../tools/shell";
 
-const execAsync = promisify(exec);
-
-// Commands that always require approval regardless of requires_approval flag.
-// Covers mutations that can't be undone or have broad blast radius.
-const ALWAYS_APPROVE_PATTERN = /\b(rm|rmdir|git\s+push|git\s+reset|git\s+clean|npm\s+publish|bun\s+publish|pip\s+install|sudo|chmod|chown|dd|mkfs|fdisk|curl\s.*\|\s*(?:bash|sh)|wget\s.*\|\s*(?:bash|sh))\b/i;
+// Commands that still require approval in the private-tool lane because they
+// are destructive, privileged, publishing, or have broad external impact.
+const ALWAYS_APPROVE_PATTERN = /\b(rm|rmdir|git\s+push|git\s+reset|git\s+clean|npm\s+publish|bun\s+publish|sudo|chmod|chown|dd|mkfs|fdisk|curl\s.*\|\s*(?:bash|sh)|wget\s.*\|\s*(?:bash|sh))\b/i;
 
 export type ToolDefinition = {
   type: "function";
@@ -67,6 +64,21 @@ export const AGENT_TOOLS: ToolDefinition[] = [
           end_line: { type: "number", description: "The 1-based ending line number (inclusive)." },
         },
         required: ["path", "start_line", "end_line"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "summarize_file",
+      description: "Summarize a local workspace file with metadata and its first lines.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: { type: "string", description: "The relative path to the file." },
+          max_lines: { type: "number", description: "Maximum number of leading lines to include (default: 20)." },
+        },
+        required: ["path"],
       },
     },
   },
@@ -142,21 +154,6 @@ export const AGENT_TOOLS: ToolDefinition[] = [
           all_occurrences: { type: "boolean", description: "Whether to replace all matches instead of requiring exactly one." },
         },
         required: ["path", "search", "replace"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "draft_edit",
-      description: "Propose an edit for a file. This creates a draft patch that the user must approve.",
-      parameters: {
-        type: "object",
-        properties: {
-          path: { type: "string", description: "The relative path to the file to edit." },
-          instruction: { type: "string", description: "Detailed instruction for the edit." },
-        },
-        required: ["path", "instruction"],
       },
     },
   },
@@ -264,102 +261,13 @@ export const AGENT_TOOLS: ToolDefinition[] = [
   {
     type: "function",
     function: {
-      name: "web_fetch",
-      description: "Fetch and summarize a URL for documentation or research.",
-      parameters: {
-        type: "object",
-        properties: {
-          url: { type: "string", description: "The URL to fetch." },
-        },
-        required: ["url"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "openapi_lookup",
-      description: "Look up a specific endpoint or schema in ORI's OpenAPI document.",
-      parameters: {
-        type: "object",
-        properties: {
-          path: { type: "string", description: "Optional API path to inspect, such as /chat/completions." },
-          method: { type: "string", description: "Optional HTTP method like get or post." },
-          schema: { type: "string", description: "Optional component schema name to inspect." },
-        },
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "check_health",
-      description: "Check the ORI runtime health and current surface context.",
-      parameters: { type: "object", properties: {} },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "get_key_info",
-      description: "Return tenant, key id, and scopes for the current authenticated ORI key.",
-      parameters: { type: "object", properties: {} },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "get_capabilities",
-      description: "Return the full ORI capability manifest from the runtime.",
-      parameters: { type: "object", properties: {} },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "list_surfaces",
-      description: "List valid ORI product surfaces and their profile sets.",
-      parameters: { type: "object", properties: {} },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "list_working_styles",
-      description: "List working style profiles available for a given ORI surface.",
-      parameters: {
-        type: "object",
-        properties: {
-          surface: { type: "string", description: "The surface to query: studio, home, dev, or red." },
-        },
-        required: ["surface"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "get_request_template",
-      description: "Retrieve a request template from the ORI developer portal request catalog.",
-      parameters: {
-        type: "object",
-        properties: {
-          template: { type: "string", description: "The template name to retrieve." },
-        },
-        required: ["template"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
       name: "shell",
-      description: "Run a shell command on the user's local machine. For write/destructive operations (git commit, git push, npm install, file deletions), set requires_approval=true — the user will confirm before execution.",
+      description: "Run a shell command on the user's local machine. Routine local work runs immediately. Set requires_approval=true only for destructive, privileged, publishing, or external-impact commands.",
       parameters: {
         type: "object",
         properties: {
           command: { type: "string", description: "The shell command to run." },
-          requires_approval: { type: "boolean", description: "True for write or destructive operations. User will see the command and confirm before it runs." },
+          requires_approval: { type: "boolean", description: "True only when the command should be explicitly confirmed before execution." },
           approval_reason: { type: "string", description: "Human-readable description shown to the user when asking for approval." },
         },
         required: ["command"],
@@ -370,7 +278,7 @@ export const AGENT_TOOLS: ToolDefinition[] = [
     type: "function",
     function: {
       name: "git_add",
-      description: "Stage files for commit. Requires user approval.",
+      description: "Stage files for commit.",
       parameters: {
         type: "object",
         properties: {
@@ -384,7 +292,7 @@ export const AGENT_TOOLS: ToolDefinition[] = [
     type: "function",
     function: {
       name: "git_commit",
-      description: "Create a git commit with the staged changes. Requires user approval.",
+      description: "Create a git commit with the staged changes. Only use this when the user asked for a commit.",
       parameters: {
         type: "object",
         properties: {
@@ -415,47 +323,11 @@ export type AgentToolExecution = {
   summary: string;
   ok: boolean;
   body: string;
-  patch?: string;
+  patch?: PatchPreview;
   changedFile?: string;
-  draft?: any;
-  travel?: { toPath: string; label: string; workspace: any };
-  shellPending?: { command: string; reason: string };
+  travel?: { toPath: string; label: string; workspace: WorkspaceSnapshot };
+  shellPending?: ShellCommand;
 };
-
-async function callRuntimeMCP(
-  toolName: string,
-  args: Record<string, unknown>,
-): Promise<unknown> {
-  const apiBase = getApiBase();
-  const apiKey = getApiKey();
-  const response = await fetch(`${apiBase}/mcp`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-      "X-Ori-Context": "dev",
-    },
-    body: JSON.stringify({
-      jsonrpc: "2.0",
-      id: 1,
-      method: "tools/call",
-      params: { name: toolName, arguments: args },
-    }),
-  });
-  const data = (await response.json()) as {
-    result?: { content?: Array<{ text?: string }>; isError?: boolean };
-    error?: { message?: string };
-  };
-  if (data.error) {
-    throw new Error(data.error.message ?? "MCP error");
-  }
-  const text = data.result?.content?.[0]?.text ?? "";
-  try {
-    return JSON.parse(text);
-  } catch {
-    return text;
-  }
-}
 
 export async function executeToolCall(
   name: string,
@@ -508,6 +380,38 @@ export async function executeToolCall(
         };
       }
 
+      case "summarize_file": {
+        const targetPath = String(args.path || "").trim();
+        if (!targetPath) throw new Error("summarize_file requires a path.");
+        const filePath = path.join(cwd, targetPath);
+        const stat = await fs.stat(filePath);
+        if (!stat.isFile()) {
+          throw new Error(`Path is not a file: ${targetPath}`);
+        }
+
+        const maxLines = Math.max(1, Math.min(200, Number(args.max_lines) || 20));
+        const content = await fs.readFile(filePath, "utf-8");
+        const lines = content.split("\n");
+        const preview = lines
+          .slice(0, maxLines)
+          .map((line, index) => `${index + 1}: ${line}`)
+          .join("\n");
+
+        return {
+          tool: name,
+          ok: true,
+          summary: `Summarized ${targetPath}`,
+          body: [
+            `Path: ${targetPath}`,
+            `Size: ${stat.size} bytes`,
+            `Total lines: ${lines.length}`,
+            `Preview lines: 1-${Math.min(maxLines, lines.length)}`,
+            "",
+            preview || "No content.",
+          ].join("\n"),
+        };
+      }
+
       case "create_file": {
         const filePath = path.join(cwd, args.path);
         await fs.mkdir(path.dirname(filePath), { recursive: true });
@@ -528,10 +432,11 @@ export async function executeToolCall(
         const filePath = path.join(cwd, args.path);
         let before = "";
         try { before = await fs.readFile(filePath, "utf-8"); } catch { /* new file */ }
+        const after = String(args.content);
         await fs.mkdir(path.dirname(filePath), { recursive: true });
-        await fs.writeFile(filePath, args.content, "utf-8");
+        await fs.writeFile(filePath, after, "utf-8");
         const beforeLines = before.split("\n");
-        const afterLines = String(args.content).split("\n");
+        const afterLines = after.split("\n");
         const preview = [
           `- ${beforeLines.length} lines before`,
           `+ ${afterLines.length} lines after`,
@@ -544,7 +449,7 @@ export async function executeToolCall(
           summary: `Wrote ${args.path}`,
           body: `Rewrote ${args.path}\n\n${preview}`,
           changedFile: args.path,
-          patch: preview,
+          patch: await buildPatchPreview({ before, after, cwd, targetPath: args.path }),
         };
       }
 
@@ -589,7 +494,7 @@ export async function executeToolCall(
           summary: `Patched ${args.path}`,
           body: `Patched ${args.path}\n\n${diffPreview}`,
           changedFile: args.path,
-          patch: diffPreview,
+          patch: await buildPatchPreview({ before: content, after: updated, cwd, targetPath: args.path }),
         };
       }
 
@@ -599,8 +504,9 @@ export async function executeToolCall(
         
         let output = "";
         if (recursive) {
-           const { stdout } = await execAsync(`find . -maxdepth 4 -not -path '*/.*'`, { cwd: targetPath });
-           output = stdout;
+           const result = await runCommand(["find", ".", "-maxdepth", "4", "-not", "-path", "*/.*"], targetPath);
+           if (!result.ok) throw new Error(result.stderr || result.stdout || "find failed");
+           output = result.stdout;
         } else {
            const entries = await fs.readdir(targetPath, { withFileTypes: true });
            output = entries.map(e => `${e.name}${e.isDirectory() ? "/" : ""}`).join("\n");
@@ -616,11 +522,13 @@ export async function executeToolCall(
 
       case "glob_files": {
         const pattern = String(args.pattern || "").trim();
-        const escapedPattern = pattern.replace(/'/g, "'\\''");
-        const { stdout } = await execAsync(
-          `find . -type f -not -path '*/.*' | grep -i '${escapedPattern}' | head -n 200`,
-          { cwd },
-        );
+        const result = await runCommand(["find", ".", "-type", "f", "-not", "-path", "*/.*"], cwd);
+        if (!result.ok) throw new Error(result.stderr || result.stdout || "find failed");
+        const stdout = result.stdout
+          .split("\n")
+          .filter((file) => file.toLowerCase().includes(pattern.toLowerCase()))
+          .slice(0, 200)
+          .join("\n");
         return {
           tool: name,
           ok: true,
@@ -632,9 +540,11 @@ export async function executeToolCall(
       case "search_files": {
           const query = String(args.query || "").trim();
           const include = String(args.include || "").trim();
-          const escapedQuery = query.replace(/'/g, "'\\''");
-          const includeArg = include ? ` -g '${include.replace(/'/g, "'\\''")}'` : "";
-          const { stdout } = await execAsync(`rg -n --hidden --glob '!.git'${includeArg} '${escapedQuery}' . | head -n 100`, { cwd, maxBuffer: 1024 * 1024 * 4 });
+          const result = await runCommand(
+            ["rg", "-n", "--hidden", "--glob", "!.git", ...(include ? ["-g", include] : []), query, "."],
+            cwd,
+          );
+          const stdout = result.stdout.split("\n").slice(0, 100).join("\n");
           return {
               tool: name,
               ok: true,
@@ -644,34 +554,36 @@ export async function executeToolCall(
       }
 
       case "git_status": {
-        const { stdout } = await execAsync("git status --short", { cwd });
+        const result = await runCommand(["git", "status", "--short"], cwd);
+        if (!result.ok) throw new Error(result.stderr || result.stdout || "git status failed");
         return {
           tool: name,
           ok: true,
           summary: "Checked git status",
-          body: stdout || "Working tree clean.",
+          body: result.stdout || "Working tree clean.",
         };
       }
 
       case "git_log": {
-        const { stdout } = await execAsync("git log -n 5 --oneline", { cwd });
+        const result = await runCommand(["git", "log", "-n", "5", "--oneline"], cwd);
+        if (!result.ok) throw new Error(result.stderr || result.stdout || "git log failed");
         return {
           tool: name,
           ok: true,
           summary: "Read git log",
-          body: stdout || "No git history found.",
+          body: result.stdout || "No git history found.",
         };
       }
 
       case "git_show": {
         const target = String(args.target || "").trim();
-        const escapedTarget = target.replace(/'/g, "'\\''");
-        const { stdout } = await execAsync(`git show --stat --format=medium '${escapedTarget}'`, { cwd, maxBuffer: 1024 * 1024 * 4 });
+        const result = await runCommand(["git", "show", "--stat", "--format=medium", target], cwd);
+        if (!result.ok) throw new Error(result.stderr || result.stdout || "git show failed");
         return {
           tool: name,
           ok: true,
           summary: `Read git show for ${target}`,
-          body: stdout || "No git data found for target.",
+          body: result.stdout || "No git data found for target.",
         };
       }
 
@@ -679,59 +591,49 @@ export async function executeToolCall(
         const targetPath = String(args.path || "").trim();
         const startLine = Math.max(1, Number(args.start_line) || 1);
         const endLine = Math.max(startLine, Number(args.end_line) || startLine);
-        const escapedPath = targetPath.replace(/'/g, "'\\''");
-        const { stdout } = await execAsync(
-          `git blame -L ${startLine},${endLine} -- '${escapedPath}'`,
-          { cwd, maxBuffer: 1024 * 1024 * 4 },
-        );
+        const result = await runCommand(["git", "blame", "-L", `${startLine},${endLine}`, "--", targetPath], cwd);
+        if (!result.ok) throw new Error(result.stderr || result.stdout || "git blame failed");
         return {
           tool: name,
           ok: true,
           summary: `Read git blame for ${targetPath}:${startLine}-${endLine}`,
-          body: stdout || "No blame data found for requested range.",
+          body: result.stdout || "No blame data found for requested range.",
         };
       }
 
       case "diff_stat": {
-        const { stdout } = await execAsync("git diff --stat", { cwd });
+        const result = await runCommand(["git", "diff", "--stat"], cwd);
+        if (!result.ok) throw new Error(result.stderr || result.stdout || "git diff failed");
         return {
           tool: name,
           ok: true,
           summary: "Summarized local diff",
-          body: stdout || "No changes detected.",
+          body: result.stdout || "No changes detected.",
         };
       }
 
       case "diff_patch": {
-        const { stdout } = await execAsync("git diff", { cwd });
+        const result = await runCommand(["git", "diff"], cwd);
+        if (!result.ok) throw new Error(result.stderr || result.stdout || "git diff failed");
         return {
           tool: name,
           ok: true,
           summary: "Read local diff patch",
-          body: stdout || "No changes detected.",
+          body: result.stdout || "No changes detected.",
         };
       }
 
       case "git_diff_staged": {
-        const { stdout } = await execAsync("git diff --cached", { cwd });
+        const result = await runCommand(["git", "diff", "--cached"], cwd);
+        if (!result.ok) throw new Error(result.stderr || result.stdout || "git diff --cached failed");
         return {
           tool: name,
           ok: true,
           summary: "Read staged diff patch",
-          body: stdout || "No staged changes detected.",
+          body: result.stdout || "No staged changes detected.",
         };
       }
 
-      case "draft_edit": {
-        return {
-          tool: name,
-          ok: true,
-          summary: `Proposed edit for ${args.path}`,
-          body: "Draft created. Please review and /apply.",
-          draft: { targetPath: args.path, instruction: args.instruction }
-        };
-      }
-      
       case "verify": {
           const buildCmd = await (async () => {
             try {
@@ -748,11 +650,12 @@ export async function executeToolCall(
           }
 
           try {
-            const { stdout, stderr } = await execAsync(buildCmd, { cwd, maxBuffer: 1024 * 1024 * 4 });
-            const output = [stdout, stderr].filter(Boolean).join("\n").trim();
+            const result = await runShellString(buildCmd, cwd);
+            if (!result.ok) throw new Error([result.stdout, result.stderr].filter(Boolean).join("\n"));
+            const output = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();
             return { tool: name, ok: true, summary: `Build passed: ${buildCmd}`, body: output || "Build succeeded with no output." };
           } catch (err: any) {
-            const output = [err.stdout, err.stderr].filter(Boolean).join("\n").trim();
+            const output = String(err.message || err).trim();
             return { tool: name, ok: false, summary: `Build FAILED: ${buildCmd}`, body: `Build failed:\n\n${output}` };
           }
       }
@@ -760,79 +663,14 @@ export async function executeToolCall(
       case "run_tests": {
           const testCommand = await detectTestCommand(cwd);
           try {
-            const { stdout, stderr } = await execAsync(testCommand, { cwd, maxBuffer: 1024 * 1024 * 8 });
-            const output = [stdout, stderr].filter(Boolean).join("\n").trim();
+            const result = await runShellString(testCommand, cwd);
+            if (!result.ok) throw new Error([result.stdout, result.stderr].filter(Boolean).join("\n"));
+            const output = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();
             return { tool: name, ok: true, summary: `Tests passed: ${testCommand}`, body: output || "Tests passed with no output." };
           } catch (err: any) {
-            const output = [err.stdout, err.stderr].filter(Boolean).join("\n").trim();
+            const output = String(err.message || err).trim();
             return { tool: name, ok: false, summary: `Tests FAILED: ${testCommand}`, body: `Tests failed:\n\n${output}` };
           }
-      }
-
-      case "web_fetch": {
-          const apiBase = getApiBase();
-          const apiKey = getApiKey();
-          const response = await fetch(`${apiBase}/ingest/web`, {
-              method: "POST",
-              headers: {
-                  "Authorization": `Bearer ${apiKey}`,
-                  "Content-Type": "application/json",
-              },
-              body: JSON.stringify({ url: args.url }),
-          });
-          const data = await response.json();
-          return {
-              tool: name,
-              ok: response.ok,
-              summary: `Fetched ${args.url}`,
-              body: data.content || data.error || "Failed to fetch content.",
-          };
-      }
-
-      case "openapi_lookup": {
-          const apiBase = getApiBase();
-          const apiKey = getApiKey();
-          const response = await fetch(`${apiBase}/openapi.json`, {
-              method: "GET",
-              headers: {
-                  "Authorization": `Bearer ${apiKey}`,
-                  "Content-Type": "application/json",
-              },
-          });
-          const doc = await response.json();
-          const endpointPath = args.path ? String(args.path) : "";
-          const method = args.method ? String(args.method).toLowerCase() : "";
-          const schema = args.schema ? String(args.schema) : "";
-
-          let result: unknown = doc;
-          if (schema) {
-              result = doc?.components?.schemas?.[schema];
-              if (!result) {
-                  throw new Error(`Schema not found: ${schema}`);
-              }
-          } else if (endpointPath) {
-              result = doc?.paths?.[endpointPath];
-              if (!result) {
-                  throw new Error(`Path not found: ${endpointPath}`);
-              }
-              if (method) {
-                  result = (result as Record<string, unknown>)?.[method];
-                  if (!result) {
-                      throw new Error(`Method ${method.toUpperCase()} not found for path ${endpointPath}`);
-                  }
-              }
-          }
-
-          return {
-              tool: name,
-              ok: response.ok,
-              summary: schema
-                ? `Looked up OpenAPI schema ${schema}`
-                : endpointPath
-                  ? `Looked up OpenAPI path ${endpointPath}${method ? ` ${method.toUpperCase()}` : ""}`
-                  : "Read OpenAPI document",
-              body: JSON.stringify(result, null, 2),
-          };
       }
 
       case "shell": {
@@ -849,37 +687,42 @@ export async function executeToolCall(
             shellPending: { command, reason: approvalReason },
           };
         }
-        const { stdout, stderr } = await execAsync(command, { cwd, maxBuffer: 1024 * 1024 * 4 });
+        const result = await runShellString(command, cwd);
+        if (!result.ok) {
+          throw new Error(result.stderr || result.stdout || `exit ${result.exitCode}`);
+        }
         return {
           tool: name,
           ok: true,
           summary: `Ran: ${command.split(/\s+/)[0]}`,
-          body: [stdout, stderr].filter(Boolean).join("\n") || "Done.",
+          body: [result.stdout, result.stderr].filter(Boolean).join("\n") || "Done.",
         };
       }
 
       case "git_add": {
         const paths = String(args.paths || ".").trim();
-        const command = `git add ${paths}`;
+        const result = await runCommand(["git", "add", ...paths.split(/\s+/).filter(Boolean)], cwd);
+        if (!result.ok) throw new Error(result.stderr || result.stdout || "git add failed");
+        const output = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();
         return {
           tool: name,
           ok: true,
           summary: `git add ${paths}`,
-          body: `Awaiting approval to run:\n\`${command}\``,
-          shellPending: { command, reason: `Stage ${paths === "." ? "all changes" : paths} for commit.` },
+          body: output || `Staged ${paths === "." ? "all changes" : paths}.`,
         };
       }
 
       case "git_commit": {
         const message = String(args.message || "").trim();
         if (!message) throw new Error("git_commit requires a message.");
-        const command = `git commit -m ${JSON.stringify(message)}`;
+        const result = await runCommand(["git", "commit", "-m", message], cwd);
+        if (!result.ok) throw new Error(result.stderr || result.stdout || "git commit failed");
+        const output = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();
         return {
           tool: name,
           ok: true,
           summary: `git commit: ${message.slice(0, 40)}`,
-          body: `Awaiting approval to run:\n\`${command}\``,
-          shellPending: { command, reason: `Create a commit: "${message}"` },
+          body: output || `Created commit: ${message}`,
         };
       }
 
@@ -893,21 +736,6 @@ export async function executeToolCall(
           summary: `git push ${remote}`,
           body: `Awaiting approval to run:\n\`${command}\``,
           shellPending: { command, reason: `Push commits to ${remote}${branch ? `/${branch}` : ""}.` },
-        };
-      }
-
-      case "check_health":
-      case "get_key_info":
-      case "get_capabilities":
-      case "list_surfaces":
-      case "list_working_styles":
-      case "get_request_template": {
-        const result = await callRuntimeMCP(name, args);
-        return {
-          tool: name,
-          ok: true,
-          summary: `ORI runtime: ${name}`,
-          body: typeof result === "string" ? result : JSON.stringify(result, null, 2),
         };
       }
 

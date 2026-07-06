@@ -31,7 +31,7 @@ export function EditIntentDrawer({
     >
       <Text color="magenta" bold>Edit Intent</Text>
       <Text color="white">Editing {file}</Text>
-      <Text color="#707070">Describe the change you want ORI to make, then press Enter.</Text>
+      <Text color="#707070">Describe the change you want, then press Enter.</Text>
       <Box marginTop={1}>
         <Text color="magenta">Intent: </Text>
         <TextInput value={value} onChange={onChange} onSubmit={onSubmit} />

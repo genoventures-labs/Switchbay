@@ -9,7 +9,6 @@ const SHORTCUTS = [
   { key: "/", label: "Slash commands", description: "Browse and run internal commands" },
   { key: "@", label: "File mentions", description: "Add file/directory context to your query" },
   { key: "?", label: "Help", description: "Show this shortcuts drawer" },
-  { key: "Ctrl+T", label: "Toggle thinking", description: "Show/hide active reasoning steps" },
   { key: "Ctrl+U", label: "Scroll up", description: "Page up through the transcript" },
   { key: "Ctrl+D", label: "Scroll down", description: "Page down through the transcript" },
   { key: "Ctrl+C", label: "Exit", description: "Terminate the current session" },

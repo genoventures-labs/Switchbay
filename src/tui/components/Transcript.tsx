@@ -1,7 +1,7 @@
 import React from "react";
 import { Box, Text } from "ink";
 import type { TranscriptEntry } from "../../agent/turn-state";
-import type { DraftEdit, ApprovalRequest } from "../../agent/turn-state";
+import type { ApprovalRequest } from "../../agent/turn-state";
 import type { PendingAgentDraft } from "../../agent/loop";
 import type { ActivePlan } from "../../agent/turn-state";
 import { MarkdownText } from "./MarkdownText";
@@ -9,30 +9,27 @@ import { WelcomeBoard } from "./WelcomeBoard";
 import { PlanPanel } from "./PlanPanel";
 
 type TranscriptProps = {
-  activeCapability: string | null;
+  lane: string;
   entries: TranscriptEntry[];
   hasMoreAbove?: boolean;
   hasMoreBelow?: boolean;
   pendingApproval: ApprovalRequest | null;
-  pendingDraft: DraftEdit | null;
   pendingAgentDraft?: PendingAgentDraft | null;
   activePlan?: ActivePlan | null;
   scrollOffset?: number;
   streamingText: string;
-  thinking: string | null;
   terminalWidth?: number;
 };
 
 export function Transcript({
+  lane,
   entries,
   hasMoreAbove = false,
   hasMoreBelow = false,
   pendingApproval,
-  pendingDraft,
   pendingAgentDraft,
   activePlan,
   streamingText,
-  thinking,
   terminalWidth = 120,
 }: TranscriptProps) {
   const brandColor = "#E57373"; // Salmon/Coral
@@ -48,12 +45,11 @@ export function Transcript({
         </Box>
       )}
 
-      {entries.length === 0 && !streamingText && !thinking ? (
+      {entries.length === 0 && !streamingText ? (
         <WelcomeBoard
-          version="0.7.3"
-          user="Mike"
-          email="thatnotiondude@gmail.com"
-          model="Sonnet 4.6"
+          appName="Code Harness"
+          version="0.9.45"
+          lane={lane}
           cwd={process.cwd()}
           terminalWidth={terminalWidth}
         />
@@ -76,7 +72,7 @@ export function Transcript({
               <Box flexDirection="column">
                 <Box gap={1} marginBottom={0}>
                   <Text color={brandColor}>⏺</Text>
-                  <Text color="white" bold>ORI</Text>
+                  <Text color="white" bold>Assistant</Text>
                 </Box>
                 <Box paddingLeft={2} marginTop={0} flexShrink={1} flexDirection="column">
                   <MarkdownText content={entry.body} role="assistant" terminalWidth={terminalWidth - 4} />
@@ -119,7 +115,7 @@ export function Transcript({
           <Box flexDirection="column">
             <Box gap={1}>
               <Text color={brandColor}>⏺</Text>
-              <Text color="white" bold>ORI</Text>
+              <Text color="white" bold>Assistant</Text>
             </Box>
             <Box paddingLeft={2} marginTop={0} flexShrink={1} flexDirection="column">
               <MarkdownText content={streamingText} role="assistant" terminalWidth={terminalWidth - 4} />
@@ -130,21 +126,6 @@ export function Transcript({
 
       {activePlan && (
         <PlanPanel plan={activePlan} />
-      )}
-
-      {pendingApproval && pendingDraft && (
-        <Box flexDirection="column" marginTop={1} borderStyle="round" borderColor={brandColor} paddingX={2} paddingY={1}>
-          <Box gap={1} marginBottom={1}>
-            <Text color={brandColor} bold>Draft Ready</Text>
-            <Text color={grayColor}>·</Text>
-            <Text color="white" bold>{pendingDraft.targetPath}</Text>
-          </Box>
-          <Text color={grayColor}>{pendingApproval.summary}</Text>
-          <Box marginTop={1} gap={3}>
-            <Text color={greenColor}>y / yes → apply</Text>
-            <Text color="red">n / no → discard</Text>
-          </Box>
-        </Box>
       )}
 
       {pendingApproval?.kind === "shell_command" && (

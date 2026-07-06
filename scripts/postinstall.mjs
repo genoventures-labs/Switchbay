@@ -1,17 +1,22 @@
 #!/usr/bin/env node
-const hasKey = process.env.ORI_API_KEY?.trim();
+const hasCloudKey = process.env.OPENAI_API_KEY?.trim() || process.env.ANTHROPIC_API_KEY?.trim();
+const hasLocalLane = process.env.HARNESS_LANE === "local" || process.env.ORI_LANE === "local";
 
-if (!hasKey) {
+if (!hasCloudKey && !hasLocalLane) {
   console.log(`
 ┌─────────────────────────────────────────┐
-│           ORI Code installed ✓          │
+│          Code Harness installed ✓       │
 ├─────────────────────────────────────────┤
-│ Add your API key to get started:        │
+│ Pick a lane to get started:             │
 │                                         │
-│   export ORI_API_KEY=glm.<prefix>.<key> │
+│   export OPENAI_API_KEY=...             │
+│   export ANTHROPIC_API_KEY=...          │
+│   export HARNESS_LANE=cloud             │
 │                                         │
-│ Add that to ~/.zshrc or ~/.bashrc       │
-│ then run: ori-code                      │
+│ Or use LM Studio locally:               │
+│   export HARNESS_LANE=local             │
+│                                         │
+│ then run: code-harness                  │
 └─────────────────────────────────────────┘
 `);
 }

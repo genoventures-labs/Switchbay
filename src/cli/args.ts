@@ -4,6 +4,7 @@ export type CliOptions = {
   surface: string;
   profile: string;
   mode: string;
+  lane: string | null;
   initialQuery: string;
   hop: string | null;
   resume: string | boolean; // string (id/index) or true (latest)
@@ -17,6 +18,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
   let surface: string = DEFAULTS.surface;
   let profile: string = DEFAULTS.profile;
   let mode: string = DEFAULTS.mode;
+  let lane: string | null = null;
   let hop: string | null = null;
   let resume: string | boolean = false;
   let newSession = false;
@@ -31,6 +33,8 @@ export function parseCliArgs(argv: string[]): CliOptions {
       profile = args[++i] ?? DEFAULTS.profile;
     } else if (arg === "-m" || arg === "--mode") {
       mode = args[++i] ?? DEFAULTS.mode;
+    } else if (arg === "--lane") {
+      lane = args[++i] ?? null;
     } else if (arg === "--hop") {
       hop = args[++i] ?? null;
     } else if (arg === "--resume") {
@@ -46,14 +50,14 @@ export function parseCliArgs(argv: string[]): CliOptions {
     } else if (arg === "--purge") {
       purge = args[++i] ?? null;
     } else if (arg === "update") {
-      console.log("Run this to update ori-code:\n");
-      console.log("  bun remove -g ori-code && bun install -g github:cassianwolfe/ori-code#main\n");
+      console.log("Run this to update the coding harness:\n");
+      console.log("  bun install -g github:cassianwolfe/ori-code#main\n");
       process.exit(0);
     } else if (arg === "version" || arg === "--version" || arg === "-v") {
-      console.log("ori-code 0.9.45");
+      console.log("code-harness 0.9.45");
       process.exit(0);
     } else if (arg === undefined || arg === "help" || arg === "--help" || arg === "-h") {
-      return { surface, profile, mode, initialQuery: "", hop: null, resume: false, newSession: false, purge: null, subcommand: "help" };
+      return { surface, profile, mode, lane, initialQuery: "", hop: null, resume: false, newSession: false, purge: null, subcommand: "help" };
     } else if (!arg.startsWith("-")) {
       positional.push(arg);
     }
@@ -63,6 +67,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
     surface,
     profile,
     mode,
+    lane,
     initialQuery: positional.join(" "),
     hop,
     resume,

@@ -12,16 +12,23 @@ export function EditDrawer({ files, selectedIndex, visible }: EditDrawerProps) {
     return null;
   }
 
+  const brandColor = "#E57373";
+  const greenColor = "#00FF7F";
+  const grayColor = "#707070";
+
   return (
     <Box
       flexDirection="column"
+      marginTop={1}
       marginBottom={1}
       paddingX={2}
       borderStyle="round"
-      borderColor="green"
+      borderColor={grayColor}
     >
-      <Text color="green" bold>Edit File</Text>
-      <Text color="#707070">Pick a file, then press Tab or Enter to move into edit intent.</Text>
+      <Box marginBottom={1}>
+        <Text color={brandColor} bold>Edit File</Text>
+        <Text color={grayColor}> · Tab/Enter choose · Esc close</Text>
+      </Box>
       {files.length > 0 ? (
         files.map((file, index) => {
           const selected = index === selectedIndex;
@@ -29,19 +36,20 @@ export function EditDrawer({ files, selectedIndex, visible }: EditDrawerProps) {
           return (
             <Box
               key={file}
-              marginTop={1}
               paddingX={1}
-              borderStyle={selected ? "round" : undefined}
-              borderColor={selected ? "yellow" : undefined}
+              backgroundColor={selected ? "#2D333B" : undefined}
             >
-              <Text color={selected ? "yellow" : "white"} bold={selected}>
-                {selected ? ">" : " "} {file}
+              <Text color={selected ? greenColor : grayColor} bold={selected}>
+                {selected ? "❯" : " "}
+              </Text>
+              <Text color="white" bold={selected}>
+                {" "}{file}
               </Text>
             </Box>
           );
         })
       ) : (
-        <Text color="white">No matching files in the current workspace snapshot.</Text>
+        <Text color={grayColor}>No matching files in the current workspace snapshot.</Text>
       )}
     </Box>
   );

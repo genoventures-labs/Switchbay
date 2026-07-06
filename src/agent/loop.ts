@@ -1,14 +1,19 @@
 import { readFileSync, readdirSync, existsSync } from "node:fs";
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { DEFAULTS } from "../config/defaults";
-import { getDefaultModel } from "../config/env";
-import type { OriClient } from "../runtime/ori-client";
+import {
+  APP_STORAGE_DIR,
+  PROJECT_CONTEXT_FILE,
+  existingProjectContextPath,
+  existingWorkspaceDataPath,
+  workspaceStorageDir,
+} from "../config/paths";
+import type { ChatRuntimeClient } from "../runtime/client";
 import type {
   ChatCompletionRequest,
   ChatCompletionResponse,
   OriMessage,
-  ScratchpadState,
 } from "../runtime/types";
 import {
   AGENT_TOOLS,
@@ -28,12 +33,11 @@ import {
   type TranscriptEntry,
 } from "./turn-state";
 import { loadWorkspaceSnapshot, type WorkspaceSnapshot } from "../session/workspace";
-import type { Bundle } from "../tools/bundles";
 import { listProjectFiles } from "../tools/files";
 import { runCommand } from "../tools/shell";
 
 export async function generatePlan(
-  client: OriClient,
+  client: ChatRuntimeClient,
   surface: string,
   goal: string,
   cwd: string,
@@ -64,13 +68,13 @@ export async function generatePlan(
     ],
   });
 
-  const text = resp.choices?.[0]?.message?.content ?? "";
+  const text = extractAssistantText(resp);
   const steps = text
     .split("\n")
-    .map(l => l.replace(/^\d+[\.\)]\s*/, "").trim())
-    .filter(l => l.length > 5);
+    .map((l) => l.replace(/^\d+[\.\)]\s*/, "").trim())
+    .filter((l) => l.length > 5);
 
-  if (steps.length === 0) throw new Error("ORI returned no steps.");
+  if (steps.length === 0) throw new Error("The model returned no steps.");
   return steps;
 }
 
@@ -82,7 +86,7 @@ export type PendingAgentDraft = {
 };
 
 export async function generateAgentDefinition(
-  client: OriClient,
+  client: ChatRuntimeClient,
   surface: string,
   answers: { name: string; specialty: string; approach: string; rules: string },
 ): Promise<PendingAgentDraft> {
@@ -92,7 +96,7 @@ export async function generateAgentDefinition(
     .replace(/^-|-$/g, "")
     .slice(0, 40);
 
-  const prompt = `You are writing an ORI agent definition file. ORI agents inject a focused system prompt into a coding assistant session to give it a specialist mindset.
+  const prompt = `You are writing an agent definition file. Agents inject a focused system prompt into a coding assistant session to give it a specialist mindset.
 
 Create a concise, dense agent definition for:
 - Name: ${answers.name}
@@ -120,10 +124,10 @@ Be dense and direct. No filler. Max 200 words. Output ONLY the system prompt tex
     ],
   });
 
-  const generatedPrompt = resp.choices?.[0]?.message?.content?.trim() ?? "";
-  if (!generatedPrompt) throw new Error("ORI returned no content.");
+  const generatedPrompt = extractAssistantText(resp);
+  if (!generatedPrompt) throw new Error("The model returned no content.");
 
-  const savePath = join(process.cwd(), ".ori", "agents", `${id}.md`);
+  const savePath = join(workspaceStorageDir(process.cwd()), "agents", `${id}.md`);
 
   const fileContent = `# ${answers.name}
 description: ${answers.specialty.slice(0, 100)}
@@ -234,26 +238,25 @@ export async function buildTurn(input: {
   profile: string;
   transcript: OriMessage[];
   workspace: WorkspaceSnapshot | null;
-  activeBundles?: Bundle[];
   activeAgentId?: string | null;
 }): Promise<BuiltTurn> {
   const mode = (input.mode as AgentMode) || "build";
   const objective = input.input.slice(0, 100);
   const cwd = input.workspace?.cwd || process.cwd();
 
-  // Inject ORI.md as authoritative project context if it exists
+  // Inject project context if it exists.
   let oriMdBlock = "";
-  const oriMdPath = join(cwd, "ORI.md");
-  if (existsSync(oriMdPath)) {
+  const contextPath = existingProjectContextPath(cwd);
+  if (contextPath) {
     try {
-      const oriMd = readFileSync(oriMdPath, "utf-8").trim();
-      if (oriMd) oriMdBlock = `\n\nPROJECT CONTEXT (ORI.md — treat as authoritative):\n${oriMd}`;
+      const context = readFileSync(contextPath, "utf-8").trim();
+      if (context) oriMdBlock = `\n\nPROJECT CONTEXT (${contextPath.endsWith(PROJECT_CONTEXT_FILE) ? PROJECT_CONTEXT_FILE : "legacy ORI.md"} — treat as authoritative):\n${context}`;
     } catch { /* ignore */ }
   }
 
-  // Inject .ori/memory.md if it exists
+  // Inject workspace memory if it exists.
   let memoryBlock = "";
-  const memoryPath = join(cwd, ".ori", "memory.md");
+  const memoryPath = existingWorkspaceDataPath(cwd, "memory.md");
   if (existsSync(memoryPath)) {
     try {
       const memory = readFileSync(memoryPath, "utf-8").trim();
@@ -263,7 +266,7 @@ export async function buildTurn(input: {
 
   // Inject pinned files
   let pinsBlock = "";
-  const pinsJsonPath = join(cwd, ".ori", "pins.json");
+  const pinsJsonPath = existingWorkspaceDataPath(cwd, "pins.json");
   if (existsSync(pinsJsonPath)) {
     try {
       const pins: string[] = JSON.parse(readFileSync(pinsJsonPath, "utf-8"));
@@ -276,7 +279,7 @@ export async function buildTurn(input: {
           parts.push(`### ${p}\n\`\`\`\n${trimmedContent}\n\`\`\``);
         } catch { /* file missing — skip silently */ }
       }
-      if (parts.length) pinsBlock = `\n\nPINNED FILES (always in context):\n${parts.join("\n\n")}`;
+      if (parts.length) pinsBlock = `\n\nPINNED FILES (from ${APP_STORAGE_DIR}/pins.json, always in context):\n${parts.join("\n\n")}`;
     } catch { /* ignore malformed */ }
   }
 
@@ -288,30 +291,22 @@ export async function buildTurn(input: {
     if (activeAgent) agentBlock = agentSystemPrompt(activeAgent);
   }
 
-  let systemPrompt = `You are ORI, a sovereign coding agent powered by Thynaptic.
+  let systemPrompt = `You are a local-first coding agent running inside a terminal harness.
 Current Mode: ${mode}
 Current Profile: ${input.profile}
 Current Workspace: ${cwd}${oriMdBlock}${memoryBlock}${pinsBlock}${agentBlock}
 
 GROUNDING RULES:
-1. You are running as a local-first development tool (ORI Code).
-2. Surface selects the product lane, but the current workspace is the active world.
+1. You are running inside a local development tool.
+2. Runtime lane and profile may influence style, but the current workspace is the active world.
 3. Strictly focus on the local filesystem and the current repository context.
-4. Do not recite broad VPS infrastructure, global host configurations, or unrelated ORI platform metadata unless explicitly asked to inspect the host environment.
+4. Do not recite broad host infrastructure, global host configurations, or unrelated platform metadata unless explicitly asked to inspect the host environment.
 5. Your primary mission is to understand, plan, and execute changes within the current workspace path: ${cwd}.
-6. Treat sibling repos, shared VPS state, and other ORI surfaces as out of scope unless the user explicitly asks to cross that boundary.
+6. Treat sibling repos and shared host state as out of scope unless the user explicitly asks to cross that boundary.
 7. Be extremely concise and direct.
 8. DO NOT NARRATE your tool usage or internal reasoning steps in your final response to the user. (e.g. avoid "I have checked the files and found..."). Just state the findings or provide the answer directly.
 `;
-  
-  if (input.activeBundles && input.activeBundles.length > 0) {
-    systemPrompt += "\n\nActive Specializations (Bundles):";
-    for (const bundle of input.activeBundles) {
-      systemPrompt += `\n\n--- BUNDLE: ${bundle.manifest.name} ---\n${bundle.rules}`;
-    }
-  }
-
-  // Proactively embed live workspace context so ORI can answer questions about
+  // Proactively embed live workspace context so the model can answer questions about
   // the project, recent changes, and git state without server-side tool calls.
   const [statusResult, logResult] = await Promise.all([
     runCommand(["git", "status", "--short"], cwd),
@@ -320,7 +315,7 @@ GROUNDING RULES:
 
   const snapshotLines: string[] = [];
 
-  // Top-level file listing — lets ORI reason about tech stack / project type
+  // Top-level file listing lets the model reason about tech stack and project type.
   try {
     const entries = readdirSync(cwd, { withFileTypes: true });
     const names = entries
@@ -357,12 +352,11 @@ GROUNDING RULES:
   }
 
   systemPrompt += `\n\nTOOL USE:
-You have access to tools that execute on the user's local machine via the ORI tool bridge. You do not run them yourself — call them via the API tool_calls mechanism and the ori-code client executes them locally.
+You have access to tools that execute on the user's local machine via this app's tool bridge. You do not run them yourself — call them via the API tool_calls mechanism and the client executes them locally.
 
 - Read-only commands (ls, cat, pwd, grep, find, echo, wc, head, tail, curl for GET, etc.): call shell immediately — do NOT set requires_approval.
-- Write or destructive commands (npm install, bun add, git commit, git push, rm, mv, file writes): set requires_approval=true — the user confirms before it runs.
-- git_add, git_commit, git_push always require approval.
-- create_file and apply_patch run immediately (they are file edits, not shell mutations).
+- Routine local work should run without approval: file edits, mkdir/mv/cp within the workspace, installs, builds, tests, formatting, git add, and git commit when the user asked for a commit.
+- Require approval only for broad, destructive, privileged, publishing, or external-impact commands: rm/rmdir, git push, git reset, git clean, sudo, chmod/chown, dd/mkfs/fdisk, publish commands, and curl/wget piped to a shell.
 - Chain multiple tool calls in one response when needed.
 - NEVER say you lack shell or filesystem access — you have full local access via the tool bridge.`;
 
@@ -380,24 +374,27 @@ You have access to tools that execute on the user's local machine via the ORI to
     objective,
     pendingPlan: [],
     request: {
-      model: getDefaultModel(),
+      model: undefined,
       messages,
     },
     resolvedProfile: input.profile,
   };
 }
 
-function parseInlineToolCalls(text: string): Array<{ id: string; function: { name: string; arguments: string } }> {
-  const calls: Array<{ id: string; function: { name: string; arguments: string } }> = [];
+function parseInlineToolCalls(text: string): Array<{ id: string; type: "function"; function: { name: string; arguments: string } }> {
+  const calls: Array<{ id: string; type: "function"; function: { name: string; arguments: string } }> = [];
   const regex = /<tool_call>\s*([\s\S]*?)\s*<\/tool_call>/g;
   let match;
   let i = 0;
   while ((match = regex.exec(text)) !== null) {
+    const rawCall = match[1];
+    if (!rawCall) continue;
     try {
-      const parsed = JSON.parse(match[1]) as { name?: string; args?: Record<string, unknown> };
+      const parsed = JSON.parse(rawCall) as { name?: string; args?: Record<string, unknown> };
       if (parsed.name) {
         calls.push({
           id: `inline-${Date.now()}-${i++}`,
+          type: "function",
           function: { name: parsed.name, arguments: JSON.stringify(parsed.args ?? {}) },
         });
       }
@@ -411,7 +408,7 @@ function stripInlineToolCalls(text: string): string {
 }
 
 export async function executeTurn(input: {
-  client: OriClient;
+  client: ChatRuntimeClient;
   cwd?: string;
   sessionId: string;
   workspace?: WorkspaceSnapshot | null;
@@ -518,10 +515,11 @@ export async function executeTurn(input: {
         tool: toolName,
         summary: result.summary,
         ok: result.ok,
+        body: result.body,
         patch: result.patch,
         changedFile: result.changedFile,
-        draft: result.draft,
         travel: result.travel,
+        shellPending: result.shellPending,
       });
 
       messages.push({
@@ -541,472 +539,3 @@ export async function executeTurn(input: {
     toolExecutions,
   };
 }
-
-export function parseApprovalIntent(input: string): "apply" | "cancel" | null {
-  const normalized = input.trim().toLowerCase();
-  if (["y", "yes", "apply", "/apply"].includes(normalized)) return "apply";
-  if (["n", "no", "cancel", "/cancel"].includes(normalized)) return "cancel";
-  return null;
-}
-
-export async function tryLocalCommand(
-  input: string,
-  options: {
-    client: OriClient;
-    profile: string;
-    sessionId: string;
-    surface: string;
-    workspace: WorkspaceSnapshot | null;
-    pendingDraft?: any;
-    pendingPlanDraft?: any;
-    conversation?: import("../runtime/types").OriMessage[];
-    lastChangedFile?: string | null;
-    activeAgentId?: string | null;
-  }
-): Promise<{
-  handled: boolean;
-  assistantMessage?: string;
-  workspace?: WorkspaceSnapshot;
-  scratchpad?: ScratchpadState | null;
-  patch?: string;
-  changedFile?: string;
-  draft?: any;
-  planDraft?: any;
-  clearDraft?: boolean;
-  clearPlanDraft?: boolean;
-  clearTranscript?: boolean;
-  compactedConversation?: import("../runtime/types").OriMessage[];
-  activateAgent?: string | null;
-  openAgentPicker?: boolean;
-  openCreateAgent?: boolean;
-  planGoal?: string;
-  checkpointOp?: { op: "create"; name: string } | { op: "list" } | { op: "restore"; index: number };
-  verification?: any;
-  travel?: { toPath: string; label: string; workspace: WorkspaceSnapshot };
-  followUpInput?: string;
-}> {
-  const trimmed = input.trim();
-
-  if (!trimmed.startsWith("/")) return { handled: false };
-
-  if (trimmed === "/clear") {
-    return { handled: true, clearTranscript: true };
-  }
-
-  if (trimmed === "/undo-turn") {
-    const cwd = options.workspace?.cwd ?? process.cwd();
-    try {
-      const { execAsync: execA } = await import("node:child_process").then(m => ({
-        execAsync: (cmd: string) => new Promise<string>((res, rej) =>
-          m.exec(cmd, { cwd }, (err, out) => err ? rej(err) : res(out.trim()))
-        ),
-      }));
-      const changed = await execA("git diff HEAD --name-only").catch(() => "");
-      const files = changed.split("\n").map(f => f.trim()).filter(Boolean);
-      if (!files.length) {
-        return { handled: true, assistantMessage: "Nothing to undo — no uncommitted changes vs HEAD." };
-      }
-      const quoted = files.map(f => JSON.stringify(f)).join(" ");
-      await execA(`git checkout HEAD -- ${quoted}`);
-      const list = files.map(f => `- \`${f}\``).join("\n");
-      return { handled: true, assistantMessage: `Reverted ${files.length} file${files.length !== 1 ? "s" : ""} to HEAD:\n\n${list}` };
-    } catch (e: any) {
-      return { handled: true, assistantMessage: `Undo failed: ${e.message}` };
-    }
-  }
-
-  if (trimmed === "/undo") {
-    const file = options.lastChangedFile;
-    if (!file) {
-      return { handled: true, assistantMessage: "Nothing to undo — no file has been changed this session." };
-    }
-    const cwd = options.workspace?.cwd ?? process.cwd();
-    try {
-      const { execAsync: exec } = await import("node:child_process").then(m => ({ execAsync: (cmd: string) => new Promise<string>((res, rej) => m.exec(cmd, { cwd }, (err, out) => err ? rej(err) : res(out))) }));
-      await exec(`git checkout HEAD -- ${JSON.stringify(file)}`);
-      return { handled: true, assistantMessage: `Undid changes to \`${file}\` — restored to HEAD.` };
-    } catch (e: any) {
-      return { handled: true, assistantMessage: `Undo failed: ${e.message}` };
-    }
-  }
-
-  if (trimmed === "/init" || trimmed === "/init --update") {
-    const cwd = options.workspace?.cwd ?? process.cwd();
-    const oriMdPath = join(cwd, "ORI.md");
-    const isUpdate = trimmed === "/init --update";
-
-    if (existsSync(oriMdPath) && !isUpdate) {
-      return {
-        handled: true,
-        assistantMessage: `ORI.md already exists in this workspace. Use \`/init --update\` to regenerate it.`,
-      };
-    }
-
-    // Gather project signals for the prompt
-    const signals: string[] = [];
-
-    // Directory structure (top-level, non-hidden, no node_modules)
-    try {
-      const entries = readdirSync(cwd, { withFileTypes: true });
-      const names = entries
-        .filter(e => !e.name.startsWith(".") && e.name !== "node_modules" && e.name !== "dist" && e.name !== ".git")
-        .map(e => e.isDirectory() ? `${e.name}/` : e.name)
-        .slice(0, 50);
-      signals.push(`Top-level structure:\n${names.join("  ")}`);
-    } catch { /* ignore */ }
-
-    // package.json
-    try {
-      const pkg = JSON.parse(readFileSync(join(cwd, "package.json"), "utf-8"));
-      const parts: string[] = [];
-      if (pkg.name) parts.push(`name: ${pkg.name}`);
-      if (pkg.description) parts.push(`description: ${pkg.description}`);
-      if (pkg.scripts) parts.push(`scripts: ${JSON.stringify(pkg.scripts)}`);
-      const deps = Object.keys({ ...pkg.dependencies, ...pkg.devDependencies });
-      if (deps.length) parts.push(`dependencies: ${deps.join(", ")}`);
-      signals.push(`package.json:\n${parts.join("\n")}`);
-    } catch { /* not a node project */ }
-
-    // go.mod
-    try {
-      const goMod = readFileSync(join(cwd, "go.mod"), "utf-8").split("\n").slice(0, 10).join("\n");
-      signals.push(`go.mod:\n${goMod}`);
-    } catch { /* not a go project */ }
-
-    // Cargo.toml
-    try {
-      const cargo = readFileSync(join(cwd, "Cargo.toml"), "utf-8").split("\n").slice(0, 20).join("\n");
-      signals.push(`Cargo.toml:\n${cargo}`);
-    } catch { /* not a rust project */ }
-
-    // README (first 60 lines)
-    for (const readmeName of ["README.md", "README.txt", "README"]) {
-      try {
-        const readme = readFileSync(join(cwd, readmeName), "utf-8").split("\n").slice(0, 60).join("\n");
-        signals.push(`README:\n${readme}`);
-        break;
-      } catch { /* no readme */ }
-    }
-
-    // Existing ORI.md if updating
-    if (isUpdate && existsSync(oriMdPath)) {
-      try {
-        const existing = readFileSync(oriMdPath, "utf-8");
-        signals.push(`Existing ORI.md (preserve any hand-edited sections):\n${existing}`);
-      } catch { /* ignore */ }
-    }
-
-    // git log
-    try {
-      const { runCommand: rc } = await import("../tools/shell");
-      const log = await rc(["git", "log", "--oneline", "-10"], cwd);
-      if (log.stdout) signals.push(`Recent commits:\n${log.stdout}`);
-    } catch { /* ignore */ }
-
-    const prompt = `You are generating an ORI.md file for a software project. This file is injected at the top of every ORI Code session for this workspace — it's the agent's persistent project brain.
-
-Analyze the project signals below and write a concise, dense ORI.md. It should cover:
-1. **What this project is** — one tight paragraph, no fluff
-2. **Stack** — languages, frameworks, key deps (be specific, include versions if visible)
-3. **Key commands** — build, test, run, lint (exact commands)
-4. **Project layout** — 5-10 bullet points on the most important dirs/files and what they do
-5. **Gotchas & conventions** — things that would trip up a new engineer: naming conventions, env vars, non-obvious config, known footguns
-6. **Do not** — anything the agent should never do in this repo (e.g. don't push to main, don't touch X)
-
-Format: use markdown headers (##). Be terse. No filler sentences. Max 400 words.
-
-Project signals:
-${signals.join("\n\n")}
-
-Write only the ORI.md content, starting with # ORI.md`;
-
-    try {
-      const resp = await options.client.createChatCompletion(options.surface, {
-        model: undefined,
-        messages: [
-          { role: "system", content: "You are a technical documentation writer. Output only the requested file content, no preamble or explanation." },
-          { role: "user", content: prompt },
-        ],
-      });
-      const content = resp.choices?.[0]?.message?.content ?? "";
-      if (!content) {
-        return { handled: true, assistantMessage: "Init failed — ORI returned no content." };
-      }
-      await writeFile(oriMdPath, content, "utf-8");
-      return {
-        handled: true,
-        assistantMessage: `ORI.md ${isUpdate ? "updated" : "created"} ✓\n\nThis file will be loaded into every session in this workspace. Edit it anytime to refine the context.\n\n\`\`\`\n${content.slice(0, 600)}${content.length > 600 ? "\n… (truncated)" : ""}\n\`\`\``,
-      };
-    } catch (e: any) {
-      return { handled: true, assistantMessage: `Init failed: ${e.message}` };
-    }
-  }
-
-  if (trimmed === "/create-agent") {
-    return { handled: true, openCreateAgent: true };
-  }
-
-  // Agent commands — /agents picker, /agent <id>, direct /<agent-id>
-  if (trimmed === "/agents" || trimmed === "/agent") {
-    return { handled: true, openAgentPicker: true };
-  }
-
-  if (trimmed === "/agent off" || trimmed === "/agent none") {
-    return {
-      handled: true,
-      activateAgent: null,
-      assistantMessage: "Agent deactivated. Back to default ORI mode.",
-    };
-  }
-
-  // Direct agent activation: /ui-designer, /backend, etc.
-  // Also handles /agent <id>
-  const agentCandidateId = trimmed.startsWith("/agent ")
-    ? trimmed.slice(7).trim()
-    : trimmed.slice(1); // strip leading /
-
-  if (agentCandidateId) {
-    const allAgents = await loadAllAgents();
-    const match = findAgent(agentCandidateId, allAgents);
-    if (match) {
-      const wasActive = options.activeAgentId === match.id;
-      if (wasActive) {
-        return {
-          handled: true,
-          activateAgent: null,
-          assistantMessage: `${match.emoji} ${match.name} deactivated.`,
-        };
-      }
-      return {
-        handled: true,
-        activateAgent: match.id,
-        assistantMessage: `${match.emoji} **${match.name}** activated.\n\n${match.description}`,
-      };
-    }
-  }
-
-  // ── /review ──────────────────────────────────────────────────────────────
-  if (trimmed === "/review" || trimmed.startsWith("/review ")) {
-    const cwd = options.workspace?.cwd ?? process.cwd();
-    const focus = trimmed.slice("/review".length).trim(); // optional e.g. "security" or "performance"
-    try {
-      const { execAsync: execR } = await import("node:child_process").then(m => ({
-        execAsync: (cmd: string) => new Promise<string>((res, rej) =>
-          m.exec(cmd, { cwd, maxBuffer: 1024 * 1024 * 4 }, (err, out) => err ? rej(err) : res(out.trim()))
-        ),
-      }));
-
-      let diff = await execR("git diff HEAD").catch(() => "");
-      if (!diff) diff = await execR("git diff HEAD~1").catch(() => "");
-      if (!diff) return { handled: true, assistantMessage: "Nothing to review — no uncommitted changes and no previous commit diff." };
-
-      // Truncate very large diffs
-      const maxDiff = 8000;
-      const truncated = diff.length > maxDiff;
-      const diffBlock = truncated ? diff.slice(0, maxDiff) + "\n\n… [diff truncated]" : diff;
-
-      const focusLine = focus ? ` Focus specifically on ${focus} concerns.` : "";
-      const reviewPrompt = `Review the following diff.${focusLine} Structure your feedback as:
-1. **Issues** (blocking — must fix before merging)
-2. **Suggestions** (non-blocking improvements)
-3. **Nits** (style, naming, minor things)
-
-Be specific: cite file and line context. Be direct. Skip praise unless something is genuinely worth noting.
-
-\`\`\`diff
-${diffBlock}
-\`\`\``;
-
-      return { handled: true, followUpInput: reviewPrompt };
-    } catch (e: any) {
-      return { handled: true, assistantMessage: `Review failed: ${e.message}` };
-    }
-  }
-
-  // ── /pin · /unpin · /pins ────────────────────────────────────────────────
-  if (trimmed.startsWith("/pin ") || trimmed === "/pin") {
-    const filePath = trimmed.slice("/pin".length).trim();
-    if (!filePath) return { handled: true, assistantMessage: 'Usage: `/pin <path>` — e.g. `/pin src/config.ts`' };
-    const cwd = options.workspace?.cwd ?? process.cwd();
-    const pinsPath = join(cwd, ".ori", "pins.json");
-    try {
-      const { mkdir, readFile: rf, writeFile: wf } = await import("node:fs/promises");
-      await mkdir(join(cwd, ".ori"), { recursive: true });
-      let pins: string[] = [];
-      try { pins = JSON.parse(await rf(pinsPath, "utf-8")); } catch { /* new */ }
-      if (!pins.includes(filePath)) pins.push(filePath);
-      await wf(pinsPath, JSON.stringify(pins, null, 2), "utf-8");
-      return { handled: true, assistantMessage: `Pinned \`${filePath}\` — will be injected into every turn context.` };
-    } catch (e: any) {
-      return { handled: true, assistantMessage: `Pin failed: ${e.message}` };
-    }
-  }
-
-  if (trimmed.startsWith("/unpin ") || trimmed === "/unpin") {
-    const filePath = trimmed.slice("/unpin".length).trim();
-    if (!filePath) return { handled: true, assistantMessage: 'Usage: `/unpin <path>`' };
-    const cwd = options.workspace?.cwd ?? process.cwd();
-    const pinsPath = join(cwd, ".ori", "pins.json");
-    try {
-      const { writeFile: wf } = await import("node:fs/promises");
-      let pins: string[] = [];
-      try { pins = JSON.parse(readFileSync(pinsPath, "utf-8")); } catch { /* none */ }
-      const filtered = pins.filter(p => p !== filePath);
-      if (filtered.length === pins.length) return { handled: true, assistantMessage: `\`${filePath}\` wasn't pinned.` };
-      await wf(pinsPath, JSON.stringify(filtered, null, 2), "utf-8");
-      return { handled: true, assistantMessage: `Unpinned \`${filePath}\`.` };
-    } catch (e: any) {
-      return { handled: true, assistantMessage: `Unpin failed: ${e.message}` };
-    }
-  }
-
-  if (trimmed === "/pins") {
-    const cwd = options.workspace?.cwd ?? process.cwd();
-    const pinsPath = join(cwd, ".ori", "pins.json");
-    try {
-      const pins: string[] = JSON.parse(readFileSync(pinsPath, "utf-8"));
-      if (!pins.length) return { handled: true, assistantMessage: "No pinned files. Use `/pin <path>` to pin one." };
-      return { handled: true, assistantMessage: `**Pinned files** (injected every turn):\n\n${pins.map(p => `- \`${p}\``).join("\n")}\n\nRemove with \`/unpin <path>\`` };
-    } catch {
-      return { handled: true, assistantMessage: "No pinned files. Use `/pin <path>` to pin one." };
-    }
-  }
-
-  // ── /remember · /forget · /memories ─────────────────────────────────────
-  if (trimmed.startsWith("/remember ") || trimmed === "/remember") {
-    const note = trimmed.slice("/remember".length).trim();
-    if (!note) return { handled: true, assistantMessage: 'Usage: `/remember "note to keep in mind"`' };
-    const cwd = options.workspace?.cwd ?? process.cwd();
-    const memPath = join(cwd, ".ori", "memory.md");
-    try {
-      const { mkdir, readFile: rf, writeFile: wf } = await import("node:fs/promises");
-      await mkdir(join(cwd, ".ori"), { recursive: true });
-      let existing = "";
-      try { existing = (await rf(memPath, "utf-8")).trim(); } catch { /* new file */ }
-      const lines = existing ? existing.split("\n").filter(l => l.trim()) : [];
-      lines.push(`- ${note}`);
-      await wf(memPath, lines.join("\n") + "\n", "utf-8");
-      return { handled: true, assistantMessage: `Remembered: _${note}_\n\n${lines.length} note${lines.length !== 1 ? "s" : ""} in memory.` };
-    } catch (e: any) {
-      return { handled: true, assistantMessage: `Failed to save: ${e.message}` };
-    }
-  }
-
-  if (trimmed === "/memories") {
-    const cwd = options.workspace?.cwd ?? process.cwd();
-    const memPath = join(cwd, ".ori", "memory.md");
-    try {
-      const content = readFileSync(memPath, "utf-8").trim();
-      const lines = content.split("\n").filter(l => l.trim());
-      if (!lines.length) return { handled: true, assistantMessage: "Memory is empty. Add notes with `/remember`." };
-      const indexed = lines.map((l, i) => `${i}. ${l.replace(/^-\s*/, "")}`).join("\n");
-      return { handled: true, assistantMessage: `**Memory** (${lines.length} notes):\n\n${indexed}\n\nRemove with \`/forget <n>\`` };
-    } catch {
-      return { handled: true, assistantMessage: "Memory is empty. Add notes with `/remember`." };
-    }
-  }
-
-  if (trimmed.startsWith("/forget ") || trimmed === "/forget") {
-    const indexStr = trimmed.slice("/forget".length).trim();
-    const index = parseInt(indexStr, 10);
-    if (isNaN(index)) return { handled: true, assistantMessage: "Usage: `/forget <index>` — use `/memories` to see indices." };
-    const cwd = options.workspace?.cwd ?? process.cwd();
-    const memPath = join(cwd, ".ori", "memory.md");
-    try {
-      const { writeFile: wf } = await import("node:fs/promises");
-      const content = readFileSync(memPath, "utf-8").trim();
-      const lines = content.split("\n").filter(l => l.trim());
-      if (index < 0 || index >= lines.length) {
-        return { handled: true, assistantMessage: `No memory at index ${index}. Run \`/memories\` to list.` };
-      }
-      const removed = lines[index].replace(/^-\s*/, "");
-      lines.splice(index, 1);
-      await wf(memPath, lines.join("\n") + (lines.length ? "\n" : ""), "utf-8");
-      return { handled: true, assistantMessage: `Forgot: _${removed}_\n\n${lines.length} note${lines.length !== 1 ? "s" : ""} remaining.` };
-    } catch {
-      return { handled: true, assistantMessage: "Memory is empty — nothing to forget." };
-    }
-  }
-
-  // ── /checkpoint ──────────────────────────────────────────────────────────
-  if (trimmed === "/checkpoint" || trimmed.startsWith("/checkpoint ")) {
-    const name = trimmed.slice("/checkpoint".length).trim() || `checkpoint-${Date.now()}`;
-    return { handled: true, checkpointOp: { op: "create", name } };
-  }
-
-  if (trimmed === "/checkpoints") {
-    return { handled: true, checkpointOp: { op: "list" } };
-  }
-
-  if (trimmed === "/restore" || trimmed.startsWith("/restore ")) {
-    const indexStr = trimmed.slice("/restore".length).trim();
-    const index = indexStr ? parseInt(indexStr, 10) : 0;
-    return { handled: true, checkpointOp: { op: "restore", index: isNaN(index) ? 0 : index } };
-  }
-
-  // ── /plan ─────────────────────────────────────────────────────────────────
-  if (trimmed.startsWith("/plan ") || trimmed === "/plan") {
-    const goal = trimmed.slice("/plan".length).trim();
-    if (!goal) return { handled: true, assistantMessage: 'Usage: `/plan "describe what you want to accomplish"`' };
-    return { handled: true, planGoal: goal };
-  }
-
-  if (trimmed === "/stop") {
-    return { handled: true, assistantMessage: "Plan stopped.", activateAgent: undefined };
-  }
-
-  if (trimmed === "/compact") {
-    const conversation = options.conversation ?? [];
-    if (conversation.length < 4) {
-      return { handled: true, assistantMessage: "Nothing to compact yet — conversation is short." };
-    }
-    const transcript = conversation
-      .filter(m => m.role === "user" || m.role === "assistant")
-      .map(m => `${m.role === "user" ? "User" : "ORI"}: ${String(m.content).slice(0, 400)}`)
-      .join("\n");
-    try {
-      const summaryResp = await options.client.createChatCompletion(options.surface, {
-        model: undefined,
-        messages: [
-          {
-            role: "system",
-            content: "You are a conversation compactor. Summarize the following conversation into a concise context block (max 300 words) that preserves all decisions made, files changed, current objectives, and any unresolved issues. Output only the summary, no preamble.",
-          },
-          { role: "user", content: transcript },
-        ],
-      });
-      const summary = summaryResp.choices?.[0]?.message?.content ?? "";
-      if (!summary) {
-        return { handled: true, assistantMessage: "Compact failed — ORI returned no summary." };
-      }
-      const compacted: import("../runtime/types").OriMessage[] = [
-        { role: "system", content: `[COMPACTED CONTEXT]\n${summary}` },
-      ];
-      return {
-        handled: true,
-        assistantMessage: `Session compacted. Summary:\n\n${summary}`,
-        clearTranscript: true,
-        compactedConversation: compacted,
-      };
-    } catch {
-      return { handled: true, assistantMessage: "Compact failed — could not reach ORI." };
-    }
-  }
-  
-  if (trimmed === "/apply") {
-    if (!options.pendingDraft && !options.pendingPlanDraft) {
-      return { handled: true, assistantMessage: "There isn’t a draft to apply right now." };
-    }
-    return { handled: true, assistantMessage: "Applied.", clearDraft: true, clearPlanDraft: true };
-  }
-
-  if (trimmed === "/cancel") {
-    if (!options.pendingDraft && !options.pendingPlanDraft) {
-      return { handled: true, assistantMessage: "There wasn’t a draft to cancel." };
-    }
-    return { handled: true, assistantMessage: "Canceled.", clearDraft: true, clearPlanDraft: true };
-  }
-
-  return { handled: false };
-}
-

@@ -67,7 +67,7 @@ export function CreateAgentDrawer({
 
   if (!visible) return null;
 
-  const step = STEPS[stepIndex];
+  const step = STEPS[stepIndex] ?? STEPS[0]!;
   const brandColor = "#E57373";
   const grayColor = "#707070";
   const greenColor = "#00FF7F";
@@ -84,7 +84,7 @@ export function CreateAgentDrawer({
       >
         <Box gap={2}>
           <Text color={brandColor} bold>Creating agent</Text>
-          <Text color={grayColor}>ORI is writing the definition…</Text>
+          <Text color={grayColor}>Writing the definition…</Text>
         </Box>
       </Box>
     );

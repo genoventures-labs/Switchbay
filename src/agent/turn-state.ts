@@ -1,6 +1,5 @@
-import type { OriMessage, ScratchpadState } from "../runtime/types";
+import type { OriMessage } from "../runtime/types";
 import type { PatchPreview } from "../tools/patch";
-import type { VerificationSummary } from "../tools/verify";
 import type { WorkspaceSnapshot } from "../session/workspace";
 
 export type AgentMode = "build" | "design" | "debug";
@@ -36,26 +35,12 @@ export type TranscriptEntry = {
   tone?: "info" | "success" | "warning" | "error";
 };
 
-export type DraftEdit = {
-  after: string;
-  before: string;
-  patch: PatchPreview;
-  reason: string;
-  targetPath: string;
-};
-
-export type PlanDraft = {
-  title: string;
-  content: string;
-  executionPrompt: string;
-};
-
 export type ShellCommand = {
   command: string;
   reason: string;
 };
 
-export type ApprovalKind = "draft_edit" | "execution_plan" | "shell_command";
+export type ApprovalKind = "execution_plan" | "shell_command";
 
 export type PlanStatus =
   | "pending_approval"  // generated, waiting for user to say y
@@ -87,7 +72,6 @@ export type SessionState = {
   conversation: OriMessage[];
   transcript: TranscriptEntry[];
   status: SessionStatus;
-  activeCapability: string | null;
   streamingText: string;
   currentObjective: string | null;
   pendingPlan: string[];
@@ -98,20 +82,15 @@ export type SessionState = {
   surface: string;
   lastError: string | null;
   workspace: WorkspaceSnapshot | null;
-  verification: VerificationSummary | null;
   changedFiles: string[];
   lastPatchPreview: PatchPreview | null;
-  pendingDraft: DraftEdit | null;
-  pendingPlanDraft: PlanDraft | null;
   pendingShell: ShellCommand | null;
   pendingApproval: ApprovalRequest | null;
   thoughts: ThoughtFrame[];
   updatedAt: number;
-  activeBundleIds: string[];
   activeAgentId: string | null;
   activePlan: ActivePlan | null;
   sessionTitle: string | null;
-  scratchpad: ScratchpadState | null;
   turnStartedAt: number | null;
   turnTokenCount: number;
 };
@@ -182,14 +161,13 @@ export function createInitialSessionState(input: {
       }),
     ],
     status: "CONNECTING",
-    activeCapability: null,
     streamingText: "",
     currentObjective: null,
     pendingPlan: [],
     recentActivity: [
       createActivityEvent(
         "info",
-        `Booted ORI Code in ${input.mode} mode on ${input.surface}.`,
+        `Booted coding harness in ${input.mode} mode on ${input.surface}.`,
       ),
     ],
     mode: input.mode,
@@ -197,23 +175,18 @@ export function createInitialSessionState(input: {
     resolvedProfile: input.resolvedProfile,
     surface: input.surface,
     updatedAt: Date.now(),
-    activeBundleIds: [],
     activeAgentId: null,
     activePlan: null,
     sessionTitle: null,
     lastError: null,
     workspace: null,
-    verification: null,
     changedFiles: [],
     lastPatchPreview: null,
-    pendingDraft: null,
-    pendingPlanDraft: null,
     pendingShell: null,
     pendingApproval: null,
     thoughts: [
       createThoughtFrame("goal", `Session booted in ${input.mode} mode.`),
     ],
-    scratchpad: null,
     turnStartedAt: null,
     turnTokenCount: 0,
   };

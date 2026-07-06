@@ -31,8 +31,8 @@ export function CommandDrawer({
       borderColor={grayColor}
     >
       <Box marginBottom={1}>
-        <Text color={brandColor} bold>Slash Commands</Text>
-        <Text color={grayColor}> · Use arrow keys to browse</Text>
+        <Text color={brandColor} bold>Commands</Text>
+        <Text color={grayColor}> · arrows browse · tab inserts · enter runs</Text>
       </Box>
 
       {commands.length > 0 ? (
@@ -62,6 +62,7 @@ export function CommandDrawer({
               {selected && (
                 <Box flexDirection="column" marginLeft={2} marginTop={0}>
                   <Text color="white">{item.description}</Text>
+                  <Text color={grayColor}>{item.example}</Text>
                 </Box>
               )}
             </Box>

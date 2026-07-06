@@ -1,17 +1,17 @@
 import React, { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { Box, useInput, useStdout } from "ink";
-import { getWebSocketBase } from "../config/env";
 import {
   buildTurn,
   executeTurn,
   extractAssistantText,
-  parseApprovalIntent,
   refreshWorkspace,
   synthesizeAssistantFallback,
-  tryLocalCommand,
 } from "../agent/loop";
+import { parseApprovalIntent, tryLocalCommand } from "../agent/commands";
 import { resolveAgentPolicy } from "../agent/policy";
-import { OriClient } from "../runtime/ori-client";
+import type { ChatRuntimeClient } from "../runtime/client";
+import { getRuntimeLaneLabel } from "../runtime/client";
+import type { RuntimeLane } from "../config/env";
 import { createSessionStore, sessionReducer } from "../session/store";
 import { createTranscriptEntry } from "../agent/turn-state";
 import { loadPersistedSession, savePersistedSession, listSessions, purgeSessions } from "../session/persistence";
@@ -21,7 +21,6 @@ import {
   resolveMentionContent,
   type MentionCandidate,
 } from "../tools/mentions";
-import { listAvailableBundles, type Bundle } from "../tools/bundles";
 import { loadAllAgents, type Agent } from "../agent/agents";
 import { CommandDrawer } from "./components/CommandDrawer";
 import { Composer } from "./components/Composer";
@@ -31,16 +30,17 @@ import { Header } from "./components/Header";
 import { MentionPicker } from "./components/MentionPicker";
 import { Transcript } from "./components/Transcript";
 import { ResumeDrawer } from "./components/ResumeDrawer";
-import { BundleDrawer } from "./components/BundleDrawer";
 import { AgentDrawer } from "./components/AgentDrawer";
 import { CreateAgentDrawer, type CreateAgentAnswers } from "./components/CreateAgentDrawer";
 import { generateAgentDefinition, generatePlan, type PendingAgentDraft } from "../agent/loop";
 import type { ActivePlan } from "../agent/turn-state";
 import { ShortcutDrawer } from "./components/ShortcutDrawer";
 import { getCommandMatches } from "./commands";
+import { runCommand, runShellString } from "../tools/shell";
 
 export type OriAppProps = {
-  client: OriClient;
+  client: ChatRuntimeClient;
+  lane?: RuntimeLane;
   initialHopLabel: string | null;
   initialQuery: string;
   mode: string;
@@ -49,15 +49,11 @@ export type OriAppProps = {
   resumeId?: string | null;
 };
 
-type StreamEvent =
-  | { type: "agent_dispatch"; action?: string }
-  | { type: "token"; content?: string }
-  | { type: "done" };
-
-type ComposerMode = "default" | "edit_file_picker" | "edit_intent" | "resume_picker" | "bundle_picker" | "agent_picker" | "create_agent" | "shortcut_picker";
+type ComposerMode = "default" | "edit_file_picker" | "edit_intent" | "resume_picker" | "agent_picker" | "create_agent" | "shortcut_picker";
 
 export function OriApp({
   client,
+  lane,
   initialHopLabel,
   initialQuery,
   mode,
@@ -94,7 +90,6 @@ export function OriApp({
     setQuery(value);
   };
   const [transcriptScrollOffset, setTranscriptScrollOffset] = useState(0);
-  const [thinkingCollapsed, setThinkingCollapsed] = useState(false);
   const [composerMode, setComposerMode] = useState<ComposerMode>("default");
   const [editIntent, setEditIntent] = useState("");
   const [selectedEditFile, setSelectedEditFile] = useState<string | null>(null);
@@ -104,8 +99,6 @@ export function OriApp({
   const [selectedMentionIndex, setSelectedMentionIndex] = useState(0);
   const [resumeSessions, setResumeSessions] = useState<{id: string, title: string, updatedAt: number}[]>([]);
   const [selectedResumeIndex, setSelectedResumeIndex] = useState(0);
-  const [availableBundles, setAvailableBundles] = useState<Bundle[]>([]);
-  const [selectedBundleIndex, setSelectedBundleIndex] = useState(0);
   const [availableAgents, setAvailableAgents] = useState<Agent[]>([]);
   const [selectedAgentIndex, setSelectedAgentIndex] = useState(0);
   const [createAgentGenerating, setCreateAgentGenerating] = useState(false);
@@ -141,7 +134,6 @@ export function OriApp({
   const mentionPickerVisible = mentionPartial !== null && composerMode === "default" && !commandDrawerVisible;
   
   const resumeDrawerVisible = composerMode === "resume_picker";
-  const bundleDrawerVisible = composerMode === "bundle_picker";
   const shortcutDrawerVisible = composerMode === "shortcut_picker";
 
   const transcriptWindowSize = Math.max(5, stdoutHeight - 15);
@@ -187,9 +179,6 @@ export function OriApp({
         setSelectedEditFile(null);
         setEditIntent("");
       }
-      if (key.ctrl && input === "t") {
-        setThinkingCollapsed((previous) => !previous);
-      }
       return;
     }
 
@@ -199,33 +188,6 @@ export function OriApp({
             setQuerySync("");
         }
         return;
-    }
-
-    if (bundleDrawerVisible) {
-      if (key.upArrow) {
-        setSelectedBundleIndex((prev) =>
-          prev <= 0 ? availableBundles.length - 1 : prev - 1,
-        );
-        return;
-      }
-      if (key.downArrow) {
-        setSelectedBundleIndex((prev) =>
-          prev >= availableBundles.length - 1 ? 0 : prev + 1,
-        );
-        return;
-      }
-      if (key.return || key.tab) {
-        const selected = availableBundles[selectedBundleIndex];
-        if (selected) {
-           void handleToggleBundle(selected.manifest.id);
-        }
-        return;
-      }
-      if (key.escape) {
-        setComposerMode("default");
-        setQuerySync("");
-        return;
-      }
     }
 
     const agentPickerVisible = composerMode === "agent_picker";
@@ -397,10 +359,6 @@ export function OriApp({
       }
     }
 
-    if (key.ctrl && input === "t") {
-      setThinkingCollapsed((previous) => !previous);
-      return;
-    }
     if (key.ctrl && input === "u") {
       setTranscriptScrollOffset((previous) =>
         Math.min(
@@ -431,14 +389,14 @@ export function OriApp({
         const next = historyIndexRef.current + 1;
         if (next < historyRef.current.length) {
           historyIndexRef.current = next;
-          setQuerySync(historyRef.current[next]);
+          setQuerySync(historyRef.current[next] ?? "");
         }
         return;
       }
       if (key.downArrow && historyIndexRef.current >= 0) {
         const next = historyIndexRef.current - 1;
         historyIndexRef.current = next;
-        setQuerySync(next >= 0 ? historyRef.current[next] : "");
+        setQuerySync(next >= 0 ? historyRef.current[next] ?? "" : "");
         return;
       }
       if (key.escape) {
@@ -512,74 +470,11 @@ export function OriApp({
       dispatch({ type: "workspace/updated", workspace });
     });
     
-    void listAvailableBundles().then((bundles) => {
-      setAvailableBundles(bundles);
-    });
     void loadAllAgents().then((agents) => {
       setAvailableAgents(agents);
     });
 
-    let ws: WebSocket | null = null;
-    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-    let reconnectDelay = 2000;
-    let destroyed = false;
-
-    function connect() {
-      if (destroyed) return;
-      ws = new WebSocket(getWebSocketBase());
-
-      ws.addEventListener("open", () => {
-        reconnectDelay = 2000;
-        dispatch({ type: "connection/opened" });
-      });
-
-      ws.addEventListener("message", (event) => {
-        try {
-          const payload =
-            typeof event.data === "string" ? event.data : event.data.toString();
-          const streamEvent = JSON.parse(payload) as StreamEvent;
-
-          if (streamEvent.type === "agent_dispatch") {
-            dispatch({
-              type: "turn/capability",
-              capability: streamEvent.action ?? "thinking",
-            });
-            return;
-          }
-
-          if (streamEvent.type === "token") {
-            dispatch({
-              type: "turn/token",
-              token: streamEvent.content ?? "",
-            });
-            return;
-          }
-
-          if (streamEvent.type === "done") {
-            dispatch({ type: "turn/completed" });
-          }
-        } catch {
-        }
-      });
-
-      ws.addEventListener("close", () => {
-        if (destroyed) return;
-        reconnectDelay = Math.min(reconnectDelay * 2, 30000);
-        reconnectTimer = setTimeout(connect, reconnectDelay);
-      });
-
-      ws.addEventListener("error", () => {
-        ws?.close();
-      });
-    }
-
-    connect();
-
-    return () => {
-      destroyed = true;
-      if (reconnectTimer) clearTimeout(reconnectTimer);
-      ws?.close();
-    };
+    dispatch({ type: "connection/opened" });
   }, []);
 
   useEffect(() => {
@@ -597,15 +492,6 @@ export function OriApp({
     }
     setComposerMode("default");
     setQuerySync("");
-  }
-
-  async function handleToggleBundle(id: string) {
-    const nextIds = state.activeBundleIds.includes(id)
-      ? state.activeBundleIds.filter((bid) => bid !== id)
-      : [...state.activeBundleIds, id];
-    
-    state.activeBundleIds = nextIds;
-    dispatch({ type: "workspace/updated", workspace: state.workspace });
   }
 
   async function handleSubmit(value: string) {
@@ -631,7 +517,7 @@ export function OriApp({
           const date = new Date(s.updatedAt).toLocaleString();
           list += `${i}. ${s.title} (${date})\n`;
         });
-        list += "\nUse /resume to pick one, or ori-code --resume <index>";
+        list += "\nUse /resume to pick one, or code-harness --resume <index>";
         dispatch({
           type: "assistant/appended",
           message: list,
@@ -646,8 +532,8 @@ export function OriApp({
       let ms = 0;
       const match = duration.match(/^(\d+)([dw])$/);
       if (match) {
-        const count = parseInt(match[1], 10);
-        const unit = match[2];
+        const count = parseInt(match[1] ?? "0", 10);
+        const unit = match[2] ?? "";
         if (unit === "d") ms = count * 24 * 60 * 60 * 1000;
         else if (unit === "w") ms = count * 7 * 24 * 60 * 60 * 1000;
         
@@ -682,28 +568,6 @@ export function OriApp({
       return;
     }
 
-    if (trimmedVal === "/bundles") {
-      const bundles = await listAvailableBundles();
-      setAvailableBundles(bundles);
-      setSelectedBundleIndex(0);
-      setComposerMode("bundle_picker");
-      return;
-    }
-
-    if (trimmedVal.startsWith("/bundle ")) {
-      const id = trimmedVal.split(" ")[1];
-      if (id) {
-        await handleToggleBundle(id);
-        const bundles = await listAvailableBundles();
-        const bundle = bundles.find(b => b.manifest.id === id);
-        dispatch({
-            type: "assistant/appended",
-            message: `Specialization "${bundle?.manifest.name || id}" is now ${state.activeBundleIds.includes(id) ? "enabled" : "disabled"}.`,
-        });
-      }
-      return;
-    }
-
     if (trimmedVal === "/new") {
       const workspace = await refreshWorkspace();
       const policy = resolveAgentPolicy({ mode, profile });
@@ -720,7 +584,6 @@ export function OriApp({
 
       dispatch({ type: "workspace/updated", workspace });
       setTranscriptScrollOffset(0);
-      setThinkingCollapsed(false);
       setSelectedEditFile(null);
       setEditIntent("");
       return;
@@ -733,10 +596,12 @@ export function OriApp({
       if (activePlan.status === "pending_approval") {
         const intent = parseApprovalIntent(trimmedVal);
         if (intent === "apply") {
+          const firstStep = activePlan.steps[0];
+          if (!firstStep) return;
           dispatch({ type: "plan/started" });
           setQuerySync("");
           // Execute step 0 immediately
-          void handleSubmit(activePlan.steps[0]);
+          void handleSubmit(firstStep);
           return;
         }
         if (intent === "cancel") {
@@ -759,16 +624,20 @@ export function OriApp({
           setQuerySync("");
           const next = activePlan.currentStep + 1;
           if (next < activePlan.steps.length) {
+            const nextStep = activePlan.steps[next];
+            if (!nextStep) return;
             dispatch({ type: "plan/started" });
-            void handleSubmit(activePlan.steps[next]);
+            void handleSubmit(nextStep);
           }
           return;
         }
         const intent = parseApprovalIntent(trimmedVal);
         if (intent === "apply") {
+          const currentStep = activePlan.steps[activePlan.currentStep];
+          if (!currentStep) return;
           dispatch({ type: "plan/started" });
           setQuerySync("");
-          void handleSubmit(activePlan.steps[activePlan.currentStep]);
+          void handleSubmit(currentStep);
           return;
         }
       }
@@ -787,7 +656,7 @@ export function OriApp({
           setAvailableAgents(agents);
           dispatch({
             type: "assistant/appended",
-            message: `✓ Agent **${pendingAgentDraft.name}** saved to \`${pendingAgentDraft.savePath}\`\n\nActivate it with \`/${pendingAgentDraft.id}\` or via \`/agents\`.`,
+            message: `✓ Agent **${pendingAgentDraft.name}** saved to \`${pendingAgentDraft.savePath}\`\n\nActivate it with \`/agent ${pendingAgentDraft.id}\` or via \`/agents\`.`,
           });
         } catch (e: any) {
           dispatch({ type: "assistant/appended", message: `Save failed: ${e.message}` });
@@ -822,11 +691,11 @@ export function OriApp({
         });
         dispatch({ type: "turn/started" });
         try {
-          const { exec: nodeExec } = await import("node:child_process");
-          const { promisify } = await import("node:util");
-          const execP = promisify(nodeExec);
-          const { stdout, stderr } = await execP(shellCmd.command, { cwd: shellCwd, maxBuffer: 1024 * 1024 * 4 });
-          const output = [stdout, stderr].filter(Boolean).join("\n") || "Done.";
+          const result = await runShellString(shellCmd.command, shellCwd);
+          if (!result.ok) {
+            throw new Error(result.stderr || result.stdout || `exit ${result.exitCode}`);
+          }
+          const output = [result.stdout, result.stderr].filter(Boolean).join("\n") || "Done.";
           dispatch({ type: "turn/completed", content: `\`${shellCmd.command}\`\n\n${output}` });
         } catch (err: any) {
           dispatch({ type: "turn/failed", error: `Shell failed: ${err.message}` });
@@ -841,18 +710,7 @@ export function OriApp({
       }
     }
 
-    const approvalIntent =
-      state.pendingApproval || state.pendingDraft || state.pendingPlanDraft
-        ? parseApprovalIntent(trimmedVal)
-        : null;
-    const resolvedValue =
-      approvalIntent === "apply"
-        ? "/apply"
-        : approvalIntent === "cancel"
-          ? "/cancel"
-          : trimmedVal;
-
-    if (resolvedValue === "/clear") {
+    if (trimmedVal === "/clear") {
       const workspace = await refreshWorkspace();
       const policy = resolveAgentPolicy({ mode, profile });
 
@@ -868,7 +726,6 @@ export function OriApp({
 
       dispatch({ type: "workspace/updated", workspace });
       setTranscriptScrollOffset(0);
-      setThinkingCollapsed(false);
       setSelectedEditFile(null);
       setEditIntent("");
       return;
@@ -892,16 +749,12 @@ export function OriApp({
     };
     setTurnThoughts([]);
 
-    const activeBundles = availableBundles.filter(b => state.activeBundleIds.includes(b.manifest.id));
-
-    const localCommand = await tryLocalCommand(resolvedValue, {
+    const localCommand = await tryLocalCommand(trimmedVal, {
       client,
       profile: state.resolvedProfile,
       sessionId: state.sessionId,
       surface,
       workspace,
-      pendingDraft: state.pendingDraft,
-      pendingPlanDraft: state.pendingPlanDraft,
       conversation: state.conversation,
       lastChangedFile: state.changedFiles[state.changedFiles.length - 1] ?? null,
       activeAgentId: state.activeAgentId,
@@ -920,66 +773,11 @@ export function OriApp({
         dispatch({ type: "workspace/updated", workspace: localCommand.workspace });
       }
 
-      if (localCommand.scratchpad !== undefined) {
-        dispatch({
-          type: "scratchpad/updated",
-          scratchpad: localCommand.scratchpad,
-        });
-      }
-
       if (localCommand.patch && localCommand.changedFile) {
         dispatch({
           type: "patch/updated",
           patch: localCommand.patch,
           changedFile: localCommand.changedFile,
-        });
-      }
-
-      if (localCommand.draft) {
-        dispatch({
-          type: "draft/staged",
-          draft: localCommand.draft,
-        });
-      }
-
-      if (localCommand.planDraft) {
-        dispatch({
-          type: "plan/staged",
-          plan: localCommand.planDraft,
-        });
-      }
-
-      if (localCommand.clearDraft) {
-        if (state.pendingApproval) {
-          dispatch({
-            type: resolvedValue === "/apply" ? "approval/approved" : "approval/rejected",
-            requestId: state.pendingApproval.id,
-          });
-        }
-        dispatch({ type: "draft/cleared" });
-      }
-
-      if (localCommand.clearPlanDraft) {
-        if (state.pendingApproval) {
-          dispatch({
-            type: resolvedValue === "/apply" ? "approval/approved" : "approval/rejected",
-            requestId: state.pendingApproval.id,
-          });
-        }
-        dispatch({ type: "plan/cleared" });
-      }
-
-      if (localCommand.clearDraft || localCommand.clearPlanDraft) {
-        // also clear any pending shell if co-staged
-        if (state.pendingShell) {
-          dispatch({ type: "shell/cleared" });
-        }
-      }
-
-      if (localCommand.verification) {
-        dispatch({
-          type: "verification/updated",
-          verification: localCommand.verification,
         });
       }
 
@@ -1024,45 +822,49 @@ export function OriApp({
         const cwd = state.workspace?.cwd ?? process.cwd();
         const { op } = localCommand.checkpointOp;
         try {
-          const { exec } = await import("node:child_process");
-          const run = (cmd: string) => new Promise<string>((res, rej) =>
-            exec(cmd, { cwd }, (err, out) => err ? rej(err) : res(out.trim()))
-          );
+          const runGit = async (args: string[]) => {
+            const result = await runCommand(args, cwd);
+            if (!result.ok) {
+              throw new Error(result.stderr || result.stdout || `${args.join(" ")} failed`);
+            }
+            return result.stdout;
+          };
 
           if (op === "create") {
             const { name } = localCommand.checkpointOp as { op: "create"; name: string };
-            await run(`git stash push --include-untracked -m "ori: ${name}"`);
+            await runGit(["git", "stash", "push", "--include-untracked", "-m", `harness: ${name}`]);
             dispatch({ type: "assistant/appended", message: `Checkpoint saved: **${name}**\n\nRestore with \`/restore\` or \`/checkpoints\` to list all.` });
           }
 
           if (op === "list") {
-            const out = await run("git stash list");
+            const out = await runGit(["git", "stash", "list"]);
             const checkpoints = out
               .split("\n")
-              .filter(l => l.includes("ori:"))
+              .filter(isHarnessCheckpointLine)
               .map((l, i) => {
-                const match = l.match(/ori:\s*(.+)$/);
+                const match = l.match(/(?:harness|ori):\s*(.+)$/);
                 return `${i}. ${match?.[1] ?? l}`;
               });
             dispatch({
               type: "assistant/appended",
               message: checkpoints.length
                 ? `**Checkpoints:**\n\n${checkpoints.join("\n")}\n\nUse \`/restore <n>\` to restore one.`
-                : "No ORI checkpoints found. Create one with `/checkpoint <name>`.",
+                : "No checkpoints found. Create one with `/checkpoint <name>`.",
             });
           }
 
           if (op === "restore") {
             const { index } = localCommand.checkpointOp as { op: "restore"; index: number };
-            const out = await run("git stash list");
-            const oriStashes = out.split("\n").filter(l => l.includes("ori:"));
-            if (index >= oriStashes.length) {
+            const out = await runGit(["git", "stash", "list"]);
+            const harnessStashes = out.split("\n").filter(isHarnessCheckpointLine);
+            if (index >= harnessStashes.length) {
               dispatch({ type: "assistant/appended", message: `No checkpoint at index ${index}. Run \`/checkpoints\` to list.` });
             } else {
-              const stashRef = oriStashes[index].match(/^(stash@\{\d+\})/)?.[1];
+              const stashLine = harnessStashes[index] ?? "";
+              const stashRef = stashLine.match(/^(stash@\{\d+\})/)?.[1];
               if (stashRef) {
-                await run(`git stash apply ${stashRef}`);
-                const nameMatch = oriStashes[index].match(/ori:\s*(.+)$/);
+                await runGit(["git", "stash", "apply", stashRef]);
+                const nameMatch = stashLine.match(/(?:harness|ori):\s*(.+)$/);
                 dispatch({ type: "assistant/appended", message: `Restored checkpoint: **${nameMatch?.[1] ?? stashRef}**` });
               }
             }
@@ -1142,7 +944,6 @@ export function OriApp({
       previousObjective: state.currentObjective,
       transcript: state.conversation,
       workspace,
-      activeBundles,
       activeAgentId: state.activeAgentId,
     });
 
@@ -1178,13 +979,6 @@ export function OriApp({
           summary: toolExecution.summary,
           ok: toolExecution.ok,
         });
-
-        if (toolExecution.draft) {
-          dispatch({
-            type: "draft/staged",
-            draft: toolExecution.draft,
-          });
-        }
 
         if (toolExecution.patch && toolExecution.changedFile) {
           dispatch({
@@ -1226,19 +1020,14 @@ export function OriApp({
       } else if (executedTurn.toolExecutions.length > 0) {
         dispatch({
           type: "assistant/appended",
-          message: "Turn completed after local tool work, but ORI returned no final assistant text.",
+          message: "Turn completed after local tool work, but the model returned no final assistant text.",
         });
       } else {
         dispatch({
           type: "assistant/appended",
-          message: "ORI returned no assistant text for this turn.",
+          message: "The model returned no assistant text for this turn.",
         });
       }
-
-      dispatch({
-        type: "scratchpad/updated",
-        scratchpad: response.meta?.scratchpad ?? null,
-      });
 
       // When streaming fired, streamingText already has the content — pass undefined
       // so turn/completed falls back to state.streamingText in the reducer.
@@ -1314,7 +1103,7 @@ export function OriApp({
   useEffect(() => {
     const trimmed = query.trim();
 
-    if (composerMode === "edit_intent" || composerMode === "resume_picker" || composerMode === "bundle_picker" || composerMode === "agent_picker" || composerMode === "create_agent" || composerMode === "shortcut_picker") {
+    if (composerMode === "edit_intent" || composerMode === "resume_picker" || composerMode === "agent_picker" || composerMode === "create_agent" || composerMode === "shortcut_picker") {
       return;
     }
 
@@ -1345,6 +1134,7 @@ export function OriApp({
     <Box flexDirection="column" width={stdoutWidth} height={stdoutHeight} overflowY="hidden">
       {state.transcript.length > 0 && (
         <Header
+          lane={getRuntimeLaneLabel(lane)}
           mode={mode}
           profile={state.resolvedProfile}
           status={state.status}
@@ -1355,17 +1145,15 @@ export function OriApp({
       )}
       <Box flexGrow={1} flexDirection="column">
         <Transcript
-          activeCapability={state.activeCapability}
+          lane={getRuntimeLaneLabel(lane)}
           entries={visibleTranscriptEntries}
           hasMoreAbove={transcriptStartIndex > 0}
           hasMoreBelow={transcriptEndIndex < totalTranscriptEntries}
           pendingApproval={state.pendingApproval}
-          pendingDraft={state.pendingDraft}
           pendingAgentDraft={pendingAgentDraft}
           activePlan={state.activePlan}
           scrollOffset={clampedScrollOffset}
           streamingText={state.streamingText}
-          thinking={thinkingCollapsed ? null : (state.thoughts[0]?.summary ?? null)}
           terminalWidth={stdoutWidth}
         />
       </Box>
@@ -1385,12 +1173,6 @@ export function OriApp({
         sessions={resumeSessions}
         selectedIndex={selectedResumeIndex}
         visible={resumeDrawerVisible}
-      />
-      <BundleDrawer
-        bundles={availableBundles}
-        activeBundleIds={state.activeBundleIds}
-        selectedIndex={selectedBundleIndex}
-        visible={bundleDrawerVisible}
       />
       <AgentDrawer
         agents={availableAgents}
@@ -1418,7 +1200,6 @@ export function OriApp({
         visible={mentionPickerVisible}
       />
       <Composer
-        activeCapability={state.activeCapability}
         disabled={composerMode === "edit_intent"}
         initialQuery={initialQuery}
         pendingApprovalKind={
@@ -1435,4 +1216,8 @@ export function OriApp({
       />
     </Box>
   );
+}
+
+function isHarnessCheckpointLine(line: string): boolean {
+  return /\b(?:harness|ori):\s*/.test(line);
 }

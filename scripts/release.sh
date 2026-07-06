@@ -16,15 +16,21 @@ FORMULA_PATH="Formula/ori-code.rb"
 
 echo "==> Releasing $TAG"
 
+if [[ -n "$(git status --porcelain)" ]]; then
+  echo "Release aborted: working tree is dirty."
+  echo "Commit or stash changes before running the release script."
+  exit 1
+fi
+
 # 1. Bump version in package.json
 sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" package.json
 
 # 2. Bump version string in CLI
-sed -i "s/ori-code [0-9]*\.[0-9]*\.[0-9]*/ori-code $VERSION/" src/cli/args.ts
+sed -i "s/code-harness [0-9]*\.[0-9]*\.[0-9]*/code-harness $VERSION/" src/cli/args.ts
 
 # 3. Commit, tag, push
 git add package.json src/cli/args.ts
-git commit -m "Bump version to $VERSION"
+git commit -m "code-harness $TAG"
 git tag "$TAG"
 git push origin main
 git push origin "$TAG"

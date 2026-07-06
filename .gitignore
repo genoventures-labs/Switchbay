@@ -5,11 +5,15 @@ node_modules/
 .env
 .env.*
 
-# ORI session scratchpad
+# harness session scratchpad
+.harness/
 .ori/
+.memory/
+.oricli/
 
 # build output
 dist/
+bin/code-harness-native
 bin/ori-code-native
 
 # system & editor

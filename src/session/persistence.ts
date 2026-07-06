@@ -6,15 +6,24 @@ import {
   type SessionState,
 } from "../agent/turn-state";
 
-const SESSION_DIR = path.join(
-  Bun.env.HOME ?? process.env.HOME ?? process.cwd(),
-  ".ori",
-  "sessions",
-);
-const SESSION_PATH = path.join(SESSION_DIR, "session.json");
+function getSessionPaths() {
+  const sessionDir = Bun.env.HARNESS_SESSION_DIR ??
+    Bun.env.ORI_SESSION_DIR ??
+    path.join(
+      Bun.env.HOME ?? process.env.HOME ?? process.cwd(),
+      ".code-harness",
+      "sessions",
+    );
+
+  return {
+    sessionDir,
+    sessionPath: path.join(sessionDir, "session.json"),
+  };
+}
 
 export async function loadPersistedSession(id?: string): Promise<SessionState | null> {
-  const targetPath = id ? path.join(SESSION_DIR, `session-${id}.json`) : SESSION_PATH;
+  const { sessionDir, sessionPath } = getSessionPaths();
+  const targetPath = id ? path.join(sessionDir, `session-${id}.json`) : sessionPath;
   const file = Bun.file(targetPath);
 
   if (!(await file.exists())) {
@@ -33,21 +42,21 @@ export async function loadPersistedSession(id?: string): Promise<SessionState | 
 
 export async function savePersistedSession(state: SessionState): Promise<void> {
   try {
-    await fs.mkdir(SESSION_DIR, { recursive: true });
+    const { sessionDir, sessionPath } = getSessionPaths();
+    await fs.mkdir(sessionDir, { recursive: true });
     
     const serializableState: SessionState = {
       ...state,
-      scratchpad: null,
       updatedAt: Date.now(),
     };
     
     const content = JSON.stringify(serializableState, null, 2);
     
     // Always update the main session.json for quick --resume
-    await Bun.write(SESSION_PATH, content);
+    await Bun.write(sessionPath, content);
     
     // Also save a unique record
-    const uniquePath = path.join(SESSION_DIR, `session-${state.sessionId}.json`);
+    const uniquePath = path.join(sessionDir, `session-${state.sessionId}.json`);
     await Bun.write(uniquePath, content);
   } catch (e) {
     // Silent fail on save errors
@@ -58,12 +67,13 @@ export async function listSessions(): Promise<{ id: string; title: string; updat
   const sessions: { id: string; title: string; updatedAt: number }[] = [];
   
   try {
-    const entries = await fs.readdir(SESSION_DIR);
+    const { sessionDir } = getSessionPaths();
+    const entries = await fs.readdir(sessionDir);
     const sessionFiles = entries.filter(e => e.startsWith("session-") && e.endsWith(".json"));
     
     for (const fname of sessionFiles) {
       try {
-        const p = path.join(SESSION_DIR, fname);
+        const p = path.join(sessionDir, fname);
         const file = Bun.file(p);
         const text = await file.text();
         const data = JSON.parse(text);
@@ -103,11 +113,12 @@ export async function purgeSessions(olderThanMs: number): Promise<number> {
   const now = Date.now();
   
   try {
-    const entries = await fs.readdir(SESSION_DIR);
+    const { sessionDir } = getSessionPaths();
+    const entries = await fs.readdir(sessionDir);
     for (const fname of entries) {
       if (!fname.endsWith(".json")) continue;
       
-      const p = path.join(SESSION_DIR, fname);
+      const p = path.join(sessionDir, fname);
       try {
         const stats = await fs.stat(p);
         if (now - stats.mtimeMs > olderThanMs) {
@@ -137,7 +148,7 @@ function normalizeSessionState(parsed: Partial<SessionState>): SessionState {
     (event) => event.kind !== "error",
   );
 
-  return {
+  const normalized = {
     ...fallback,
     ...parsed,
     sessionId: parsed.sessionId ?? fallback.sessionId,
@@ -150,11 +161,12 @@ function normalizeSessionState(parsed: Partial<SessionState>): SessionState {
       parsed.thoughts && parsed.thoughts.length > 0
         ? parsed.thoughts
         : [createThoughtFrame("goal", "Restored session state.")],
-    pendingDraft: parsed.pendingDraft ?? null,
-    pendingPlanDraft: parsed.pendingPlanDraft ?? null,
     pendingApproval: parsed.pendingApproval ?? null,
-    scratchpad: null,
     updatedAt: parsed.updatedAt ?? Date.now(),
-    activeBundleIds: parsed.activeBundleIds ?? [],
   };
+
+  delete (normalized as Record<string, unknown>).scratchpad;
+  delete (normalized as Record<string, unknown>).activeBundleIds;
+
+  return normalized;
 }

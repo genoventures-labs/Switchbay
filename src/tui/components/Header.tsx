@@ -2,11 +2,13 @@ import React from "react";
 import { Box, Text } from "ink";
 import path from "node:path";
 import { existsSync, readFileSync as readFileSyncNode } from "node:fs";
+import { existingProjectContextPath, existingWorkspaceDataPath } from "../../config/paths";
 import type { SessionStatus } from "../../agent/turn-state";
 import type { WorkspaceSnapshot } from "../../session/workspace";
 import type { Agent } from "../../agent/agents";
 
 type HeaderProps = {
+  lane?: string;
   mode: string;
   profile: string;
   status: SessionStatus;
@@ -15,7 +17,7 @@ type HeaderProps = {
   availableAgents?: Agent[];
 };
 
-export function Header({ mode, status, workspace, activeAgentId, availableAgents = [] }: HeaderProps) {
+export function Header({ lane = "Cloud", mode, status, workspace, activeAgentId, availableAgents = [] }: HeaderProps) {
   const cwd = workspace?.cwd ?? process.cwd();
   const project = path.basename(cwd);
   const branch = workspace?.branch ?? null;
@@ -23,11 +25,11 @@ export function Header({ mode, status, workspace, activeAgentId, availableAgents
   const isThinking = status === "THINKING";
   const statusLabel = status === "DISCONNECTED" ? "ready" : status.toLowerCase();
   const branchColor = dirty > 0 ? "yellow" : "#00FF7F";
-  const hasOriMd = existsSync(path.join(cwd, "ORI.md"));
-  const hasMemory = existsSync(path.join(cwd, ".ori", "memory.md"));
+  const hasProjectContext = Boolean(existingProjectContextPath(cwd));
+  const hasMemory = existsSync(existingWorkspaceDataPath(cwd, "memory.md"));
   const pinCount = (() => {
     try {
-      const p = path.join(cwd, ".ori", "pins.json");
+      const p = existingWorkspaceDataPath(cwd, "pins.json");
       if (!existsSync(p)) return 0;
       return (JSON.parse(readFileSyncNode(p, "utf-8")) as string[]).length;
     } catch { return 0; }
@@ -46,7 +48,7 @@ export function Header({ mode, status, workspace, activeAgentId, availableAgents
       <Box justifyContent="space-between">
         <Box flexDirection="column">
           <Box gap={1}>
-            <Text color="#E57373" bold>ORI</Text>
+            <Text color="#E57373" bold>Harness</Text>
             <Text color="gray">in</Text>
             <Text color="white">{project}</Text>
             {branch ? (
@@ -56,10 +58,10 @@ export function Header({ mode, status, workspace, activeAgentId, availableAgents
                 {dirty > 0 ? <Text color="yellow" dimColor>{dirty} dirty</Text> : null}
               </>
             ) : null}
-            {hasOriMd ? (
+            {hasProjectContext ? (
               <>
                 <Text color="#707070">·</Text>
-                <Text color="#00FF7F" dimColor>ORI.md</Text>
+                <Text color="#00FF7F" dimColor>context</Text>
               </>
             ) : null}
             {hasMemory ? (
@@ -84,6 +86,7 @@ export function Header({ mode, status, workspace, activeAgentId, availableAgents
           <Text color="#707070">{cwd}</Text>
         </Box>
         <Box flexDirection="column" alignItems="flex-end">
+          <Text color="#707070">{lane}</Text>
           <Text color="#707070">{mode}</Text>
           <Text color={isThinking ? "#E57373" : "#00FF7F"} bold>
             {isThinking ? "thinking" : statusLabel}

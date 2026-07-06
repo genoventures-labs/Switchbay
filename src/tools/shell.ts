@@ -33,3 +33,10 @@ export async function runCommand(
     ok: exitCode === 0,
   };
 }
+
+export async function runShellString(
+  command: string,
+  cwd = process.cwd(),
+): Promise<ShellResult> {
+  return runCommand(["bash", "-lc", command], cwd);
+}

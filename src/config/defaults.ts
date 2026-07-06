@@ -1,12 +1,15 @@
 export const DEFAULTS = {
-  // Use the explicit fast default here so ORI Code doesn't depend on a
-  // server-side alias that may lag behind Oracle routing changes.
-  model: "gpt-5-mini",
+  openAiModel: "gpt-5-mini",
+  anthropicModel: "claude-sonnet-4-5",
+  lmStudioModel: "qwen2.5-7b-instruct",
   surface: "dev",
   profile: "ori_code",
   mode: "build",
-  apiBase: "https://glm.thynaptic.com/v1",
-  wsBase: "wss://glm.thynaptic.com/v1/stream",
+  lane: "cloud",
+  openAiBase: "https://api.openai.com/v1",
+  anthropicBase: "https://api.anthropic.com/v1",
+  cloudProvider: "auto",
+  lmStudioBase: "http://127.0.0.1:1234/v1",
 } as const;
 
 export type DefaultSurface = typeof DEFAULTS.surface;

@@ -28,7 +28,7 @@ export type ToolCall = {
 };
 
 export type ChatCompletionRequest = {
-  model: string;
+  model?: string;
   messages: OriMessage[];
   profile?: string;
   stream?: boolean;
@@ -50,36 +50,8 @@ export type ChatCompletionResponse = {
   meta?: {
     provider?: string;
     sass_factor?: number;
-    scratchpad?: ScratchpadState;
   };
 };
-
-export type ScratchpadStatus = "active" | "stale";
-
-export type ScratchpadState = {
-  status: ScratchpadStatus;
-  task?: string;
-  surface?: string;
-  profile?: string;
-};
-
-export type FeedbackRequest = {
-  prompt: string;
-  response: string;
-  sass?: number;
-  roast?: string;
-  lesson?: string;
-};
-
-export type OriCapabilityName =
-  | "memory_lookup"
-  | "plan_review"
-  | "repo_research"
-  | "web_search"
-  | "web_fetch"
-  | "research"
-  | "repo_report"
-  | "ask_ori";
 
 export type RuntimeEnvironmentHeaders = {
   os: string;
@@ -93,64 +65,4 @@ export type WorkspaceFocus = {
   repoRoot?: string | null;
   branch?: string | null;
   project?: string;
-};
-
-export type CapabilityRequest = {
-  input: Record<string, unknown>;
-  sessionId?: string;
-  surface: string;
-  workspace?: WorkspaceFocus;
-};
-
-export type CapabilityResponse = {
-  ok?: boolean;
-  result?: unknown;
-  output?: unknown;
-  data?: unknown;
-};
-
-export type SessionSummary = {
-  id: string;
-  created?: string;
-  updated?: string;
-  title?: string;
-};
-
-export type SessionMessage = {
-  id?: string;
-  role?: string;
-  content?: string;
-  created?: string;
-};
-
-export type RuntimeHealth = {
-  status?: string;
-  system?: string;
-};
-
-export type ModelInfo = {
-  id?: string;
-  object?: string;
-  [key: string]: unknown;
-};
-
-export type ToolInfo = {
-  name?: string;
-  description?: string;
-  [key: string]: unknown;
-};
-
-export type BrowserHealth = {
-  status?: string;
-  healthy?: boolean;
-  [key: string]: unknown;
-};
-
-export type DaemonHealth = Record<string, unknown>;
-
-export type SpaceInfo = {
-  id?: string;
-  name?: string;
-  description?: string;
-  [key: string]: unknown;
 };

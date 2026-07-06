@@ -1,17 +1,19 @@
 {
   "name": "ori-code",
   "version": "0.9.45",
-  "description": "ORI Code — terminal coding agent powered by ORI",
-  "module": "index.ts",
+  "description": "Terminal coding agent harness with cloud and local model lanes",
+  "module": "index.tsx",
   "type": "module",
   "private": false,
   "bin": {
+    "code-harness": "./bin/ori-code",
     "ori-code": "./bin/ori-code",
     "ori": "./bin/ori-code"
   },
   "scripts": {
-    "build": "bun build index.tsx --compile --outfile bin/ori-code-native",
-    "postinstall": "node scripts/postinstall.mjs"
+    "build": "bun build index.tsx --compile --outfile bin/code-harness-native",
+    "test": "bun test",
+    "postinstall": "bun scripts/postinstall.mjs"
   },
   "devDependencies": {
     "@types/bun": "latest",
@@ -21,20 +23,15 @@
     "typescript": "^5"
   },
   "dependencies": {
-    "@types/ws": "^8.18.1",
     "ink": "^7.0.0",
     "ink-text-input": "^6.0.0",
-    "react": "^19.2.5",
-    "react-devtools-core": "^7.0.1",
-    "react-reconciler": "^0.33.0",
-    "ws": "^8.20.0",
-    "yoga-layout-prebuilt": "^1.10.0"
+    "react": "^19.2.5"
   },
   "repository": {
     "type": "git",
     "url": "https://github.com/cassianwolfe/ori-code"
   },
-  "keywords": ["ori", "ai", "coding-agent", "terminal", "cli"],
+  "keywords": ["ai", "coding-agent", "terminal", "cli", "developer-tools"],
   "engines": {
     "bun": ">=1.0.0"
   }

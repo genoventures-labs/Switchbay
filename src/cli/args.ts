@@ -51,7 +51,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
       purge = args[++i] ?? null;
     } else if (arg === "update") {
       console.log("Run this to update the coding harness:\n");
-      console.log("  bun install -g github:cassianwolfe/ori-code#main\n");
+      console.log("  bun install -g github:genoventures-labs/ori-code#main\n");
       process.exit(0);
     } else if (arg === "version" || arg === "--version" || arg === "-v") {
       console.log("code-harness 0.9.45");

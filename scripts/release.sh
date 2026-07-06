@@ -10,8 +10,8 @@ if [[ -z "$VERSION" ]]; then
 fi
 
 TAG="v$VERSION"
-REPO="cassianwolfe/ori-code"
-TAP_REPO="cassianwolfe/homebrew-tap"
+REPO="genoventures-labs/ori-code"
+TAP_REPO="genoventures-labs/homebrew-tap"
 FORMULA_PATH="Formula/ori-code.rb"
 
 echo "==> Releasing $TAG"

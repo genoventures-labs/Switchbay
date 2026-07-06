@@ -29,7 +29,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/cassianwolfe/ori-code"
+    "url": "https://github.com/genoventures-labs/ori-code"
   },
   "keywords": ["ai", "coding-agent", "terminal", "cli", "developer-tools"],
   "engines": {

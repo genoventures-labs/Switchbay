@@ -72,7 +72,7 @@ sed -i \
   -e "s|homepage \".*\"|homepage \"https://github.com/$REPO\"|" \
   -e "s|url \".*\"|url \"$TARBALL_URL\"|" \
   -e "s|sha256 \".*\"|sha256 \"$SHA256\"|" \
-  -e 's|desc ".*"|desc "Terminal-first AI coding workbench with cloud and local model lanes"|' \
+  -e 's|desc ".*"|desc "Terminal-first AI coding workbench with cloud, local, and MCP lanes"|' \
   "$TMP_TAP/$FORMULA_PATH"
 
 if ! grep -q 'bin/"switchbay"' "$TMP_TAP/$FORMULA_PATH"; then
@@ -84,6 +84,9 @@ perl -0pi -e 's|exec bun "#\{prefix\}/index\.tsx"$|exec bun "#{prefix}/index.tsx
 perl -0pi -e 's|export SWITCHBAY_LMSTUDIO_BASE=http://127\.0\.0\.1:1234/v1|export SWITCHBAY_LMSTUDIO_BASE=http://YOUR-LM-STUDIO-HOST:1234/v1|g' "$TMP_TAP/$FORMULA_PATH"
 if ! grep -q 'SWITCHBAY_LMSTUDIO_API_KEY' "$TMP_TAP/$FORMULA_PATH"; then
   perl -0pi -e 's|(export SWITCHBAY_LMSTUDIO_BASE=http://YOUR-LM-STUDIO-HOST:1234/v1\n)|$1        export SWITCHBAY_LMSTUDIO_API_KEY=...\n|g' "$TMP_TAP/$FORMULA_PATH"
+fi
+if ! grep -q 'SWITCHBAY_LANE=local-mcp' "$TMP_TAP/$FORMULA_PATH"; then
+  perl -0pi -e 's|(export SWITCHBAY_LMSTUDIO_API_KEY=\.\.\.\n)|$1        # Optional MCP lane:\n        # export SWITCHBAY_LANE=local-mcp\n        # switchbay mcp init\n|g' "$TMP_TAP/$FORMULA_PATH"
 fi
 
 cd "$TMP_TAP"

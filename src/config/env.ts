@@ -35,11 +35,7 @@ export function getRuntimeLane(): RuntimeLane {
 export function getDefaultModel(): string {
   const lane = getRuntimeLane();
   if (lane === "local" || lane === "local-mcp") {
-    return (
-      readEnv("SWITCHBAY_LMSTUDIO_MODEL") ??
-      readEnv("LMSTUDIO_DEFAULT_MODEL") ??
-      DEFAULTS.lmStudioModel
-    );
+    return getLmStudioModel();
   }
 
   const provider = getCloudProvider();
@@ -47,6 +43,14 @@ export function getDefaultModel(): string {
     return getAnthropicModel();
   }
   return getOpenAiModel();
+}
+
+export function getLmStudioModel(): string {
+  return (
+    readEnv("SWITCHBAY_LMSTUDIO_MODEL") ??
+    readEnv("LMSTUDIO_DEFAULT_MODEL") ??
+    DEFAULTS.lmStudioModel
+  );
 }
 
 export function getCloudProvider(): CloudProvider {

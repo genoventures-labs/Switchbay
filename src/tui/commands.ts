@@ -51,7 +51,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   {
     category: "runtime",
     command: "/lane",
-    description: "Toggle runtime lane between Cloud and LM Studio.",
+    description: "Cycle runtime lane between Cloud, LM Studio, and LM Studio MCP.",
     example: "/lane",
   },
   {

@@ -3,7 +3,7 @@
 [![Version](https://img.shields.io/badge/version-0.9.68-111827)](#)
 [![Runtime](https://img.shields.io/badge/runtime-Bun-000000?logo=bun)](https://bun.sh)
 [![UI](https://img.shields.io/badge/UI-React%20%2B%20Ink-2563eb)](https://github.com/vadimdemedes/ink)
-[![Model lanes](https://img.shields.io/badge/lanes-cloud%20%7C%20local-16a34a)](#model-lanes)
+[![Model lanes](https://img.shields.io/badge/lanes-cloud%20%7C%20local%20%7C%20MCP-16a34a)](#model-lanes)
 [![Engine Bay](https://img.shields.io/badge/Engine%20Bay-GitHub%20sync-7c3aed)](#engine-bay)
 [![Toolbox](https://img.shields.io/badge/Toolbox-agent%20skills-0f766e)](#toolbox)
 [![License](https://img.shields.io/badge/license-MIT-0f766e)](#license)
@@ -27,6 +27,7 @@ Switchbay gives you one fast shell for everyday agentic development:
 - Move between specialist agents for backend, UI, security, debugging, architecture, docs, and review.
 - Resume sessions, pin context, save local memories, and keep work visible in the terminal.
 - Route between cloud models and local LM Studio models without changing the workflow.
+- Use LM Studio's native MCP lane for local models that can call MCP servers configured in LM Studio.
 - Add swappable engines from local manifests or the GitHub-backed Engine Bay.
 - Give agents reusable Toolbox skills for review, debugging, planning, testing, API checks, UI polish, and releases.
 
@@ -38,6 +39,7 @@ Most AI coding tools make one model, hosted service, or private backend feel lik
 
 - Use cloud models for deeper reasoning, code review, architecture, and complex implementation.
 - Use local LM Studio models for smaller utility work, offline-friendly tasks, private machine-close work, and quick summaries.
+- Use the LM Studio MCP lane when local models should call MCP servers that are already configured in LM Studio.
 - Keep approvals practical: broad-impact, destructive, privileged, publishing, refunding, and deploy-style actions still gate.
 - Keep the workbench useful even if a provider, hosted API, VPS, or local model setup changes.
 - Keep extensions portable through Engine Bay instead of baking every workflow into the core app.
@@ -155,6 +157,8 @@ switchbay update
 switchbay engines sync
 switchbay toolbox list
 switchbay memory refresh
+switchbay mcp status
+switchbay mcp init
 ```
 
 ## Slash Commands
@@ -168,6 +172,8 @@ Inside the TUI:
 /new               Start a fresh session
 /compact           Compress the transcript into context
 /clear             Clear the visible conversation
+/lane              Cycle Cloud, LM Studio, and LM Studio MCP lanes
+/model             Pick a cloud preset or LM Studio model
 /init              Generate SWITCHBAY.md for this repo
 /pin               Pin a file into future turn context
 /pins              List pinned files

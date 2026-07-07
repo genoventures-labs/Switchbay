@@ -11,6 +11,7 @@ import { buildTurn, executeTurn, extractAssistantText, refreshWorkspace, synthes
 import { describeEngineBay, loadEngineBayInventory, syncEngineBayRepo } from "./src/engines/hub";
 import { describeToolbox, loadToolboxInventory, readToolboxSkill } from "./src/toolbox/hub";
 import { describeMemory, listMemoryNotes, readMemoryFacts, refreshMemory } from "./src/memory/store";
+import { createDefaultLmStudioMcpConfig, describeLmStudioMcpConfig, loadLmStudioMcpConfig, saveLmStudioMcpConfig } from "./src/runtime/lmstudio-mcp-config";
 import { ANSI_COLORS as CLR } from "./src/tui/theme";
 
 // Ensure config is initialized on first boot
@@ -46,12 +47,14 @@ Usage:
   switchbay memory refresh           Refresh operational memory
   switchbay memory list              List memory notes
   switchbay memory facts             List structured memory facts
+  switchbay mcp                      Show LM Studio MCP lane config
+  switchbay mcp init                 Create .switchbay/lmstudio.mcp.json
 
 Options:
   -s, --surface <type>   Surface context (default: dev)
   -p, --profile <name>   Working style (default: switchbay)
   -m, --mode <name>      Agent mode: build | design | debug (default: build)
-  --lane <name>          Runtime lane: cloud | local | lmstudio (default: SWITCHBAY_LANE or cloud)
+  --lane <name>          Runtime lane: cloud | local | mcp (default: SWITCHBAY_LANE or cloud)
   --hop <name>           Travel to a whitelisted location before launching
   --resume <val>         Resume last saved session, or specific ID/Index (0=latest)
   --new                  Force a fresh session even if a saved one exists
@@ -72,6 +75,11 @@ Options:
 
   if (options.subcommand === "memory") {
     await runMemoryCommand(options.memoryAction);
+    return;
+  }
+
+  if (options.subcommand === "mcp") {
+    await runMcpCommand(options.mcpAction);
     return;
   }
 
@@ -226,6 +234,24 @@ async function runMemoryCommand(action: "status" | "refresh" | "list" | "facts")
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`switchbay memory: ${msg}`);
+    process.exit(1);
+  }
+}
+
+async function runMcpCommand(action: "status" | "init") {
+  try {
+    const cwd = process.cwd();
+    if (action === "init") {
+      const path = await saveLmStudioMcpConfig(createDefaultLmStudioMcpConfig(), cwd);
+      console.log(`Created LM Studio MCP config at ${path}`);
+      console.log("Edit it to match the MCP servers installed in LM Studio, then run `switchbay --lane mcp` or `/lane mcp`.");
+      return;
+    }
+
+    console.log(describeLmStudioMcpConfig(await loadLmStudioMcpConfig(cwd)));
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`switchbay mcp: ${msg}`);
     process.exit(1);
   }
 }

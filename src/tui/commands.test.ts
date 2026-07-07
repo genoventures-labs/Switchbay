@@ -5,6 +5,10 @@ test("command palette lists only implemented command families", () => {
   const commands = SLASH_COMMANDS.map((item) => item.command);
 
   expect(commands).toContain("/agent");
+  expect(commands).toContain("/lane");
+  expect(commands).toContain("/lane mcp");
+  expect(commands).toContain("/model");
+  expect(commands).toContain("/mcp");
   expect(commands).toContain("/review");
   expect(commands).toContain("/checkpoint");
   expect(commands).toContain("/edit");
@@ -31,6 +35,8 @@ test("command palette searches commands, examples, descriptions, and categories"
   expect(getCommandMatches("/stash").map((item) => item.command)).toContain("/checkpoint");
   expect(getCommandMatches("/session").map((item) => item.command)).toContain("/sessions");
   expect(getCommandMatches("/memory").map((item) => item.command)).toContain("/memory");
+  expect(getCommandMatches("/mcp").map((item) => item.command)).toContain("/mcp");
+  expect(getCommandMatches("/mcp").map((item) => item.command)).toContain("/create-mcp");
   expect(getCommandMatches("/engine").map((item) => item.command)).toContain("/engines");
   expect(getCommandMatches("/engine").map((item) => item.command)).toContain("/create-engine");
   expect(getCommandMatches("/hub").map((item) => item.command)).toContain("/engine-bay");

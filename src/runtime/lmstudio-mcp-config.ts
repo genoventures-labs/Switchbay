@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
-import { getDefaultModel, getLmStudioNativeBase } from "../config/env";
+import { getLmStudioModel, getLmStudioNativeBase } from "../config/env";
 import { workspaceDataPath } from "../config/paths";
 
 export const LMSTUDIO_MCP_CONFIG_FILE = "lmstudio.mcp.json";
@@ -65,7 +65,7 @@ export function createDefaultLmStudioMcpConfig(): LmStudioMcpConfig {
   return {
     enabled: true,
     nativeBase: getLmStudioNativeBase(),
-    model: getDefaultModel(),
+    model: getLmStudioModel(),
     integrations: ["mcp/playwright"],
     mcpServers: {
       playwright: {
@@ -96,7 +96,7 @@ export function describeLmStudioMcpConfig(status: LmStudioMcpConfigStatus): stri
     "",
     `Config: \`${status.path}\`${status.exists ? "" : " (not created yet)"}`,
     `Native API: \`${status.config.nativeBase ?? getLmStudioNativeBase()}\``,
-    `Model: \`${status.config.model ?? getDefaultModel()}\``,
+    `Model: \`${status.config.model ?? getLmStudioModel()}\``,
     `Enabled: \`${status.config.enabled === false ? "false" : "true"}\``,
     "",
     "Integrations:",

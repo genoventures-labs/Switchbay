@@ -1,5 +1,5 @@
 export const DEFAULTS = {
-  openAiModel: "gpt-5-mini",
+  openAiModel: "gpt-5.5",
   anthropicModel: "claude-sonnet-4-5",
   lmStudioModel: "qwen2.5-7b-instruct",
   surface: "dev",

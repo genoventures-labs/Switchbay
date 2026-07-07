@@ -1,8 +1,9 @@
 import { afterEach, expect, test } from "bun:test";
-import { listLmStudioModels } from "./models";
+import { getCloudModelPresets, listLmStudioModels } from "./models";
 
 const savedEnv = {
   SWITCHBAY_LANE: Bun.env.SWITCHBAY_LANE,
+  SWITCHBAY_OPENAI_MODEL: Bun.env.SWITCHBAY_OPENAI_MODEL,
   SWITCHBAY_LMSTUDIO_BASE: Bun.env.SWITCHBAY_LMSTUDIO_BASE,
   SWITCHBAY_LMSTUDIO_API_KEY: Bun.env.SWITCHBAY_LMSTUDIO_API_KEY,
   SWITCHBAY_LMSTUDIO_MODEL: Bun.env.SWITCHBAY_LMSTUDIO_MODEL,
@@ -16,6 +17,20 @@ afterEach(() => {
       Bun.env[key] = value;
     }
   }
+});
+
+test("cloud presets include the current OpenAI main, mini, and nano models", () => {
+  delete Bun.env.SWITCHBAY_OPENAI_MODEL;
+
+  const openAiPresets = getCloudModelPresets()
+    .filter((model) => model.provider === "openai")
+    .map((model) => model.id);
+
+  expect(openAiPresets.slice(0, 3)).toEqual([
+    "gpt-5.5",
+    "gpt-5.4-mini",
+    "gpt-5.4-nano",
+  ]);
 });
 
 test("lists LM Studio models from the configured host", async () => {

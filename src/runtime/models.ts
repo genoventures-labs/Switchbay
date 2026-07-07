@@ -24,9 +24,9 @@ export type RuntimeModelList = {
 };
 
 const OPENAI_PRESETS: RuntimeModelOption[] = [
-  { id: "gpt-5", label: "GPT-5", lane: "cloud", provider: "openai", source: "preset" },
-  { id: "gpt-5-mini", label: "GPT-5 mini", lane: "cloud", provider: "openai", source: "preset" },
-  { id: "gpt-5-nano", label: "GPT-5 nano", lane: "cloud", provider: "openai", source: "preset" },
+  { id: "gpt-5.5", label: "GPT-5.5", lane: "cloud", provider: "openai", source: "preset" },
+  { id: "gpt-5.4-mini", label: "GPT-5.4 mini", lane: "cloud", provider: "openai", source: "preset" },
+  { id: "gpt-5.4-nano", label: "GPT-5.4 nano", lane: "cloud", provider: "openai", source: "preset" },
 ];
 
 const ANTHROPIC_PRESETS: RuntimeModelOption[] = [

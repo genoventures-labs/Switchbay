@@ -211,6 +211,12 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     example: "/creative",
   },
   {
+    category: "engines",
+    command: "/create-engine",
+    description: "Open the guided custom-engine manifest wizard.",
+    example: "/create-engine",
+  },
+  {
     category: "toolbox",
     command: "/toolbox",
     description: "Show or sync agent skills and reusable working methods.",

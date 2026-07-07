@@ -33,7 +33,8 @@ import { ResumeDrawer } from "./components/ResumeDrawer";
 import { AgentDrawer } from "./components/AgentDrawer";
 import { EngineDrawer, flattenEngineDrawerItems } from "./components/EngineDrawer";
 import { CreateAgentDrawer, type CreateAgentAnswers } from "./components/CreateAgentDrawer";
-import { generateAgentDefinition, generatePlan, type PendingAgentDraft } from "../agent/loop";
+import { CreateEngineDrawer, type CreateEngineAnswers } from "./components/CreateEngineDrawer";
+import { generateAgentDefinition, generateEngineManifest, generatePlan, type PendingAgentDraft, type PendingEngineDraft } from "../agent/loop";
 import type { ActivePlan } from "../agent/turn-state";
 import { ShortcutDrawer } from "./components/ShortcutDrawer";
 import { getCommandMatches } from "./commands";
@@ -56,7 +57,7 @@ export type SwitchbayAppProps = {
   resumeId?: string | null;
 };
 
-type ComposerMode = "default" | "edit_file_picker" | "edit_intent" | "resume_picker" | "agent_picker" | "engine_picker" | "model_picker" | "skill_picker" | "create_agent" | "shortcut_picker";
+type ComposerMode = "default" | "edit_file_picker" | "edit_intent" | "resume_picker" | "agent_picker" | "engine_picker" | "model_picker" | "skill_picker" | "create_agent" | "create_engine" | "shortcut_picker";
 
 export function SwitchbayApp({
   client,
@@ -122,6 +123,8 @@ export function SwitchbayApp({
   const [skillDrawerNotice, setSkillDrawerNotice] = useState<string | null>(null);
   const [createAgentGenerating, setCreateAgentGenerating] = useState(false);
   const [pendingAgentDraft, setPendingAgentDraft] = useState<PendingAgentDraft | null>(null);
+  const [createEngineGenerating, setCreateEngineGenerating] = useState(false);
+  const [pendingEngineDraft, setPendingEngineDraft] = useState<PendingEngineDraft | null>(null);
   const [turnThoughts, setTurnThoughts] = useState<string[]>([]);
   const [alwaysApprovedShellCommands, setAlwaysApprovedShellCommands] = useState<Set<string>>(() => new Set());
   const [rightRailCollapsed, setRightRailCollapsed] = useState(false);
@@ -190,7 +193,7 @@ export function SwitchbayApp({
   const composerRows = initialQuery ? 3 : state.status === "THINKING" ? Math.min(7, 4 + turnThoughts.length) : 4;
   const drawerRows =
     commandDrawerVisible || mentionPickerVisible || resumeDrawerVisible || shortcutDrawerVisible ||
-    editPickerState.visible || composerMode === "agent_picker" || engineDrawerVisible || modelDrawerVisible || skillDrawerVisible || composerMode === "create_agent"
+    editPickerState.visible || composerMode === "agent_picker" || engineDrawerVisible || modelDrawerVisible || skillDrawerVisible || composerMode === "create_agent" || composerMode === "create_engine"
       ? 10
       : composerMode === "edit_intent"
         ? 5
@@ -934,6 +937,35 @@ export function SwitchbayApp({
       }
     }
 
+    if (pendingEngineDraft) {
+      const intent = parseApprovalIntent(trimmedVal);
+      if (intent === "apply" || intent === "always") {
+        try {
+          const dir = pendingEngineDraft.savePath.replace(/\/[^/]+$/, "");
+          const { mkdir, writeFile: wf } = await import("node:fs/promises");
+          await mkdir(dir, { recursive: true });
+          await wf(pendingEngineDraft.savePath, pendingEngineDraft.content, "utf-8");
+          const registry = await loadEngineRegistry(state.workspace?.cwd ?? process.cwd());
+          setAvailableEngines(registry.engines);
+          dispatch({
+            type: "assistant/appended",
+            message: `✓ Engine **${pendingEngineDraft.name}** saved to \`${pendingEngineDraft.savePath}\`\n\nOpen it with \`/engines\` or call tools by asking Bay to use \`${pendingEngineDraft.id}\`.`,
+          });
+        } catch (e: any) {
+          dispatch({ type: "assistant/appended", message: `Save failed: ${e.message}` });
+        }
+        setPendingEngineDraft(null);
+        setQuerySync("");
+        return;
+      }
+      if (intent === "cancel") {
+        setPendingEngineDraft(null);
+        dispatch({ type: "assistant/appended", message: "Engine discarded." });
+        setQuerySync("");
+        return;
+      }
+    }
+
     // Shell command approval — handled before tryLocalCommand so we can exec async
     if (state.pendingShell && state.pendingApproval?.kind === "shell_command") {
       const intent = parseApprovalIntent(trimmedVal);
@@ -1143,6 +1175,12 @@ export function SwitchbayApp({
 
       if (localCommand.openCreateAgent) {
         setComposerMode("create_agent");
+        setQuerySync("");
+        return;
+      }
+
+      if (localCommand.openCreateEngine) {
+        setComposerMode("create_engine");
         setQuerySync("");
         return;
       }
@@ -1391,6 +1429,25 @@ export function SwitchbayApp({
     }
   }
 
+  async function handleCreateEngineComplete(answers: CreateEngineAnswers) {
+    setCreateEngineGenerating(true);
+    try {
+      const cloudClient = createRuntimeClient("cloud");
+      const draft = await generateEngineManifest(cloudClient, surface, answers);
+      setComposerMode("default");
+      setCreateEngineGenerating(false);
+      setPendingEngineDraft(draft);
+      dispatch({
+        type: "assistant/appended",
+        message: `Here's your **${draft.name}** engine manifest:\n\n\`\`\`json\n${draft.content}\`\`\`\n\nSave path: \`${draft.savePath}\`\n\n**y** to save · **n** to discard`,
+      });
+    } catch (e: any) {
+      setComposerMode("default");
+      setCreateEngineGenerating(false);
+      dispatch({ type: "assistant/appended", message: `Failed to generate engine: ${e.message}` });
+    }
+  }
+
   async function handleEditIntentSubmit(value: string) {
     if (!selectedEditFile || !value.trim()) {
       return;
@@ -1412,7 +1469,7 @@ export function SwitchbayApp({
   useEffect(() => {
     const trimmed = query.trim();
 
-    if (composerMode === "edit_intent" || composerMode === "resume_picker" || composerMode === "agent_picker" || composerMode === "model_picker" || composerMode === "skill_picker" || composerMode === "create_agent" || composerMode === "shortcut_picker") {
+    if (composerMode === "edit_intent" || composerMode === "resume_picker" || composerMode === "agent_picker" || composerMode === "model_picker" || composerMode === "skill_picker" || composerMode === "create_agent" || composerMode === "create_engine" || composerMode === "shortcut_picker") {
       return;
     }
 
@@ -1515,6 +1572,12 @@ export function SwitchbayApp({
           onComplete={handleCreateAgentComplete}
           onCancel={() => { setComposerMode("default"); setQuerySync(""); }}
         />
+        <CreateEngineDrawer
+          visible={composerMode === "create_engine" || createEngineGenerating}
+          generating={createEngineGenerating}
+          onComplete={handleCreateEngineComplete}
+          onCancel={() => { setComposerMode("default"); setQuerySync(""); }}
+        />
         <ShortcutDrawer
           visible={shortcutDrawerVisible}
         />
@@ -1529,9 +1592,10 @@ export function SwitchbayApp({
           visible={mentionPickerVisible}
         />
         <Composer
-          disabled={composerMode === "edit_intent"}
+          disabled={composerMode === "edit_intent" || composerMode === "create_engine"}
           initialQuery={initialQuery}
           pendingApprovalKind={
+            pendingEngineDraft ? "engine_draft" :
             pendingAgentDraft ? "agent_draft" :
             state.activePlan?.status === "pending_approval" ? "plan_approval" :
             state.activePlan?.status === "awaiting_continue" ? "plan_continue" :

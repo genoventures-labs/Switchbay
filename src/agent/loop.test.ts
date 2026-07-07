@@ -9,6 +9,7 @@ import {
   buildTurn,
   executeTurn,
   extractAssistantText,
+  generateEngineManifest,
   synthesizeAssistantFallback,
 } from "./loop";
 import { parseApprovalIntent, tryLocalCommand } from "./commands";
@@ -68,6 +69,44 @@ test("approval intent accepts short apply and cancel inputs", () => {
   expect(parseApprovalIntent("apply")).toBeNull();
   expect(parseApprovalIntent("/cancel")).toBeNull();
   expect(parseApprovalIntent("later")).toBeNull();
+});
+
+test("generateEngineManifest produces a workspace engine draft", async () => {
+  const { client } = createMockClient([
+    createResponse(`\`\`\`json
+{
+  "id": "file-helper",
+  "name": "File Helper",
+  "description": "Inspect and summarize files.",
+  "cwd": ".",
+  "tools": [
+    {
+      "name": "list_files",
+      "description": "List files under a path.",
+      "command": "find {{path}} -maxdepth 2 -type f",
+      "parameters": {
+        "path": { "type": "string", "description": "Directory path." }
+      },
+      "required": ["path"],
+      "approval": "auto"
+    }
+  ]
+}
+\`\`\``),
+  ]);
+
+  const draft = await generateEngineManifest(client, "dev", {
+    name: "File Helper",
+    purpose: "Help with file inspection.",
+    tools: "list files",
+    commands: "find {{path}} -maxdepth 2 -type f",
+    approval: "read-only",
+  });
+
+  expect(draft.id).toBe("file-helper");
+  expect(draft.name).toBe("File Helper");
+  expect(draft.savePath).toContain(".switchbay/engines/file-helper.engine.json");
+  expect(JSON.parse(draft.content).tools[0].name).toBe("list_files");
 });
 
 test("tool fallback returns the first useful tool body", () => {

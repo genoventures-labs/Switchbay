@@ -122,6 +122,8 @@ export function Composer({
             <Text><Text color={grayColor}>1</Text> no · <Text color={brandColor}>2</Text> yes · <Text color={brandColor}>3</Text> yes always</Text>
           ) : pendingApprovalKind === "agent_draft" ? (
             <Text><Text color={grayColor}>1</Text> discard · <Text color={brandColor}>2</Text> save</Text>
+          ) : pendingApprovalKind === "engine_draft" ? (
+            <Text><Text color={grayColor}>1</Text> discard · <Text color={brandColor}>2</Text> save engine</Text>
           ) : pendingApprovalKind === "plan_approval" ? (
             <Text><Text color={grayColor}>1</Text> cancel · <Text color={brandColor}>2</Text> execute plan</Text>
           ) : pendingApprovalKind === "plan_continue" ? (

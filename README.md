@@ -160,6 +160,7 @@ Inside the TUI:
 /create-agent      Create a custom local agent
 /edit              Open the file edit picker
 /engines           List registered engines
+/create-engine     Create a custom workspace engine manifest
 /engine-bay        Show or sync the GitHub engine hub
 /creative          Show the built-in Creative Engine lane
 /toolbox           Show or sync reusable agent skills

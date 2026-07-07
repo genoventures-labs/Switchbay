@@ -87,6 +87,13 @@ export type PendingAgentDraft = {
   savePath: string;
 };
 
+export type PendingEngineDraft = {
+  id: string;
+  name: string;
+  content: string;
+  savePath: string;
+};
+
 export async function generateAgentDefinition(
   client: ChatRuntimeClient,
   surface: string,
@@ -138,6 +145,85 @@ ${generatedPrompt}
 `;
 
   return { id, name: answers.name, content: fileContent, savePath };
+}
+
+export async function generateEngineManifest(
+  client: ChatRuntimeClient,
+  surface: string,
+  answers: { name: string; purpose: string; tools: string; commands: string; approval: string },
+): Promise<PendingEngineDraft> {
+  const id = answers.name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 40);
+
+  const prompt = `Create a Switchbay engine manifest JSON object.
+
+Engine manifests have this TypeScript shape:
+{
+  "id": "letters-numbers-hyphens",
+  "name": "Human Name",
+  "description": "Short practical description",
+  "cwd": ".",
+  "tools": [
+    {
+      "name": "tool_name",
+      "description": "What this tool does",
+      "command": "shell command with {{param}} placeholders",
+      "parameters": { "param": { "type": "string", "description": "..." } },
+      "required": ["param"],
+      "approval": "auto" | "always",
+      "approval_reason": "Why approval is needed, only when always"
+    }
+  ]
+}
+
+Rules:
+- Output ONLY valid JSON. No markdown fences.
+- Use lowercase ids/tool names with hyphens or underscores only.
+- Prefer commands that can run from the workspace root.
+- Use {{param}} placeholders for user-provided values.
+- Mark destructive/publishing/payment/external-impact commands with "approval": "always".
+- Keep read-only/list/status commands "auto".
+- Create 2-5 useful tools unless the brief clearly needs fewer.
+
+Brief:
+- Name: ${answers.name}
+- Purpose: ${answers.purpose}
+- Desired tools: ${answers.tools}
+- Known commands/scripts/APIs: ${answers.commands || "None supplied"}
+- Approval/safety notes: ${answers.approval || "Use normal Switchbay safety defaults"}`;
+
+  const resp = await client.createChatCompletion(surface, {
+    model: undefined,
+    messages: [
+      {
+        role: "system",
+        content: "You write strict JSON Switchbay engine manifests. Output valid JSON only.",
+      },
+      { role: "user", content: prompt },
+    ],
+  });
+
+  const raw = extractAssistantText(resp).trim();
+  if (!raw) throw new Error("The model returned no manifest.");
+  const manifest = JSON.parse(stripJsonFence(raw));
+  const normalized = {
+    ...manifest,
+    id: manifest.id || id,
+    name: manifest.name || answers.name,
+  };
+  const content = `${JSON.stringify(normalized, null, 2)}\n`;
+  const savePath = join(workspaceStorageDir(process.cwd()), "engines", `${normalized.id}.engine.json`);
+  return { id: normalized.id, name: normalized.name, content, savePath };
+}
+
+function stripJsonFence(value: string): string {
+  return value
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
 }
 
 export type BuiltTurn = {

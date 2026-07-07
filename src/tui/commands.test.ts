@@ -12,6 +12,7 @@ test("command palette lists only implemented command families", () => {
   expect(commands).toContain("/engines");
   expect(commands).toContain("/engine-bay");
   expect(commands).toContain("/creative");
+  expect(commands).toContain("/create-engine");
   expect(commands).toContain("/toolbox");
   expect(commands).toContain("/skills");
   expect(commands).toContain("/collapse");
@@ -29,6 +30,7 @@ test("command palette searches commands, examples, descriptions, and categories"
   expect(getCommandMatches("/session").map((item) => item.command)).toContain("/sessions");
   expect(getCommandMatches("/memory").map((item) => item.command)).toContain("/memory");
   expect(getCommandMatches("/engine").map((item) => item.command)).toContain("/engines");
+  expect(getCommandMatches("/engine").map((item) => item.command)).toContain("/create-engine");
   expect(getCommandMatches("/hub").map((item) => item.command)).toContain("/engine-bay");
   expect(getCommandMatches("/writing").map((item) => item.command)).toContain("/creative");
   expect(getCommandMatches("/skill").map((item) => item.command)).toContain("/toolbox");

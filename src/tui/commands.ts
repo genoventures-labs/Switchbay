@@ -79,6 +79,12 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     example: "/models",
   },
   {
+    category: "runtime",
+    command: "/collapse",
+    description: "Hide or show the read-only right-side telemetry panels.",
+    example: "/collapse",
+  },
+  {
     category: "context",
     command: "/init",
     description: "Generate a project context file for this workspace.",

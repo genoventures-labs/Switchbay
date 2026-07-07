@@ -152,6 +152,7 @@ Inside the TUI:
 /checkpoints       List checkpoints
 /restore           Restore a checkpoint
 /plan              Generate and execute a plan step by step
+/collapse          Hide or show the right-side telemetry panels
 /agent             Activate a specialist agent
 /agents            Browse available agents
 /create-agent      Create a custom local agent

@@ -10,6 +10,7 @@ const SHORTCUTS = [
   { key: "/", label: "Slash commands", description: "Browse and run internal commands" },
   { key: "@", label: "File mentions", description: "Add file/directory context to your query" },
   { key: "Ctrl+L", label: "Toggle lane", description: "Switch between Cloud and LM Studio lanes" },
+  { key: "/collapse", label: "Toggle panels", description: "Hide or show right-side telemetry" },
   { key: "/skills", label: "Skills drawer", description: "Browse reusable Toolbox skills" },
   { key: "/model", label: "Model drawer", description: "Pick a cloud preset or LM Studio model" },
   { key: "?", label: "Help", description: "Show this shortcuts drawer" },

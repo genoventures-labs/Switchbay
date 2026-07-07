@@ -43,6 +43,7 @@ import { ModelDrawer } from "./components/ModelDrawer";
 import { listRuntimeModels, type RuntimeModelOption } from "../runtime/models";
 import { SkillDrawer } from "./components/SkillDrawer";
 import { loadToolboxInventory, type ToolboxSkill } from "../toolbox/hub";
+import { RightRail } from "./components/RightRail";
 
 export type SwitchbayAppProps = {
   client: ChatRuntimeClient;
@@ -123,6 +124,7 @@ export function SwitchbayApp({
   const [pendingAgentDraft, setPendingAgentDraft] = useState<PendingAgentDraft | null>(null);
   const [turnThoughts, setTurnThoughts] = useState<string[]>([]);
   const [alwaysApprovedShellCommands, setAlwaysApprovedShellCommands] = useState<Set<string>>(() => new Set());
+  const [rightRailCollapsed, setRightRailCollapsed] = useState(false);
   
   const didHydrateRef = useRef(false);
   const historyRef = useRef<string[]>([]);
@@ -178,6 +180,12 @@ export function SwitchbayApp({
     };
   }, [composerMode, query, state.workspace?.recentFiles]);
 
+  const railCanFit = stdoutWidth >= 100;
+  const showRightRail = railCanFit && !rightRailCollapsed && !initialQuery;
+  const rightRailWidth = showRightRail
+    ? Math.max(30, Math.min(44, Math.floor(stdoutWidth * 0.24)))
+    : 0;
+  const mainWidth = showRightRail ? Math.max(60, stdoutWidth - rightRailWidth) : stdoutWidth;
   const headerRows = state.transcript.length > 0 ? 5 : 0;
   const composerRows = initialQuery ? 3 : state.status === "THINKING" ? Math.min(7, 4 + turnThoughts.length) : 4;
   const drawerRows =
@@ -197,8 +205,8 @@ export function SwitchbayApp({
   );
   const transcriptEndIndex = Math.max(0, totalTranscriptEntries - clampedScrollOffset);
   const { entries: visibleTranscriptEntries, startIndex: transcriptStartIndex } = useMemo(
-    () => sliceTranscriptForRows(state.transcript, transcriptEndIndex, transcriptAreaHeight, stdoutWidth),
-    [state.transcript, transcriptEndIndex, transcriptAreaHeight, stdoutWidth],
+    () => sliceTranscriptForRows(state.transcript, transcriptEndIndex, transcriptAreaHeight, mainWidth),
+    [state.transcript, transcriptEndIndex, transcriptAreaHeight, mainWidth],
   );
   function acceptMention(candidate: MentionCandidate) {
     const next = queryRef.current.replace(/@([\w./\-]*)$/, `@${candidate.value}${candidate.isDir ? "/" : ""} `);
@@ -801,6 +809,16 @@ export function SwitchbayApp({
       dispatch({
         type: "assistant/appended",
         message: `Unknown lane \`${requested}\`. Use \`/lane cloud\`, \`/lane local\`, or \`/lane\` to toggle.`,
+      });
+      setQuerySync("");
+      return;
+    }
+
+    if (trimmedVal === "/collapse") {
+      setRightRailCollapsed((value) => !value);
+      dispatch({
+        type: "assistant/appended",
+        message: rightRailCollapsed ? "Right panels expanded." : "Right panels collapsed.",
       });
       setQuerySync("");
       return;
@@ -1422,108 +1440,125 @@ export function SwitchbayApp({
   }, [mentionPartial, state.workspace?.cwd]);
 
   return (
-    <Box flexDirection="column" width={stdoutWidth} height={stdoutHeight} overflowY="hidden">
-      {state.transcript.length > 0 && (
-        <Header
-          lane={runtimeBadge}
-          mode={mode}
-          profile={state.resolvedProfile}
-          status={state.status}
-          terminalWidth={stdoutWidth}
-          workspace={state.workspace}
-          activeAgentId={state.activeAgentId}
-          availableAgents={availableAgents}
+    <Box width={stdoutWidth} height={stdoutHeight} overflowY="hidden">
+      <Box flexDirection="column" width={mainWidth} height={stdoutHeight} overflowY="hidden">
+        {state.transcript.length > 0 && (
+          <Header
+            lane={runtimeBadge}
+            mode={mode}
+            profile={state.resolvedProfile}
+            status={state.status}
+            terminalWidth={mainWidth}
+            workspace={state.workspace}
+            activeAgentId={state.activeAgentId}
+            availableAgents={availableAgents}
+          />
+        )}
+        <Box height={transcriptAreaHeight} flexDirection="column" overflowY="hidden">
+          <Transcript
+            lane={runtimeBadge}
+            entries={visibleTranscriptEntries}
+            hasMoreAbove={transcriptStartIndex > 0}
+            hasMoreBelow={transcriptEndIndex < totalTranscriptEntries}
+            pendingApproval={state.pendingApproval}
+            pendingAgentDraft={pendingAgentDraft}
+            activePlan={state.activePlan}
+            scrollOffset={clampedScrollOffset}
+            streamingText={state.streamingText}
+            terminalWidth={mainWidth}
+          />
+        </Box>
+        <EditDrawer
+          files={editPickerState.files}
+          selectedIndex={selectedEditFileIndex}
+          visible={editPickerState.visible}
         />
-      )}
-      <Box height={transcriptAreaHeight} flexDirection="column" overflowY="hidden">
-        <Transcript
-          lane={runtimeBadge}
-          entries={visibleTranscriptEntries}
-          hasMoreAbove={transcriptStartIndex > 0}
-          hasMoreBelow={transcriptEndIndex < totalTranscriptEntries}
-          pendingApproval={state.pendingApproval}
-          pendingAgentDraft={pendingAgentDraft}
-          activePlan={state.activePlan}
-          scrollOffset={clampedScrollOffset}
-          streamingText={state.streamingText}
-          terminalWidth={stdoutWidth}
+        <EditIntentDrawer
+          file={selectedEditFile ?? ""}
+          onChange={setEditIntent}
+          onSubmit={handleEditIntentSubmit}
+          value={editIntent}
+          visible={composerMode === "edit_intent" && Boolean(selectedEditFile)}
+        />
+        <ResumeDrawer
+          sessions={resumeSessions}
+          selectedIndex={selectedResumeIndex}
+          visible={resumeDrawerVisible}
+        />
+        <AgentDrawer
+          agents={availableAgents}
+          activeAgentId={state.activeAgentId}
+          selectedIndex={selectedAgentIndex}
+          visible={composerMode === "agent_picker"}
+        />
+        <EngineDrawer
+          items={engineDrawerItems}
+          selectedIndex={selectedEngineIndex}
+          visible={engineDrawerVisible}
+        />
+        <ModelDrawer
+          activeModel={activeRuntimeModel}
+          items={availableModels}
+          notice={modelDrawerNotice}
+          selectedIndex={selectedModelIndex}
+          visible={modelDrawerVisible}
+        />
+        <SkillDrawer
+          items={availableSkills}
+          notice={skillDrawerNotice}
+          selectedIndex={selectedSkillIndex}
+          visible={skillDrawerVisible}
+        />
+        <CreateAgentDrawer
+          visible={composerMode === "create_agent" || createAgentGenerating}
+          generating={createAgentGenerating}
+          onComplete={handleCreateAgentComplete}
+          onCancel={() => { setComposerMode("default"); setQuerySync(""); }}
+        />
+        <ShortcutDrawer
+          visible={shortcutDrawerVisible}
+        />
+        <CommandDrawer
+          commands={commandMatches}
+          selectedIndex={selectedCommandIndex}
+          visible={commandDrawerVisible}
+        />
+        <MentionPicker
+          candidates={mentionCandidates}
+          selectedIndex={selectedMentionIndex}
+          visible={mentionPickerVisible}
+        />
+        <Composer
+          disabled={composerMode === "edit_intent"}
+          initialQuery={initialQuery}
+          pendingApprovalKind={
+            pendingAgentDraft ? "agent_draft" :
+            state.activePlan?.status === "pending_approval" ? "plan_approval" :
+            state.activePlan?.status === "awaiting_continue" ? "plan_continue" :
+            (state.pendingApproval?.kind ?? null)
+          }
+          query={query}
+          status={state.status}
+          thoughts={turnThoughts}
+          turnStartedAt={state.turnStartedAt}
+          turnTokenCount={state.turnTokenCount}
         />
       </Box>
-      <EditDrawer
-        files={editPickerState.files}
-        selectedIndex={selectedEditFileIndex}
-        visible={editPickerState.visible}
-      />
-      <EditIntentDrawer
-        file={selectedEditFile ?? ""}
-        onChange={setEditIntent}
-        onSubmit={handleEditIntentSubmit}
-        value={editIntent}
-        visible={composerMode === "edit_intent" && Boolean(selectedEditFile)}
-      />
-      <ResumeDrawer
-        sessions={resumeSessions}
-        selectedIndex={selectedResumeIndex}
-        visible={resumeDrawerVisible}
-      />
-      <AgentDrawer
-        agents={availableAgents}
-        activeAgentId={state.activeAgentId}
-        selectedIndex={selectedAgentIndex}
-        visible={composerMode === "agent_picker"}
-      />
-      <EngineDrawer
-        items={engineDrawerItems}
-        selectedIndex={selectedEngineIndex}
-        visible={engineDrawerVisible}
-      />
-      <ModelDrawer
-        activeModel={activeRuntimeModel}
-        items={availableModels}
-        notice={modelDrawerNotice}
-        selectedIndex={selectedModelIndex}
-        visible={modelDrawerVisible}
-      />
-      <SkillDrawer
-        items={availableSkills}
-        notice={skillDrawerNotice}
-        selectedIndex={selectedSkillIndex}
-        visible={skillDrawerVisible}
-      />
-      <CreateAgentDrawer
-        visible={composerMode === "create_agent" || createAgentGenerating}
-        generating={createAgentGenerating}
-        onComplete={handleCreateAgentComplete}
-        onCancel={() => { setComposerMode("default"); setQuerySync(""); }}
-      />
-      <ShortcutDrawer
-        visible={shortcutDrawerVisible}
-      />
-      <CommandDrawer
-        commands={commandMatches}
-        selectedIndex={selectedCommandIndex}
-        visible={commandDrawerVisible}
-      />
-      <MentionPicker
-        candidates={mentionCandidates}
-        selectedIndex={selectedMentionIndex}
-        visible={mentionPickerVisible}
-      />
-      <Composer
-        disabled={composerMode === "edit_intent"}
-        initialQuery={initialQuery}
-        pendingApprovalKind={
-          pendingAgentDraft ? "agent_draft" :
-          state.activePlan?.status === "pending_approval" ? "plan_approval" :
-          state.activePlan?.status === "awaiting_continue" ? "plan_continue" :
-          (state.pendingApproval?.kind ?? null)
-        }
-        query={query}
-        status={state.status}
-        thoughts={turnThoughts}
-        turnStartedAt={state.turnStartedAt}
-        turnTokenCount={state.turnTokenCount}
-      />
+      {showRightRail ? (
+        <RightRail
+          activeAgentId={state.activeAgentId}
+          availableAgents={availableAgents}
+          changedFiles={state.changedFiles}
+          mode={mode}
+          recentActivity={state.recentActivity}
+          runtimeBadge={runtimeBadge}
+          status={state.status}
+          thoughts={state.thoughts}
+          transcript={state.transcript}
+          workspace={state.workspace}
+          width={rightRailWidth}
+        />
+      ) : null}
     </Box>
   );
 }

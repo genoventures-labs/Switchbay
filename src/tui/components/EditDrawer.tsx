@@ -1,5 +1,6 @@
 import React from "react";
 import { Box, Text } from "ink";
+import { TUI_COLORS } from "../theme";
 
 type EditDrawerProps = {
   files: string[];
@@ -12,9 +13,9 @@ export function EditDrawer({ files, selectedIndex, visible }: EditDrawerProps) {
     return null;
   }
 
-  const brandColor = "#E57373";
-  const greenColor = "#00FF7F";
-  const grayColor = "#707070";
+  const brandColor = TUI_COLORS.accentBright;
+  const greenColor = TUI_COLORS.accent;
+  const grayColor = TUI_COLORS.muted;
 
   return (
     <Box
@@ -37,12 +38,12 @@ export function EditDrawer({ files, selectedIndex, visible }: EditDrawerProps) {
             <Box
               key={file}
               paddingX={1}
-              backgroundColor={selected ? "#2D333B" : undefined}
+              backgroundColor={selected ? TUI_COLORS.surfaceRaised : undefined}
             >
               <Text color={selected ? greenColor : grayColor} bold={selected}>
                 {selected ? "❯" : " "}
               </Text>
-              <Text color="white" bold={selected}>
+              <Text color={TUI_COLORS.text} bold={selected}>
                 {" "}{file}
               </Text>
             </Box>

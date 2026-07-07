@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Box, Text } from "ink";
 import type { SessionStatus } from "../../agent/turn-state";
+import { TUI_COLORS } from "../theme";
 
 const PHRASES_CORE = [
   "connecting the dots",
@@ -62,15 +63,15 @@ export function Composer({
   if (initialQuery) {
     return (
       <Box paddingX={2} paddingY={1}>
-        <Box borderStyle="single" borderLeft={false} borderRight={false} borderBottom={false} borderTop={true} borderColor="#707070" paddingX={1} paddingY={0}>
-          <Text color="#707070">one-shot mode · Ctrl+C to exit</Text>
+        <Box borderStyle="single" borderLeft={false} borderRight={false} borderBottom={false} borderTop={true} borderColor={TUI_COLORS.surfaceRaised} paddingX={1} paddingY={0}>
+          <Text color={TUI_COLORS.muted}>one-shot mode · Ctrl+C to exit</Text>
         </Box>
       </Box>
     );
   }
 
-  const brandColor = "#E57373";
-  const grayColor = "#707070";
+  const brandColor = TUI_COLORS.accentBright;
+  const grayColor = TUI_COLORS.muted;
 
   return (
     <Box flexDirection="column">
@@ -78,7 +79,7 @@ export function Composer({
         <Box flexDirection="column" paddingX={2} marginBottom={0} marginTop={1}>
           <Box gap={1}>
             <Text color={brandColor}>⏺</Text>
-            <Text color="white">{phrase}…</Text>
+            <Text color={TUI_COLORS.text}>{phrase}…</Text>
             <Text color={grayColor}>
               ({elapsed}s · {formatTokens(turnTokenCount)} · thinking)
             </Text>
@@ -97,7 +98,8 @@ export function Composer({
         borderRight={false}
         borderBottom={true}
         borderTop={true}
-        borderColor={grayColor}
+        borderColor={TUI_COLORS.surfaceRaised}
+        backgroundColor={TUI_COLORS.baseDeep}
         paddingX={2}
         paddingY={1}
         flexDirection="column"
@@ -105,10 +107,10 @@ export function Composer({
       >
         <Box marginY={0}>
           <Text color={grayColor}>❯ </Text>
-          <Text color={query ? "white" : brandColor}>
+          <Text color={query ? TUI_COLORS.text : brandColor}>
             {query || (disabled ? "Describe what you want to change..." : "Ask a question or describe an edit...")}
             {!isThinking && !disabled ? (
-              <Text backgroundColor="white" color="black"> </Text>
+              <Text backgroundColor={TUI_COLORS.accentBright} color={TUI_COLORS.base}> </Text>
             ) : null}
           </Text>
         </Box>
@@ -117,13 +119,13 @@ export function Composer({
       <Box paddingX={2} paddingTop={0} paddingBottom={1}>
         <Text color={grayColor}>
           {pendingApprovalKind === "shell_command" ? (
-            <Text><Text color="yellow">y</Text> run · <Text color="red">n</Text> skip</Text>
+            <Text><Text color={brandColor}>y</Text> run · <Text color={grayColor}>n</Text> skip</Text>
           ) : pendingApprovalKind === "agent_draft" ? (
-            <Text><Text color={brandColor}>y</Text> save agent · <Text color="red">n</Text> discard</Text>
+            <Text><Text color={brandColor}>y</Text> save agent · <Text color={grayColor}>n</Text> discard</Text>
           ) : pendingApprovalKind === "plan_approval" ? (
-            <Text><Text color={brandColor}>y</Text> execute plan · <Text color="red">n</Text> cancel</Text>
+            <Text><Text color={brandColor}>y</Text> execute plan · <Text color={grayColor}>n</Text> cancel</Text>
           ) : pendingApprovalKind === "plan_continue" ? (
-            <Text><Text color={brandColor}>y</Text> next step · <Text color="gray">skip</Text> · <Text color="red">stop</Text></Text>
+            <Text><Text color={brandColor}>y</Text> next step · <Text color={grayColor}>skip</Text> · <Text color={grayColor}>stop</Text></Text>
           ) : disabled ? (
             <Text>Enter to <Text color={brandColor}>draft</Text> · Esc to <Text color={brandColor}>cancel</Text></Text>
           ) : (

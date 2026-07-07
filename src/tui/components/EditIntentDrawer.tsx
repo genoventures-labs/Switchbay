@@ -1,6 +1,7 @@
 import React from "react";
 import { Box, Text } from "ink";
 import TextInput from "ink-text-input";
+import { TUI_COLORS } from "../theme";
 
 type EditIntentDrawerProps = {
   file: string;
@@ -27,13 +28,14 @@ export function EditIntentDrawer({
       marginBottom={1}
       paddingX={2}
       borderStyle="round"
-      borderColor="magenta"
+      borderColor={TUI_COLORS.accentBright}
+      backgroundColor={TUI_COLORS.baseDeep}
     >
-      <Text color="magenta" bold>Edit Intent</Text>
-      <Text color="white">Editing {file}</Text>
-      <Text color="#707070">Describe the change you want, then press Enter.</Text>
+      <Text color={TUI_COLORS.accentBright} bold>Edit Intent</Text>
+      <Text color={TUI_COLORS.text}>Editing {file}</Text>
+      <Text color={TUI_COLORS.muted}>Describe the change you want, then press Enter.</Text>
       <Box marginTop={1}>
-        <Text color="magenta">Intent: </Text>
+        <Text color={TUI_COLORS.accentBright}>Intent: </Text>
         <TextInput value={value} onChange={onChange} onSubmit={onSubmit} />
       </Box>
     </Box>

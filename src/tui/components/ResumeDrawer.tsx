@@ -1,5 +1,6 @@
 import React from "react";
 import { Box, Text } from "ink";
+import { TUI_COLORS } from "../theme";
 
 type SessionInfo = {
   id: string;
@@ -22,9 +23,9 @@ export function ResumeDrawer({
     return null;
   }
 
-  const brandColor = "#E57373"; // Salmon/Coral
-  const greenColor = "#00FF7F"; // Bright Spring Green
-  const grayColor = "#707070";  // Steel Gray
+  const brandColor = TUI_COLORS.accentBright;
+  const greenColor = TUI_COLORS.accent;
+  const grayColor = TUI_COLORS.muted;
 
   return (
     <Box
@@ -53,13 +54,13 @@ export function ResumeDrawer({
               marginBottom={selected ? 1 : 0}
               paddingX={1}
               paddingY={selected ? 1 : 0}
-              backgroundColor={selected ? "#2D333B" : undefined}
+              backgroundColor={selected ? TUI_COLORS.surfaceRaised : undefined}
             >
               <Box gap={1}>
                 <Text color={selected ? greenColor : grayColor} bold={selected}>
                   {selected ? "❯" : " "}
                 </Text>
-                <Text color="white" bold={selected}>
+                <Text color={TUI_COLORS.text} bold={selected}>
                   {session.title}
                 </Text>
               </Box>

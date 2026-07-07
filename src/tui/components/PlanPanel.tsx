@@ -1,16 +1,17 @@
 import React from "react";
 import { Box, Text } from "ink";
 import type { ActivePlan } from "../../agent/turn-state";
+import { TUI_COLORS } from "../theme";
 
 type PlanPanelProps = {
   plan: ActivePlan;
 };
 
 export function PlanPanel({ plan }: PlanPanelProps) {
-  const brandColor = "#E57373";
-  const greenColor = "#00FF7F";
-  const grayColor = "#707070";
-  const dimColor = "#505050";
+  const brandColor = TUI_COLORS.accentBright;
+  const greenColor = TUI_COLORS.accent;
+  const grayColor = TUI_COLORS.muted;
+  const dimColor = TUI_COLORS.surfaceRaised;
 
   const isApproval = plan.status === "pending_approval";
   const isContinue = plan.status === "awaiting_continue";
@@ -25,13 +26,14 @@ export function PlanPanel({ plan }: PlanPanelProps) {
       marginTop={1}
       borderStyle="round"
       borderColor={borderColor}
+      backgroundColor={TUI_COLORS.baseDeep}
       paddingX={2}
       paddingY={1}
     >
       {/* Header */}
       <Box gap={2} marginBottom={1}>
-        <Text color={brandColor} bold>📋 Plan</Text>
-        <Text color="white">{plan.goal}</Text>
+        <Text color={brandColor} bold>Plan</Text>
+        <Text color={TUI_COLORS.text}>{plan.goal}</Text>
         {isComplete && <Text color={greenColor} bold>· complete</Text>}
         {isStopped && <Text color={grayColor}>· stopped</Text>}
       </Box>
@@ -45,7 +47,7 @@ export function PlanPanel({ plan }: PlanPanelProps) {
           const isPending = i > plan.currentStep && !isComplete;
 
           let icon = "○";
-          let color = dimColor;
+          let color: string = dimColor;
           if (isDone) { icon = "✓"; color = greenColor; }
           else if (isSkipped) { icon = "—"; color = grayColor; }
           else if (isCurrent) { icon = "▶"; color = brandColor; }
@@ -53,7 +55,7 @@ export function PlanPanel({ plan }: PlanPanelProps) {
           return (
             <Box key={i} gap={1}>
               <Text color={color}>{icon}</Text>
-              <Text color={isCurrent ? "white" : color} bold={isCurrent}>
+              <Text color={isCurrent ? TUI_COLORS.text : color} bold={isCurrent}>
                 {i + 1}. {step}
               </Text>
               {isCurrent && plan.status === "running" && (
@@ -68,14 +70,14 @@ export function PlanPanel({ plan }: PlanPanelProps) {
       {isApproval && (
         <Box marginTop={1} gap={3}>
           <Text color={greenColor}>y → execute</Text>
-          <Text color="red">n → cancel</Text>
+          <Text color={grayColor}>n → cancel</Text>
         </Box>
       )}
       {isContinue && (
         <Box marginTop={1} gap={3}>
           <Text color={greenColor}>y → continue</Text>
           <Text color={grayColor}>skip → skip step</Text>
-          <Text color="red">stop → abort</Text>
+          <Text color={grayColor}>stop → abort</Text>
         </Box>
       )}
       {isComplete && (

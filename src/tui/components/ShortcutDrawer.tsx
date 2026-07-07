@@ -1,5 +1,6 @@
 import React from "react";
 import { Box, Text } from "ink";
+import { TUI_COLORS } from "../theme";
 
 type ShortcutDrawerProps = {
   visible: boolean;
@@ -18,9 +19,9 @@ const SHORTCUTS = [
 export function ShortcutDrawer({ visible }: ShortcutDrawerProps) {
   if (!visible) return null;
 
-  const brandColor = "#E57373"; // Salmon/Coral
-  const greenColor = "#00FF7F"; // Bright Spring Green
-  const grayColor = "#707070";  // Steel Gray
+  const brandColor = TUI_COLORS.accentBright;
+  const greenColor = TUI_COLORS.accent;
+  const grayColor = TUI_COLORS.muted;
 
   return (
     <Box
@@ -41,7 +42,7 @@ export function ShortcutDrawer({ visible }: ShortcutDrawerProps) {
             <Text color={greenColor} bold>{s.key}</Text>
           </Box>
           <Box width={20}>
-            <Text color="white" bold>{s.label}</Text>
+            <Text color={TUI_COLORS.text} bold>{s.label}</Text>
           </Box>
           <Text color={grayColor}>└ {s.description}</Text>
         </Box>

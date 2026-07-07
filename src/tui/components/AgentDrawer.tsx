@@ -1,6 +1,7 @@
 import React from "react";
 import { Box, Text } from "ink";
 import type { Agent } from "../../agent/agents";
+import { TUI_COLORS } from "../theme";
 
 type AgentDrawerProps = {
   agents: Agent[];
@@ -12,9 +13,9 @@ type AgentDrawerProps = {
 export function AgentDrawer({ agents, activeAgentId, selectedIndex, visible }: AgentDrawerProps) {
   if (!visible) return null;
 
-  const brandColor = "#E57373";
-  const greenColor = "#00FF7F";
-  const grayColor = "#707070";
+  const brandColor = TUI_COLORS.accentBright;
+  const greenColor = TUI_COLORS.accent;
+  const grayColor = TUI_COLORS.muted;
 
   return (
     <Box
@@ -40,14 +41,14 @@ export function AgentDrawer({ agents, activeAgentId, selectedIndex, visible }: A
             flexDirection="column"
             paddingX={1}
             paddingY={isSelected ? 1 : 0}
-            backgroundColor={isSelected ? "#2D333B" : undefined}
+            backgroundColor={isSelected ? TUI_COLORS.surfaceRaised : undefined}
           >
             <Box gap={1}>
               <Text color={isSelected ? greenColor : grayColor} bold={isSelected}>
                 {isSelected ? "❯" : " "}
               </Text>
               <Text>{agent.emoji}</Text>
-              <Text color={isActive ? greenColor : "white"} bold={isSelected || isActive}>
+              <Text color={isActive ? greenColor : TUI_COLORS.text} bold={isSelected || isActive}>
                 {agent.name}
               </Text>
               {isActive && <Text color={greenColor} bold>· active</Text>}

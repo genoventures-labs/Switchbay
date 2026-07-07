@@ -1,6 +1,7 @@
 import React from "react";
 import { Box, Text } from "ink";
 import type { SlashCommand } from "../commands";
+import { TUI_COLORS } from "../theme";
 
 type CommandDrawerProps = {
   commands: SlashCommand[];
@@ -17,9 +18,9 @@ export function CommandDrawer({
     return null;
   }
 
-  const brandColor = "#E57373"; // Salmon/Coral
-  const greenColor = "#00FF7F"; // Bright Spring Green
-  const grayColor = "#707070";  // Steel Gray
+  const brandColor = TUI_COLORS.accentBright;
+  const greenColor = TUI_COLORS.accent;
+  const grayColor = TUI_COLORS.muted;
 
   return (
     <Box
@@ -47,13 +48,13 @@ export function CommandDrawer({
               marginBottom={0}
               paddingX={1}
               paddingY={selected ? 1 : 0}
-              backgroundColor={selected ? "#2D333B" : undefined}
+              backgroundColor={selected ? TUI_COLORS.surfaceRaised : undefined}
             >
               <Box gap={1}>
                 <Text color={selected ? greenColor : grayColor} bold={selected}>
                   {selected ? "❯" : " "}
                 </Text>
-                <Text color="white" bold={selected}>
+                <Text color={TUI_COLORS.text} bold={selected}>
                   {item.command}
                 </Text>
                 <Text color={grayColor}>[{item.category}]</Text>
@@ -61,7 +62,7 @@ export function CommandDrawer({
               
               {selected && (
                 <Box flexDirection="column" marginLeft={2} marginTop={0}>
-                  <Text color="white">{item.description}</Text>
+                  <Text color={TUI_COLORS.text}>{item.description}</Text>
                   <Text color={grayColor}>{item.example}</Text>
                 </Box>
               )}

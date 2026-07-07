@@ -11,16 +11,7 @@ import { buildTurn, executeTurn, extractAssistantText, refreshWorkspace, synthes
 import { describeEngineBay, loadEngineBayInventory, syncEngineBayRepo } from "./src/engines/hub";
 import { describeToolbox, loadToolboxInventory, readToolboxSkill } from "./src/toolbox/hub";
 import { describeMemory, listMemoryNotes, readMemoryFacts, refreshMemory } from "./src/memory/store";
-
-// ANSI colors for CLI mode
-const CLR = {
-  reset: "\x1b[0m",
-  bold: "\x1b[1m",
-  salmon: "\x1b[38;2;229;115;115m",
-  green: "\x1b[38;2;0;255;127m",
-  gray: "\x1b[38;2;112;112;112m",
-  white: "\x1b[37m",
-};
+import { ANSI_COLORS as CLR } from "./src/tui/theme";
 
 // Ensure config is initialized on first boot
 loadSwitchbayConfig();
@@ -58,7 +49,7 @@ Usage:
 
 Options:
   -s, --surface <type>   Surface context (default: dev)
-  -p, --profile <name>   Working style (default: ori_code)
+  -p, --profile <name>   Working style (default: switchbay)
   -m, --mode <name>      Agent mode: build | design | debug (default: build)
   --lane <name>          Runtime lane: cloud | local | lmstudio (default: SWITCHBAY_LANE or cloud)
   --hop <name>           Travel to a whitelisted location before launching
@@ -265,10 +256,10 @@ async function runCliMode(options: any, resumeId: string | null) {
     workspace,
   });
 
-  process.stdout.write(`\n${CLR.salmon}⏺${CLR.reset} ${CLR.white}${CLR.bold}Assistant${CLR.reset} ${CLR.gray}(thinking...)${CLR.reset}\n`);
+  process.stdout.write(`\n${CLR.accent}⏺${CLR.reset} ${CLR.text}${CLR.bold}Switchbay${CLR.reset} ${CLR.muted}(thinking...)${CLR.reset}\n`);
   
   const onStep = (title: string) => {
-    process.stdout.write(`  ${CLR.gray}└ ${title}${CLR.reset}\n`);
+    process.stdout.write(`  ${CLR.muted}└ ${title}${CLR.reset}\n`);
   };
 
   try {
@@ -285,23 +276,23 @@ async function runCliMode(options: any, resumeId: string | null) {
       extractAssistantText(executedTurn.response) ||
       synthesizeAssistantFallback(options.initialQuery, executedTurn.toolExecutions, workspace);
     if (content) {
-      process.stdout.write(`\n${CLR.salmon}⏺${CLR.reset} ${CLR.white}${CLR.bold}Assistant${CLR.reset}\n`);
-      process.stdout.write(`  ${CLR.gray}└ ${CLR.reset}${content}\n\n`);
+      process.stdout.write(`\n${CLR.accent}⏺${CLR.reset} ${CLR.text}${CLR.bold}Switchbay${CLR.reset}\n`);
+      process.stdout.write(`  ${CLR.muted}└ ${CLR.reset}${content}\n\n`);
       
       state.conversation.push({ role: "user", content: options.initialQuery });
       state.conversation.push({ role: "assistant", content });
       state.updatedAt = Date.now();
       await savePersistedSession(state);
     } else if (executedTurn.toolExecutions.length > 0) {
-      process.stdout.write(`\n${CLR.salmon}⏺${CLR.reset} ${CLR.white}${CLR.bold}Assistant${CLR.reset}\n`);
-      process.stdout.write(`  ${CLR.gray}└ ${CLR.reset}Turn completed after local tool work, but the model returned no final assistant text.\n\n`);
+      process.stdout.write(`\n${CLR.accent}⏺${CLR.reset} ${CLR.text}${CLR.bold}Switchbay${CLR.reset}\n`);
+      process.stdout.write(`  ${CLR.muted}└ ${CLR.reset}Turn completed after local tool work, but the model returned no final assistant text.\n\n`);
     } else {
-      process.stdout.write(`\n${CLR.salmon}⏺${CLR.reset} ${CLR.white}${CLR.bold}Assistant${CLR.reset}\n`);
-      process.stdout.write(`  ${CLR.gray}└ ${CLR.reset}The model returned no assistant text for this turn.\n\n`);
+      process.stdout.write(`\n${CLR.accent}⏺${CLR.reset} ${CLR.text}${CLR.bold}Switchbay${CLR.reset}\n`);
+      process.stdout.write(`  ${CLR.muted}└ ${CLR.reset}The model returned no assistant text for this turn.\n\n`);
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    process.stdout.write(`\n${CLR.salmon}⏺${CLR.reset} ${CLR.white}${CLR.bold}Error:${CLR.reset} ${msg}\n`);
+    process.stdout.write(`\n${CLR.accent}⏺${CLR.reset} ${CLR.text}${CLR.bold}Error:${CLR.reset} ${msg}\n`);
   }
 }
 

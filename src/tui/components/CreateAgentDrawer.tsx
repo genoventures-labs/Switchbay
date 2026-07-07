@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Box, Text } from "ink";
 import TextInput from "ink-text-input";
+import { TUI_COLORS } from "../theme";
 
 export type CreateAgentAnswers = {
   name: string;
@@ -68,9 +69,9 @@ export function CreateAgentDrawer({
   if (!visible) return null;
 
   const step = STEPS[stepIndex] ?? STEPS[0]!;
-  const brandColor = "#E57373";
-  const grayColor = "#707070";
-  const greenColor = "#00FF7F";
+  const brandColor = TUI_COLORS.accentBright;
+  const grayColor = TUI_COLORS.muted;
+  const greenColor = TUI_COLORS.accent;
 
   if (generating) {
     return (
@@ -81,6 +82,7 @@ export function CreateAgentDrawer({
         marginBottom={1}
         borderStyle="round"
         borderColor={brandColor}
+        backgroundColor={TUI_COLORS.baseDeep}
       >
         <Box gap={2}>
           <Text color={brandColor} bold>Creating agent</Text>
@@ -113,6 +115,7 @@ export function CreateAgentDrawer({
       marginBottom={1}
       borderStyle="round"
       borderColor={brandColor}
+      backgroundColor={TUI_COLORS.baseDeep}
     >
       {/* Header */}
       <Box gap={2} marginBottom={1}>
@@ -133,7 +136,7 @@ export function CreateAgentDrawer({
       </Box>
 
       {/* Question */}
-      <Text color="white" bold>{step.question}</Text>
+      <Text color={TUI_COLORS.text} bold>{step.question}</Text>
       <Text color={grayColor}>{step.hint}</Text>
 
       {/* Already answered summary */}

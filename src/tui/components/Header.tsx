@@ -6,6 +6,7 @@ import { existingProjectContextPath, existingWorkspaceDataPath } from "../../con
 import type { SessionStatus } from "../../agent/turn-state";
 import type { WorkspaceSnapshot } from "../../session/workspace";
 import type { Agent } from "../../agent/agents";
+import { TUI_COLORS } from "../theme";
 
 type HeaderProps = {
   lane?: string;
@@ -24,7 +25,7 @@ export function Header({ lane = "Cloud", mode, status, workspace, activeAgentId,
   const dirty = workspace?.dirtyFiles.length ?? 0;
   const isThinking = status === "THINKING";
   const statusLabel = status === "DISCONNECTED" ? "ready" : status.toLowerCase();
-  const branchColor = dirty > 0 ? "yellow" : "#00FF7F";
+  const branchColor = dirty > 0 ? TUI_COLORS.accentBright : TUI_COLORS.accent;
   const hasProjectContext = Boolean(existingProjectContextPath(cwd));
   const hasMemory = existsSync(existingWorkspaceDataPath(cwd, "memory.md"));
   const pinCount = (() => {
@@ -42,62 +43,63 @@ export function Header({ lane = "Cloud", mode, status, workspace, activeAgentId,
       paddingY={1}
       flexDirection="column"
       borderStyle="round"
-      borderColor="#707070"
+      borderColor={TUI_COLORS.surfaceRaised}
+      backgroundColor={TUI_COLORS.baseDeep}
       marginBottom={1}
     >
       <Box justifyContent="space-between">
         <Box flexDirection="column">
           <Box gap={1}>
-            <Text color="#E57373" bold>Harness</Text>
-            <Text color="gray">in</Text>
-            <Text color="white">{project}</Text>
+            <Text color={TUI_COLORS.accentBright} bold>Switchbay</Text>
+            <Text color={TUI_COLORS.muted}>in</Text>
+            <Text color={TUI_COLORS.text}>{project}</Text>
             {branch ? (
               <>
-                <Text color="gray">·</Text>
+                <Text color={TUI_COLORS.muted}>·</Text>
                 <Text color={branchColor}>{branch}</Text>
-                {dirty > 0 ? <Text color="yellow" dimColor>{dirty} dirty</Text> : null}
+                {dirty > 0 ? <Text color={TUI_COLORS.accentBright} dimColor>{dirty} dirty</Text> : null}
               </>
             ) : null}
             {hasProjectContext ? (
               <>
-                <Text color="#707070">·</Text>
-                <Text color="#00FF7F" dimColor>context</Text>
+                <Text color={TUI_COLORS.muted}>·</Text>
+                <Text color={TUI_COLORS.accent} dimColor>context</Text>
               </>
             ) : null}
             {hasMemory ? (
               <>
-                <Text color="#707070">·</Text>
-                <Text color="#00FF7F" dimColor>mem</Text>
+                <Text color={TUI_COLORS.muted}>·</Text>
+                <Text color={TUI_COLORS.accent} dimColor>mem</Text>
               </>
             ) : null}
             {pinCount > 0 ? (
               <>
-                <Text color="#707070">·</Text>
-                <Text color="#00FF7F" dimColor>{pinCount} pinned</Text>
+                <Text color={TUI_COLORS.muted}>·</Text>
+                <Text color={TUI_COLORS.accent} dimColor>{pinCount} pinned</Text>
               </>
             ) : null}
             {activeAgent ? (
               <>
-                <Text color="#707070">·</Text>
-                <Text color="#E57373">{activeAgent.emoji} {activeAgent.name}</Text>
+                <Text color={TUI_COLORS.muted}>·</Text>
+                <Text color={TUI_COLORS.accentBright}>{activeAgent.emoji} {activeAgent.name}</Text>
               </>
             ) : null}
           </Box>
-          <Text color="#707070">{cwd}</Text>
+          <Text color={TUI_COLORS.muted}>{cwd}</Text>
         </Box>
         <Box flexDirection="column" alignItems="flex-end">
-          <Text color="#707070">{lane}</Text>
-          <Text color="#707070">{mode}</Text>
-          <Text color={isThinking ? "#E57373" : "#00FF7F"} bold>
+          <Text color={TUI_COLORS.muted}>{lane}</Text>
+          <Text color={TUI_COLORS.muted}>{mode}</Text>
+          <Text color={isThinking ? TUI_COLORS.accentBright : TUI_COLORS.accent} bold>
             {isThinking ? "thinking" : statusLabel}
           </Text>
         </Box>
       </Box>
       <Box marginTop={1} justifyContent="space-between">
-        <Text color="#707070">
-          Ask a question, describe an edit, or use slash commands.
+        <Text color={TUI_COLORS.muted}>
+          Route a task, inspect the repo, or call a Switchbay lane.
         </Text>
-        <Text color="#707070">
+        <Text color={TUI_COLORS.muted}>
           / for commands · @ for files
         </Text>
       </Box>

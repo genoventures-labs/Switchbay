@@ -1,5 +1,6 @@
 import React from "react";
 import { Box, Text } from "ink";
+import { TUI_COLORS } from "../theme";
 
 type WelcomeBoardProps = {
   appName: string;
@@ -10,24 +11,24 @@ type WelcomeBoardProps = {
 };
 
 const SWITCHBAY_LOGO = [
-  "██╗  ██╗ █████╗ ██████╗ ",
-  "██║  ██║██╔══██╗██╔══██╗",
-  "███████║███████║██████╔╝",
-  "██╔══██║██╔══██║██╔══██╗",
-  "██║  ██║██║  ██║██║  ██║",
-  "╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝",
+  "███████╗██╗    ██╗██████╗ ",
+  "██╔════╝██║    ██║██╔══██╗",
+  "███████╗██║ █╗ ██║██████╔╝",
+  "╚════██║██║███╗██║██╔══██╗",
+  "███████║╚███╔███╔╝██████╔╝",
+  "╚══════╝ ╚══╝╚══╝ ╚═════╝ ",
 ];
 
 const COMPACT_LOGO = [
   " ╭────╮",
-  " │ HAR│",
+  " │ SWB│",
   " ╰────╯",
 ];
 
 export function WelcomeBoard({ appName, lane, version, cwd, terminalWidth }: WelcomeBoardProps) {
-  const brandColor = "#E57373";
-  const grayColor = "#707070";
-  const dimColor = "#505050";
+  const brandColor = TUI_COLORS.accentBright;
+  const grayColor = TUI_COLORS.muted;
+  const dimColor = TUI_COLORS.surfaceRaised;
 
   const isWide = terminalWidth >= 80;
   const isMid = terminalWidth >= 55;
@@ -69,7 +70,7 @@ export function WelcomeBoard({ appName, lane, version, cwd, terminalWidth }: Wel
             <Text key={i} color={brandColor}>{line}</Text>
           ))}
           <Box marginTop={0}>
-            <Text color={dimColor}>{"          "}coding switchbay</Text>
+            <Text color={dimColor}>{"          "}cloud/local engine bay</Text>
           </Box>
         </Box>
 
@@ -79,10 +80,10 @@ export function WelcomeBoard({ appName, lane, version, cwd, terminalWidth }: Wel
             <Box gap={2} marginBottom={1}>
               <Text color={grayColor}>v{version}</Text>
               <Text color={dimColor}>·</Text>
-              <Text color="white">{lane}</Text>
+              <Text color={TUI_COLORS.text}>{lane}</Text>
             </Box>
             <Text color={grayColor}>{appName}</Text>
-            <Text color={dimColor}>cloud/local coding agent shell</Text>
+            <Text color={dimColor}>terminal-first AI coding workbench</Text>
             <Box marginTop={1}>
               <Text color={dimColor}>{displayCwd}</Text>
             </Box>

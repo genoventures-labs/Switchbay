@@ -1,5 +1,6 @@
 import React from "react";
 import { Box, Text } from "ink";
+import { TUI_COLORS } from "../theme";
 
 type MarkdownTextProps = {
   content: string;
@@ -51,23 +52,23 @@ function renderBlock(
       );
     case "bullet":
       return (
-        <Text key={index} color="white" wrap="wrap">
-          <Text color="cyan">• </Text>
+        <Text key={index} color={TUI_COLORS.text} wrap="wrap">
+          <Text color={TUI_COLORS.accent}>• </Text>
           {renderInline(block.text, role)}
         </Text>
       );
     case "numbered":
       return (
-        <Text key={index} color="white" wrap="wrap">
-          <Text color="cyan">{block.index} </Text>
+        <Text key={index} color={TUI_COLORS.text} wrap="wrap">
+          <Text color={TUI_COLORS.accent}>{block.index} </Text>
           {renderInline(block.text, role)}
         </Text>
       );
     case "blockquote":
       return (
         <Box key={index} marginY={0} paddingLeft={1}>
-          <Text color="gray">
-            <Text color="yellow">▍ </Text>
+          <Text color={TUI_COLORS.muted}>
+            <Text color={TUI_COLORS.accentBright}>▍ </Text>
             {renderInline(block.text, role)}
           </Text>
         </Box>
@@ -76,7 +77,7 @@ function renderBlock(
       return (
         <Box key={index} flexDirection="column" marginY={1}>
           {block.rows.map((row, rowIndex) => (
-            <Text key={rowIndex} color={rowIndex === 0 ? "cyan" : "white"}>
+            <Text key={rowIndex} color={rowIndex === 0 ? TUI_COLORS.accentBright : TUI_COLORS.text}>
               {formatTableRow(row, block.rows)}
             </Text>
           ))}
@@ -90,11 +91,12 @@ function renderBlock(
           flexDirection="column"
           marginY={1}
           borderStyle="round"
-          borderColor="gray"
+          borderColor={TUI_COLORS.surfaceRaised}
+          backgroundColor={TUI_COLORS.baseDeep}
           paddingX={1}
           width={codeWidth}
         >
-          <Text color="gray">
+          <Text color={TUI_COLORS.muted}>
             {block.language ? `code · ${block.language}` : "code"}
           </Text>
           {block.lines.length > 0 ? (
@@ -110,7 +112,7 @@ function renderBlock(
     case "paragraph":
       return (
         <Box key={index} marginBottom={1}>
-          <Text color="white" wrap="wrap">
+          <Text color={TUI_COLORS.text} wrap="wrap">
             {renderInline(block.text, role)}
           </Text>
         </Box>
@@ -297,26 +299,26 @@ function renderInline(text: string, role: NonNullable<MarkdownTextProps["role"]>
     switch (part.type) {
       case "code":
         return (
-          <Text key={index} color={getInlineCodeColor(role)} backgroundColor="black">
+          <Text key={index} color={getInlineCodeColor(role)} backgroundColor={TUI_COLORS.baseDeep}>
             {part.value}
           </Text>
         );
       case "link":
         return (
-          <Text key={index} color="blue" underline>
+          <Text key={index} color={TUI_COLORS.accentBright} underline>
             {part.label}
-            <Text color="gray"> ({part.url})</Text>
+            <Text color={TUI_COLORS.muted}> ({part.url})</Text>
           </Text>
         );
       case "strong":
         return (
-          <Text key={index} color="white" bold>
+          <Text key={index} color={TUI_COLORS.text} bold>
             {part.value}
           </Text>
         );
       case "emphasis":
         return (
-          <Text key={index} color="magenta" italic>
+          <Text key={index} color={TUI_COLORS.accentBright} italic>
             {part.value}
           </Text>
         );
@@ -347,7 +349,7 @@ function renderCodeLine(
 
 function highlightCode(line: string, language: string) {
   if (!line) {
-    return [{ text: " ", color: "white" }];
+    return [{ text: " ", color: TUI_COLORS.text }];
   }
 
   const normalizedLanguage = language.toLowerCase();
@@ -355,42 +357,42 @@ function highlightCode(line: string, language: string) {
 
   return tokens.map((token) => {
     if (/^\s+$/.test(token) || token.length === 0) {
-      return { text: token, color: "white" };
+      return { text: token, color: TUI_COLORS.text };
     }
 
     if (/^\/\/.*$/.test(token) || /^#.*$/.test(token)) {
-      return { text: token, color: "gray" };
+      return { text: token, color: TUI_COLORS.muted };
     }
 
     if (/^\/\*.*\*\/$/.test(token)) {
-      return { text: token, color: "gray" };
+      return { text: token, color: TUI_COLORS.muted };
     }
 
     if (/^['"`].*['"`]$/.test(token)) {
-      return { text: token, color: "green" };
+      return { text: token, color: TUI_COLORS.accent };
     }
 
     if (/^\d[\d._]*$/.test(token)) {
-      return { text: token, color: "yellow" };
+      return { text: token, color: TUI_COLORS.accentBright };
     }
 
     if (/^[{}()[\],.;:]$/.test(token)) {
-      return { text: token, color: "white" };
+      return { text: token, color: TUI_COLORS.text };
     }
 
     if (/^(=>|===|==|!=|!==|<=|>=|\+|-|\*|\/|=|\||&|<|>)$/.test(token)) {
-      return { text: token, color: "magenta" };
+      return { text: token, color: TUI_COLORS.accentBright };
     }
 
     if (isKeyword(token, normalizedLanguage)) {
-      return { text: token, color: "cyan", bold: true };
+      return { text: token, color: TUI_COLORS.accentBright, bold: true };
     }
 
     if (/^[A-Z][A-Za-z0-9_]*$/.test(token)) {
-      return { text: token, color: "blue" };
+      return { text: token, color: TUI_COLORS.accent };
     }
 
-    return { text: token, color: "white" };
+    return { text: token, color: TUI_COLORS.text };
   });
 }
 
@@ -497,20 +499,20 @@ function getTableWidths(rows: string[][]) {
 }
 
 function getHeadingColor(level: number) {
-  if (level <= 1) return "magenta";
-  if (level === 2) return "cyan";
-  if (level === 3) return "yellow";
-  return "white";
+  if (level <= 1) return TUI_COLORS.accentBright;
+  if (level === 2) return TUI_COLORS.accent;
+  if (level === 3) return TUI_COLORS.muted;
+  return TUI_COLORS.text;
 }
 
 function getCodeDefaultColor(role: NonNullable<MarkdownTextProps["role"]>) {
-  if (role === "tool") return "yellow";
-  if (role === "user") return "cyan";
-  return "green";
+  if (role === "tool") return TUI_COLORS.accentBright;
+  if (role === "user") return TUI_COLORS.accent;
+  return TUI_COLORS.text;
 }
 
 function getInlineCodeColor(role: NonNullable<MarkdownTextProps["role"]>) {
-  if (role === "tool") return "yellow";
-  if (role === "user") return "cyan";
-  return "green";
+  if (role === "tool") return TUI_COLORS.accentBright;
+  if (role === "user") return TUI_COLORS.accent;
+  return TUI_COLORS.accentBright;
 }

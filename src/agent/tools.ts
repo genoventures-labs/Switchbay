@@ -1385,11 +1385,13 @@ export async function executeToolCall(
         };
     }
   } catch (err: any) {
+    const reason = err instanceof Error ? err.message : String(err);
+    const firstLine = reason.split("\n").find((line) => line.trim().length > 0)?.trim();
     return {
       tool: name,
       ok: false,
-      summary: `Failed to execute ${name}`,
-      body: err.message,
+      summary: `${name} failed${firstLine ? `: ${firstLine}` : ""}`,
+      body: reason,
     };
   }
 }

@@ -413,10 +413,11 @@ export async function executeTurn(input: {
   onStep?: (title: string) => void;
   onToken?: (token: string) => void;
   onTokens?: (count: number) => void;
+  maxIterations?: number;
 }): Promise<ExecutedTurn> {
   const toolExecutions: AgentToolExecution[] = [];
   const messages: ChatMessage[] = [...input.turn.request.messages];
-  const MAX_ITERATIONS = 12;
+  const MAX_ITERATIONS = input.maxIterations ?? 24;
   let emptyReplyRetries = 0;
   const MAX_EMPTY_REPLY_RETRIES = 1;
 
@@ -530,8 +531,31 @@ export async function executeTurn(input: {
     }
   }
 
+  const summary = summarizeToolLimit(input.turn.objective, toolExecutions);
   return {
-    response: { choices: [{ message: { role: "assistant", content: "I've reached my maximum reasoning steps." }, finish_reason: "length" }] },
+    response: { choices: [{ message: { role: "assistant", content: summary }, finish_reason: "length" }] },
     toolExecutions,
   };
+}
+
+function summarizeToolLimit(objective: string, toolExecutions: AgentToolExecution[]): string {
+  const completed = toolExecutions.filter((execution) => execution.ok);
+  const failed = toolExecutions.filter((execution) => !execution.ok);
+  const recentCompleted = completed.slice(-5).map((execution) => `- ${execution.summary}`);
+  const recentFailed = failed.slice(-3).map((execution) => `- ${execution.summary}`);
+
+  const lines = [
+    `Switchbay paused after ${toolExecutions.length} tool step${toolExecutions.length === 1 ? "" : "s"} while working on: ${objective}`,
+  ];
+
+  if (recentCompleted.length > 0) {
+    lines.push("", "Recent completed work:", ...recentCompleted);
+  }
+
+  if (recentFailed.length > 0) {
+    lines.push("", "Recent tool issues:", ...recentFailed);
+  }
+
+  lines.push("", "Say `continue` and I will pick up from this checkpoint.");
+  return lines.join("\n");
 }

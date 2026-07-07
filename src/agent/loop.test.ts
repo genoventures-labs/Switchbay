@@ -227,6 +227,35 @@ test("executeTurn retries one empty non-tool response", async () => {
   expect(steps).toContain("retrying empty reply...");
 });
 
+test("executeTurn returns a checkpoint summary when tool steps hit the limit", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "switchbay-step-limit-"));
+  await writeFile(join(cwd, "demo.txt"), "file body\n", "utf-8");
+  const readCall = (id: string): ToolCall => ({
+    id,
+    type: "function",
+    function: { name: "read_file", arguments: JSON.stringify({ path: "demo.txt" }) },
+  });
+  const { client } = createMockClient([
+    createResponse(null, [readCall("call-read-1")]),
+    createResponse(null, [readCall("call-read-2")]),
+  ]);
+
+  const result = await executeTurn({
+    client: client as ChatRuntimeClient,
+    cwd,
+    sessionId: "test-session",
+    surface: "dev",
+    turn: createTurn(),
+    maxIterations: 2,
+  });
+
+  const text = extractAssistantText(result.response);
+  expect(result.toolExecutions).toHaveLength(2);
+  expect(text).toContain("Switchbay paused after 2 tool steps");
+  expect(text).toContain("Recent completed work:");
+  expect(text).toContain("Say `continue`");
+});
+
 test("executeTurn ignores malformed inline tool call markup", async () => {
   const malformed = "Before <tool_call>{bad json</tool_call> after";
   const { client } = createMockClient([createResponse(malformed)]);

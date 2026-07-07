@@ -4,40 +4,59 @@
 [![Runtime](https://img.shields.io/badge/runtime-Bun-000000?logo=bun)](https://bun.sh)
 [![UI](https://img.shields.io/badge/UI-React%20%2B%20Ink-2563eb)](https://github.com/vadimdemedes/ink)
 [![Model lanes](https://img.shields.io/badge/lanes-cloud%20%7C%20local-16a34a)](#model-lanes)
+[![Engine Bay](https://img.shields.io/badge/Engine%20Bay-GitHub%20sync-7c3aed)](#engine-bay)
 [![License](https://img.shields.io/badge/license-MIT-0f766e)](#license)
 
-**Switchbay** is a terminal-first AI coding workbench for developers who want cloud intelligence, local control, and provider independence without rebuilding their workflow every time the stack changes.
+**Switchbay** is a terminal-first AI coding workbench for developers who want cloud intelligence, local control, and provider independence without rebuilding their workflow every time the model stack changes.
 
-It gives you one fast shell for agentic coding work: load repo context, talk through plans, inspect files, edit code, run commands, check git state, execute tests, manage sessions, and move between specialist agents for backend, UI, security, debugging, architecture, docs, and review.
-
-Switchbay is not another IDE, hosted SaaS, or branded chatbot. It is the workbench around the model: the routing layer, context loader, local tool runner, memory system, session keeper, approval gate, and terminal cockpit that helps your coding workflow survive provider churn, outages, private backend changes, and unreliable internet.
+It is the workbench around the model: a routing layer, context loader, local tool runner, memory system, session keeper, approval gate, engine registry, and terminal cockpit for agentic coding work.
 
 Cloud when it helps. Local when it matters. Same rig either way.
 
-## Why Switchbay
+## What It Does
 
-Most agentic coding tools make the model feel like the product. Switchbay treats intelligence as a set of lanes around your repo:
+Switchbay gives you one fast shell for everyday agentic development:
 
-- Route high-complexity work through cloud models when you need deeper reasoning.
-- Use LM Studio locally for small utility turns, offline-friendly work, or private machine-close tasks.
-- Keep file inspection, edits, shell commands, git state, approvals, memory, and sessions visible in the terminal.
-- Move between specialist agent modes without changing your whole workflow.
-- Keep the harness useful even if a provider, VPS, hosted API, or backend changes underneath you.
+- Load repo context and persistent workspace memory.
+- Talk through plans, architecture, debugging, reviews, and implementation.
+- Inspect files, read ranges, summarize code, search the tree, and check git state.
+- Create files, edit files, run commands, execute tests, and build locally.
+- Move between specialist agents for backend, UI, security, debugging, architecture, docs, and review.
+- Resume sessions, pin context, save local memories, and keep work visible in the terminal.
+- Route between cloud models and local LM Studio models without changing the workflow.
+- Add swappable engines from local manifests or the GitHub-backed Engine Bay.
 
-Switchbay is built for solo builders, senior developers, and technical founders who live in the terminal and want the important parts of agentic coding close to the repo.
+Switchbay is built for solo builders, senior developers, technical founders, and internal-tool people who live in the terminal and want the useful parts of AI coding close to the repo.
 
-## Features
+## Why It Exists
 
-- **Cloud/local model lanes**: choose `cloud` or `local` per run, or set a default in your environment.
-- **Cloud router**: use OpenAI, Anthropic, or automatic provider selection for high-intelligence work.
-- **LM Studio lane**: point Switchbay at a local OpenAI-compatible LM Studio server for SLM utility work.
-- **Terminal TUI**: React + Ink interface with transcript, composer, command drawer, mentions, sessions, and agent switching.
-- **Repo context**: loads project context from `SWITCHBAY.md` and workspace memory from `.switchbay/`.
-- **Local tools**: read files, inspect directories, run commands, check git, plan work, and apply edits from the shell.
-- **Approval gate**: command execution stays visible and interruptible without turning every turn into hand-holding.
-- **Sessions**: resume recent work with `/sessions`, `/resume`, or `switchbay --resume`.
-- **Specialist agents**: built-in lanes for UI, backend, DevOps, debugging, architecture, security, docs, and review.
-- **Compatibility fallbacks**: reads older `HARNESS_*`, `ORI_*`, `.harness/`, `.ori/`, `HARNESS.md`, and `ORI.md` names during the rename.
+Most AI coding tools make one model, hosted service, or private backend feel like the product. Switchbay treats intelligence as a set of lanes.
+
+- Use cloud models for deeper reasoning, code review, architecture, and complex implementation.
+- Use local LM Studio models for smaller utility work, offline-friendly tasks, private machine-close work, and quick summaries.
+- Keep approvals practical: broad-impact, destructive, privileged, publishing, refunding, and deploy-style actions still gate.
+- Keep the harness useful even if a provider, hosted API, VPS, or local model setup changes.
+- Keep extensions portable through Engine Bay instead of baking every workflow into the core app.
+
+## Install
+
+Homebrew:
+
+```bash
+brew tap genoventures-labs/tap
+brew install ori-code
+switchbay
+```
+
+The formula is still named `ori-code` during the rename period, but it installs the `switchbay` command. Legacy aliases `ori-code` and `ori` continue to work.
+
+From source:
+
+```bash
+bun install
+bun link
+switchbay --help
+```
 
 ## Model Lanes
 
@@ -65,26 +84,6 @@ switchbay --lane cloud "review the auth flow"
 switchbay --lane local "summarize the changed files"
 ```
 
-## Install
-
-Install with Homebrew once the tap is public:
-
-```bash
-brew tap genoventures-labs/tap
-brew install ori-code
-switchbay
-```
-
-The Homebrew formula is still named `ori-code` during the repository rename, but it installs the `switchbay` command. Legacy aliases `ori-code` and `ori` continue to work.
-
-Local development install:
-
-```bash
-bun install
-bun link
-switchbay --help
-```
-
 ## Usage
 
 Interactive terminal UI:
@@ -96,7 +95,7 @@ switchbay
 One-shot request:
 
 ```bash
-switchbay "find the likely cause of the empty response bug"
+switchbay "find the likely cause of this empty response bug"
 ```
 
 Resume work:
@@ -114,39 +113,6 @@ switchbay --mode debug
 switchbay --surface dev
 ```
 
-## Workspace Files
-
-Switchbay looks for:
-
-- `SWITCHBAY.md`: persistent project context injected into coding sessions.
-- `.switchbay/memory.md`: workspace memory.
-- `.switchbay/pins.json`: pinned files and repo notes.
-- `.switchbay/agents/*.md`: custom local specialist agents.
-
-Compatibility reads are still enabled for:
-
-- `HARNESS.md`, `ORI.md`
-- `.harness/`, `.ori/`
-- `HARNESS_*`, `ORI_*` environment variables
-- `~/.code-harness/`, `~/.ori/` global config
-
-New writes use the Switchbay names.
-
-## Commands
-
-Inside the TUI:
-
-```text
-/help        Show commands
-/sessions    List recent sessions
-/resume      Resume a saved session
-/purge 1w    Clean old sessions
-/agent       Switch specialist agent
-/new-agent   Create a custom agent
-/plan        Generate a plan
-/status      Show git/workspace state
-```
-
 CLI helpers:
 
 ```bash
@@ -155,11 +121,105 @@ switchbay version
 switchbay update
 ```
 
+## Slash Commands
+
+Inside the TUI:
+
+```text
+/sessions          List recent local sessions
+/resume            Open the session picker
+/save              Persist the current session
+/new               Start a fresh session
+/compact           Compress the transcript into context
+/clear             Clear the visible conversation
+/init              Generate SWITCHBAY.md for this repo
+/pin               Pin a file into future turn context
+/pins              List pinned files
+/remember          Save a workspace memory note
+/memories          List workspace memory notes
+/review            Review the current diff
+/checkpoint        Save a git-stash checkpoint
+/checkpoints       List checkpoints
+/restore           Restore a checkpoint
+/plan              Generate and execute a plan step by step
+/agent             Activate a specialist agent
+/agents            Browse available agents
+/create-agent      Create a custom local agent
+/edit              Open the file edit picker
+/engines           List registered engines
+/engine-bay        Show or sync the GitHub engine hub
+/creative          Show the built-in Creative Engine lane
+```
+
+## Workspace Files
+
+Switchbay looks for:
+
+- `SWITCHBAY.md`: persistent project context injected into coding sessions.
+- `.switchbay/memory.md`: workspace memory.
+- `.switchbay/pins.json`: pinned files and repo notes.
+- `.switchbay/agents/*.md`: custom local specialist agents.
+- `.switchbay/engines/*.engine.json`: workspace engine manifests.
+
+Compatibility reads are still enabled for the older ORI-Code / code-harness names:
+
+- `HARNESS.md`, `ORI.md`
+- `.harness/`, `.ori/`
+- `HARNESS_*`, `ORI_*` environment variables
+- `~/.code-harness/`, `~/.ori/` global config
+
+New writes use the Switchbay names.
+
 ## Engine Bay
 
-Switchbay can load swappable local engines from JSON manifests. Engines are small adapters around another project, script, or agent module. Drop a manifest into `.switchbay/engines/`, `~/.switchbay/engines/`, or a path listed in `SWITCHBAY_ENGINE_PATHS`, and Switchbay can list and run its tools through the model tool bridge.
+Engine Bay is Switchbay's swappable toolbox layer. An engine is a small manifest that exposes another local project, script, harness, or agent module as model-callable tools.
 
-Example manifest:
+Switchbay loads engines from:
+
+- `.switchbay/engines/`
+- `~/.switchbay/engines/`
+- paths listed in `SWITCHBAY_ENGINE_PATHS`
+- synced manifests from the GitHub Engine Bay cache
+
+GitHub-backed hub:
+
+```bash
+switchbay engines
+switchbay engines sync
+switchbay engines list
+switchbay engines templates
+```
+
+TUI:
+
+```text
+/engine-bay
+/engine-bay sync
+/engine-bay list
+/engine-bay templates
+/engines
+```
+
+By default, Engine Bay syncs from:
+
+```text
+https://github.com/genoventures-labs/Switchbay-Engines.git
+```
+
+into:
+
+```text
+~/.switchbay/engine-bay/Switchbay-Engines
+```
+
+Override with:
+
+```bash
+export SWITCHBAY_ENGINE_BAY_REPO=https://github.com/you/your-engine-bay.git
+export SWITCHBAY_ENGINE_BAY_PATH=~/.switchbay/engine-bay/Switchbay-Engines
+```
+
+Template:
 
 ```json
 {
@@ -184,46 +244,27 @@ Example manifest:
 }
 ```
 
-Generic engine tool calls:
+Generic engine tools exposed to the model:
 
 - `list_engines`
 - `list_engine_tools`
 - `run_engine_tool`
 - `validate_engines`
 
-`run_engine_tool` accepts `engine_id`, `tool_name`, and `args_json`.
-
-Shell helpers:
-
-- `/engines` lists loaded engines.
-- `/engine-bay` shows the cached GitHub Engine Bay status.
-- `/engine-bay sync` pulls the Switchbay-Engines GitHub repo into the local cache.
-- `/creative` shows the built-in Creative Engine lane.
-
-CLI helpers:
-
-```bash
-switchbay engines
-switchbay engines sync
-switchbay engines list
-switchbay engines templates
-```
-
-By default, Engine Bay syncs from `https://github.com/genoventures-labs/Switchbay-Engines.git` into `~/.switchbay/engine-bay/Switchbay-Engines`. Override with `SWITCHBAY_ENGINE_BAY_REPO` or `SWITCHBAY_ENGINE_BAY_PATH`.
-
 ## Creative Engine
 
-Switchbay includes a built-in `creative` engine for local writing support. It does not call an external model by itself; it gives the agent deterministic writing tools for briefs, naming, positioning, hooks, drafting, critique, and content planning.
+Switchbay includes a built-in `creative` engine for local writing support. It does not call an external model by itself; it gives the agent deterministic tools for briefs, naming, positioning, hooks, drafting, critique, voice notes, and content planning.
 
 Creative outputs are saved under:
 
 - `.switchbay/creative/briefs/`
+- `.switchbay/creative/packets/`
 - `.switchbay/creative/drafts/`
 - `.switchbay/creative/voices/`
 
 Drop markdown voice notes into `.switchbay/creative/voices/<voice>.md` and use `rewrite_voice` or `read_voice` to bring that style guide into a session.
 
-Creative tools include:
+Creative tools:
 
 - `creative_tools`
 - `creative_packet`
@@ -242,16 +283,18 @@ Creative tools include:
 
 Use `creative_packet` when you want one saved bundle containing a brief, positioning routes, names, hooks, draft copy, a short content calendar, and next moves.
 
-## GumOps Engine
+## Built-In And Auto-Discovered Engines
 
-GumOps is auto-discovered as the first engine when Switchbay can find a GumOps checkout. Point it at the checkout with:
+### GumOps
+
+GumOps is auto-discovered when Switchbay can find a GumOps checkout:
 
 ```bash
 export SWITCHBAY_GUMOPS_PATH=/path/to/GumOps
 export GUMROAD_ACCESS_TOKEN=...
 ```
 
-Convenience GumOps aliases include:
+Convenience tools include:
 
 - `gumops_tools`
 - `gumops_query`
@@ -265,9 +308,9 @@ Convenience GumOps aliases include:
 - `gumroad_account_info`
 - `gumroad_refund_sale`
 
-These aliases now route through the `gumops` engine. Read, query, memory, and reporting tools run directly. `gumroad_refund_sale` always stages an explicit approval before execution.
+`gumroad_refund_sale` always stages explicit approval before execution.
 
-When a GumOps checkout includes `engine_harnesses/fbgent.py` or `engine_harnesses/shopgent.py`, Switchbay also exposes read-only engine tools such as:
+When a GumOps checkout includes `engine_harnesses/fbgent.py` or `engine_harnesses/shopgent.py`, Switchbay also exposes read-only tools such as:
 
 - `facebook_get`
 - `facebook_page_insights`
@@ -278,15 +321,15 @@ When a GumOps checkout includes `engine_harnesses/fbgent.py` or `engine_harnesse
 - `shopify_order`
 - `shopify_insights`
 
-## Thinkapse Engine
+### Thinkapse
 
-Thinkapse is auto-discovered as a local CLI-only engine when Switchbay can find a Thinkapse checkout. Point it at the checkout with:
+Thinkapse is auto-discovered as a local CLI-only engine when Switchbay can find a checkout:
 
 ```bash
 export SWITCHBAY_THINKAPSE_PATH=/path/to/thinkapse
 ```
 
-The engine intentionally skips Thinkapse HTTP/API/webhook surfaces. It exposes local harness tools such as:
+Switchbay intentionally skips Thinkapse HTTP/API/webhook surfaces. It exposes local harness tools such as:
 
 - `capture`
 - `query_unprocessed`
@@ -307,6 +350,18 @@ The engine intentionally skips Thinkapse HTTP/API/webhook surfaces. It exposes l
 - `memory_context`
 
 Preview, query, triage, agent inspection, and ID parsing run directly. Route apply, force capture, mark processed, create/edit/delete/apply-style operations stage approval first.
+
+## Approval Model
+
+Switchbay is built for private/internal use, so it avoids excessive hand-holding for normal local work. It still stages approval for commands with broad or irreversible impact, including patterns like:
+
+- `rm`, `rmdir`
+- `git push`, `git reset`, `git clean`
+- `npm publish`, `bun publish`
+- `sudo`, `chmod`, `chown`
+- disk tools such as `dd`, `mkfs`, `fdisk`
+- shell-piped remote scripts
+- engine tools marked with `"approval": "always"`
 
 ## Development
 
@@ -330,9 +385,11 @@ Create a native binary:
 bun build index.tsx --compile --outfile bin/switchbay-native
 ```
 
-## Status
+Release:
 
-Switchbay is an active rename and normalization pass from the older ORI-Code / code-harness project. The current focus is stabilizing the provider-neutral shell, cleaning API lanes, tightening approval gates, and preparing the public Homebrew path.
+```bash
+./scripts/release.sh 0.9.48
+```
 
 ## License
 

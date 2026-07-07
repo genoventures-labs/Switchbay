@@ -73,7 +73,7 @@ export function Transcript({
               <Box flexDirection="column">
                 <Box gap={1} marginBottom={0}>
                   <Text color={brandColor}>⏺</Text>
-                  <Text color={TUI_COLORS.text} bold>Switchbay</Text>
+                  <Text color={TUI_COLORS.text} bold>Sway</Text>
                 </Box>
                 <Box paddingLeft={2} marginTop={0} flexShrink={1} flexDirection="column">
                   <MarkdownText content={entry.body} role="assistant" terminalWidth={terminalWidth - 4} />
@@ -116,7 +116,7 @@ export function Transcript({
           <Box flexDirection="column">
             <Box gap={1}>
               <Text color={brandColor}>⏺</Text>
-              <Text color={TUI_COLORS.text} bold>Switchbay</Text>
+              <Text color={TUI_COLORS.text} bold>Sway</Text>
             </Box>
             <Box paddingLeft={2} marginTop={0} flexShrink={1} flexDirection="column">
               <MarkdownText content={streamingText} role="assistant" terminalWidth={terminalWidth - 4} />

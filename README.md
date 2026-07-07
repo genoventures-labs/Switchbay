@@ -12,6 +12,8 @@
 
 It is the workbench around the model: a routing layer, context loader, local tool runner, memory system, session keeper, approval gate, engine registry, and terminal cockpit for agentic coding work.
 
+Inside the TUI, the assistant answers to **Sway**. Switchbay is the workbench; Sway is the callsign.
+
 Cloud when it helps. Local when it matters. Same rig either way.
 
 ## What It Does

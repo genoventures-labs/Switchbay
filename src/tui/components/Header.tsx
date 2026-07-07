@@ -88,7 +88,7 @@ export function Header({ lane = "Cloud", mode, status, terminalWidth = 120, work
       </Box>
       <Box>
         <Text color={TUI_COLORS.muted}>
-          Route a task, inspect the repo, or call a Switchbay lane.
+          Talk to Sway, route a task, inspect the repo, or call a Switchbay lane.
         </Text>
       </Box>
     </Box>

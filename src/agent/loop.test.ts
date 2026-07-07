@@ -702,6 +702,31 @@ test("agent commands use explicit /agent id activation", async () => {
   expect(oldDirectCommand.handled).toBe(false);
 });
 
+test("conversational creation requests open builders", async () => {
+  const baseOptions = {
+    client: {} as any,
+    profile: "switchbay",
+    sessionId: "test-session",
+    surface: "dev",
+    workspace: null,
+  };
+
+  const agent = await tryLocalCommand("Bay, make me a backend review agent", baseOptions);
+  expect(agent.handled).toBe(true);
+  expect(agent.openCreateAgent).toBe(true);
+
+  const engine = await tryLocalCommand("let's build a custom engine for reports", baseOptions);
+  expect(engine.handled).toBe(true);
+  expect(engine.openCreateEngine).toBe(true);
+
+  const skill = await tryLocalCommand("create a release checklist skill", baseOptions);
+  expect(skill.handled).toBe(true);
+  expect(skill.openCreateSkill).toBe(true);
+
+  const normalAsk = await tryLocalCommand("explain how this engine works", baseOptions);
+  expect(normalAsk.handled).toBe(false);
+});
+
 test("engine slash commands describe registered engines and creative tools", async () => {
   const cwd = await mkdtemp(join(tmpdir(), "switchbay-engine-commands-"));
   const baseOptions = {

@@ -75,7 +75,13 @@ export async function tryLocalCommand(
 ): Promise<LocalCommandResult> {
   const trimmed = input.trim();
 
-  if (!trimmed.startsWith("/")) return { handled: false };
+  if (!trimmed.startsWith("/")) {
+    const creationIntent = parseConversationalCreationIntent(trimmed);
+    if (creationIntent === "agent") return { handled: true, openCreateAgent: true };
+    if (creationIntent === "engine") return { handled: true, openCreateEngine: true };
+    if (creationIntent === "skill") return { handled: true, openCreateSkill: true };
+    return { handled: false };
+  }
 
   if (trimmed === "/clear") {
     return { handled: true, clearTranscript: true };
@@ -263,6 +269,22 @@ export async function tryLocalCommand(
   }
 
   return { handled: false };
+}
+
+function parseConversationalCreationIntent(input: string): "agent" | "engine" | "skill" | null {
+  const normalized = input
+    .toLowerCase()
+    .replace(/^[,\s]*(hey|yo|ok|okay)?\s*(bay|switchbay)[,\s:;-]*/i, "")
+    .replace(/[.!?]+$/g, "")
+    .trim();
+
+  const wantsCreate = /\b(create|make|build|add|setup|set up|scaffold|draft|generate)\b/.test(normalized);
+  if (!wantsCreate) return null;
+
+  if (/\b(agent|specialist|persona)\b/.test(normalized)) return "agent";
+  if (/\b(engine|engine builder|engine manifest|tool engine)\b/.test(normalized)) return "engine";
+  if (/\b(skill|toolbox skill|workflow|checklist)\b/.test(normalized)) return "skill";
+  return null;
 }
 
 async function handleInitCommand(

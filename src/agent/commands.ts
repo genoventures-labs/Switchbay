@@ -20,6 +20,14 @@ import { extractAssistantText } from "./loop";
 import { describeEngines, loadEngineRegistry } from "../engines/registry";
 import { describeEngineBay, loadEngineBayInventory } from "../engines/hub";
 import { describeToolbox, loadToolboxInventory, readToolboxSkill } from "../toolbox/hub";
+import {
+  addMemoryNote,
+  describeMemory,
+  forgetMemoryNote,
+  listMemoryNotes,
+  readMemoryFacts,
+  refreshMemory,
+} from "../memory/store";
 
 export type LocalCommandResult = {
   handled: boolean;
@@ -190,6 +198,10 @@ export async function tryLocalCommand(
 
   if (trimmed === "/memories") {
     return handleMemoriesCommand(options);
+  }
+
+  if (trimmed === "/memory" || trimmed.startsWith("/memory ")) {
+    return handleMemoryCommand(trimmed, options);
   }
 
   if (trimmed.startsWith("/forget ") || trimmed === "/forget") {
@@ -540,30 +552,21 @@ async function handleRememberCommand(trimmed: string, options: LocalCommandOptio
   const note = trimmed.slice("/remember".length).trim();
   if (!note) return { handled: true, assistantMessage: 'Usage: `/remember "note to keep in mind"`' };
   const cwd = options.workspace?.cwd ?? process.cwd();
-  const memPath = workspaceDataPath(cwd, "memory.md");
   try {
-    const { readFile: rf, writeFile: wf } = await import("node:fs/promises");
-    await mkdir(workspaceStorageDir(cwd), { recursive: true });
-    let existing = "";
-    try { existing = (await rf(existingWorkspaceDataPath(cwd, "memory.md"), "utf-8")).trim(); } catch {}
-    const lines = existing ? existing.split("\n").filter((l) => l.trim()) : [];
-    lines.push(`- ${note}`);
-    await wf(memPath, `${lines.join("\n")}\n`, "utf-8");
-    return { handled: true, assistantMessage: `Remembered: _${note}_\n\n${lines.length} note${lines.length !== 1 ? "s" : ""} in memory.` };
+    const count = await addMemoryNote(cwd, note);
+    return { handled: true, assistantMessage: `Remembered: _${note}_\n\n${count} note${count !== 1 ? "s" : ""} in memory.` };
   } catch (e: any) {
     return { handled: true, assistantMessage: `Failed to save: ${e.message}` };
   }
 }
 
-function handleMemoriesCommand(options: LocalCommandOptions): LocalCommandResult {
+async function handleMemoriesCommand(options: LocalCommandOptions): Promise<LocalCommandResult> {
   const cwd = options.workspace?.cwd ?? process.cwd();
-  const memPath = existingWorkspaceDataPath(cwd, "memory.md");
   try {
-    const content = readFileSync(memPath, "utf-8").trim();
-    const lines = content.split("\n").filter((l) => l.trim());
-    if (!lines.length) return { handled: true, assistantMessage: "Memory is empty. Add notes with `/remember`." };
-    const indexed = lines.map((l, i) => `${i}. ${l.replace(/^-\s*/, "")}`).join("\n");
-    return { handled: true, assistantMessage: `**Memory** (${lines.length} notes):\n\n${indexed}\n\nRemove with \`/forget <n>\`` };
+    const notes = await listMemoryNotes(cwd);
+    if (!notes.length) return { handled: true, assistantMessage: "Memory is empty. Add notes with `/remember`." };
+    const indexed = notes.map((note, i) => `${i}. ${note}`).join("\n");
+    return { handled: true, assistantMessage: `**Memory** (${notes.length} notes):\n\n${indexed}\n\nRemove with \`/forget <n>\`` };
   } catch {
     return { handled: true, assistantMessage: "Memory is empty. Add notes with `/remember`." };
   }
@@ -574,20 +577,36 @@ async function handleForgetCommand(trimmed: string, options: LocalCommandOptions
   const index = parseInt(indexStr, 10);
   if (isNaN(index)) return { handled: true, assistantMessage: "Usage: `/forget <index>` — use `/memories` to see indices." };
   const cwd = options.workspace?.cwd ?? process.cwd();
-  const memPath = workspaceDataPath(cwd, "memory.md");
   try {
-    const { writeFile: wf } = await import("node:fs/promises");
-    const content = readFileSync(existingWorkspaceDataPath(cwd, "memory.md"), "utf-8").trim();
-    const lines = content.split("\n").filter((l) => l.trim());
-    if (index < 0 || index >= lines.length) {
-      return { handled: true, assistantMessage: `No memory at index ${index}. Run \`/memories\` to list.` };
-    }
-    const removed = (lines[index] ?? "").replace(/^-\s*/, "");
-    lines.splice(index, 1);
-    await wf(memPath, lines.join("\n") + (lines.length ? "\n" : ""), "utf-8");
-    return { handled: true, assistantMessage: `Forgot: _${removed}_\n\n${lines.length} note${lines.length !== 1 ? "s" : ""} remaining.` };
+    const removed = await forgetMemoryNote(cwd, index);
+    if (!removed) return { handled: true, assistantMessage: `No memory at index ${index}. Run \`/memories\` to list.` };
+    const remaining = (await listMemoryNotes(cwd)).length;
+    return { handled: true, assistantMessage: `Forgot: _${removed}_\n\n${remaining} note${remaining !== 1 ? "s" : ""} remaining.` };
   } catch {
     return { handled: true, assistantMessage: "Memory is empty — nothing to forget." };
+  }
+}
+
+async function handleMemoryCommand(trimmed: string, options: LocalCommandOptions): Promise<LocalCommandResult> {
+  const cwd = options.workspace?.cwd ?? process.cwd();
+  const parts = trimmed.slice("/memory".length).trim().split(/\s+/).filter(Boolean);
+  const action = parts[0] ?? "status";
+  try {
+    if (action === "status") return { handled: true, assistantMessage: await describeMemory(cwd) };
+    if (action === "refresh") return { handled: true, assistantMessage: `Memory refreshed.\n\n${await refreshMemory(cwd)}` };
+    if (action === "facts") {
+      const facts = await readMemoryFacts(cwd);
+      return {
+        handled: true,
+        assistantMessage: facts.length
+          ? facts.map((fact) => `- \`${fact.key}\`: ${fact.value}`).join("\n")
+          : "No memory facts yet. Run `/memory refresh`.",
+      };
+    }
+    if (action === "read") return { handled: true, assistantMessage: await describeMemory(cwd) };
+    return { handled: true, assistantMessage: "Usage: `/memory [status|refresh|facts|read]`" };
+  } catch (e: any) {
+    return { handled: true, assistantMessage: `Memory failed: ${e.message}` };
   }
 }
 

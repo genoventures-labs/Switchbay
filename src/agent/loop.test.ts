@@ -115,6 +115,68 @@ test("buildTurn injects Toolbox skills into system context", async () => {
   expect(system).toContain("code-review-pass");
 });
 
+test("operational memory commands save, refresh, and inject context", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "switchbay-memory-"));
+  await writeFile(join(cwd, "package.json"), JSON.stringify({ name: "memory-demo", scripts: { test: "bun test" } }), "utf-8");
+
+  const remembered = await tryLocalCommand("/remember use Bun for tests", {
+    client: {} as any,
+    profile: "ori_code",
+    sessionId: "test-session",
+    surface: "dev",
+    workspace: {
+      cwd,
+      repoRoot: cwd,
+      branch: null,
+      dirtyFiles: [],
+      recentFiles: [],
+      diff: { hasChanges: false, stat: "" },
+    },
+  });
+  expect(remembered.handled).toBe(true);
+  expect(remembered.assistantMessage).toContain("Remembered");
+
+  const refreshed = await tryLocalCommand("/memory refresh", {
+    client: {} as any,
+    profile: "ori_code",
+    sessionId: "test-session",
+    surface: "dev",
+    workspace: {
+      cwd,
+      repoRoot: cwd,
+      branch: null,
+      dirtyFiles: [],
+      recentFiles: [],
+      diff: { hasChanges: false, stat: "" },
+    },
+  });
+  expect(refreshed.handled).toBe(true);
+  expect(refreshed.assistantMessage).toContain("Operational Memory");
+
+  const tool = await executeToolCall("memory_facts", {}, { cwd });
+  expect(tool.ok).toBe(true);
+  expect(tool.body).toContain("package.name: memory-demo");
+
+  const turn = await buildTurn({
+    input: "what should you remember?",
+    mode: "build",
+    previousObjective: null,
+    profile: "ori_code",
+    transcript: [],
+    workspace: {
+      cwd,
+      repoRoot: cwd,
+      branch: null,
+      dirtyFiles: [],
+      recentFiles: [],
+      diff: { hasChanges: false, stat: "" },
+    },
+  });
+  const system = turn.request.messages.find((message) => message.role === "system")?.content ?? "";
+  expect(system).toContain("OPERATIONAL MEMORY");
+  expect(system).toContain("use Bun for tests");
+});
+
 test("executeTurn feeds native tool results back into the next model call", async () => {
   const cwd = await mkdtemp(join(tmpdir(), "ori-code-loop-tool-"));
   await writeFile(join(cwd, "demo.txt"), "file body\n", "utf-8");

@@ -10,10 +10,11 @@ export type CliOptions = {
   resume: string | boolean; // string (id/index) or true (latest)
   newSession: boolean;
   purge: string | null;
-  subcommand: "run" | "update" | "version" | "help" | "engines" | "toolbox";
+  subcommand: "run" | "update" | "version" | "help" | "engines" | "toolbox" | "memory";
   engineAction: "status" | "sync" | "list" | "templates";
   toolboxAction: "status" | "sync" | "list" | "templates" | "read";
   toolboxSkill: string | null;
+  memoryAction: "status" | "refresh" | "list" | "facts";
 };
 
 export function parseCliArgs(argv: string[]): CliOptions {
@@ -71,6 +72,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
         engineAction,
         toolboxAction: "status",
         toolboxSkill: null,
+        memoryAction: "status",
       };
     } else if (arg === "toolbox") {
       const action = args[i + 1];
@@ -91,6 +93,28 @@ export function parseCliArgs(argv: string[]): CliOptions {
         engineAction: "status",
         toolboxAction,
         toolboxSkill: toolboxAction === "read" ? args[i + 2] ?? null : null,
+        memoryAction: "status",
+      };
+    } else if (arg === "memory") {
+      const action = args[i + 1];
+      const memoryAction = action === "refresh" || action === "list" || action === "facts" || action === "status"
+        ? action
+        : "status";
+      return {
+        surface,
+        profile,
+        mode,
+        lane,
+        initialQuery: "",
+        hop,
+        resume,
+        newSession,
+        purge,
+        subcommand: "memory",
+        engineAction: "status",
+        toolboxAction: "status",
+        toolboxSkill: null,
+        memoryAction,
       };
     } else if (arg === "update") {
       console.log("Run this to update Switchbay from source:\n");
@@ -102,7 +126,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
       console.log("switchbay 0.9.47");
       process.exit(0);
     } else if (arg === undefined || arg === "help" || arg === "--help" || arg === "-h") {
-      return { surface, profile, mode, lane, initialQuery: "", hop: null, resume: false, newSession: false, purge: null, subcommand: "help", engineAction: "status", toolboxAction: "status", toolboxSkill: null };
+      return { surface, profile, mode, lane, initialQuery: "", hop: null, resume: false, newSession: false, purge: null, subcommand: "help", engineAction: "status", toolboxAction: "status", toolboxSkill: null, memoryAction: "status" };
     } else if (!arg.startsWith("-")) {
       positional.push(arg);
     }
@@ -122,5 +146,6 @@ export function parseCliArgs(argv: string[]): CliOptions {
     engineAction: "status",
     toolboxAction: "status",
     toolboxSkill: null,
+    memoryAction: "status",
   };
 }

@@ -92,6 +92,12 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     category: "context",
+    command: "/memory",
+    description: "Show or refresh operational workspace memory.",
+    example: "/memory refresh",
+  },
+  {
+    category: "context",
     command: "/forget",
     description: "Remove a memory note by index.",
     example: "/forget 0",

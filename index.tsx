@@ -10,6 +10,7 @@ import { listSessions, purgeSessions, loadPersistedSession, savePersistedSession
 import { buildTurn, executeTurn, extractAssistantText, refreshWorkspace, synthesizeAssistantFallback } from "./src/agent/loop";
 import { describeEngineBay, loadEngineBayInventory, syncEngineBayRepo } from "./src/engines/hub";
 import { describeToolbox, loadToolboxInventory, readToolboxSkill } from "./src/toolbox/hub";
+import { describeMemory, listMemoryNotes, readMemoryFacts, refreshMemory } from "./src/memory/store";
 
 // ANSI colors for CLI mode
 const CLR = {
@@ -50,6 +51,10 @@ Usage:
   switchbay toolbox list             List available skills
   switchbay toolbox templates        List cached skill templates
   switchbay toolbox read <id>        Print a skill
+  switchbay memory                   Show workspace memory status
+  switchbay memory refresh           Refresh operational memory
+  switchbay memory list              List memory notes
+  switchbay memory facts             List structured memory facts
 
 Options:
   -s, --surface <type>   Surface context (default: dev)
@@ -71,6 +76,11 @@ Options:
 
   if (options.subcommand === "toolbox") {
     await runToolboxCommand(options.toolboxAction, options.toolboxSkill);
+    return;
+  }
+
+  if (options.subcommand === "memory") {
+    await runMemoryCommand(options.memoryAction);
     return;
   }
 
@@ -200,6 +210,31 @@ async function runToolboxCommand(action: "status" | "sync" | "list" | "templates
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`switchbay toolbox: ${msg}`);
+    process.exit(1);
+  }
+}
+
+async function runMemoryCommand(action: "status" | "refresh" | "list" | "facts") {
+  try {
+    const cwd = process.cwd();
+    if (action === "refresh") {
+      console.log(await refreshMemory(cwd));
+      return;
+    }
+    if (action === "list") {
+      const notes = await listMemoryNotes(cwd);
+      console.log(notes.length ? notes.map((note, index) => `${index}. ${note}`).join("\n") : "No memory notes.");
+      return;
+    }
+    if (action === "facts") {
+      const facts = await readMemoryFacts(cwd);
+      console.log(facts.length ? facts.map((fact) => `${fact.key}: ${fact.value}`).join("\n") : "No memory facts. Run `switchbay memory refresh`.");
+      return;
+    }
+    console.log(await describeMemory(cwd));
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`switchbay memory: ${msg}`);
     process.exit(1);
   }
 }

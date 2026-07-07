@@ -26,6 +26,7 @@ import {
   agentSystemPrompt,
 } from "./agents";
 import { buildToolboxPromptBlock } from "../toolbox/hub";
+import { buildMemoryPromptBlock } from "../memory/store";
 import {
   type AgentMode,
   createThoughtFrame,
@@ -255,15 +256,7 @@ export async function buildTurn(input: {
     } catch { /* ignore */ }
   }
 
-  // Inject workspace memory if it exists.
-  let memoryBlock = "";
-  const memoryPath = existingWorkspaceDataPath(cwd, "memory.md");
-  if (existsSync(memoryPath)) {
-    try {
-      const memory = readFileSync(memoryPath, "utf-8").trim();
-      if (memory) memoryBlock = `\n\nMEMORY (things to always keep in mind):\n${memory}`;
-    } catch { /* ignore */ }
-  }
+  const memoryBlock = await buildMemoryPromptBlock(cwd);
 
   // Inject pinned files
   let pinsBlock = "";

@@ -12,6 +12,7 @@ import {
   shellQuote,
 } from "../engines/registry";
 import { describeToolbox, readToolboxSkill } from "../toolbox/hub";
+import { addMemoryNote, describeMemory, refreshMemory, readMemoryFacts } from "../memory/store";
 
 // Commands that still require approval in the private-tool lane because they
 // are destructive, privileged, publishing, or have broad external impact.
@@ -397,6 +398,44 @@ export const AGENT_TOOLS: ToolDefinition[] = [
     function: {
       name: "sync_toolbox",
       description: "Pull the GitHub-backed Engine-Toolboxes repo into the local Toolbox cache.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "memory_status",
+      description: "Show workspace operational memory status.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "memory_refresh",
+      description: "Refresh workspace operational memory summary and structured facts.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "memory_remember",
+      description: "Add a workspace memory note.",
+      parameters: {
+        type: "object",
+        properties: {
+          note: { type: "string", description: "Memory note to save." },
+        },
+        required: ["note"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "memory_facts",
+      description: "List structured workspace memory facts.",
       parameters: { type: "object", properties: {} },
     },
   },
@@ -1149,6 +1188,46 @@ export async function executeToolCall(
           ok: true,
           summary: "Synced Toolbox",
           body: await describeToolbox(true),
+        };
+      }
+
+      case "memory_status": {
+        return {
+          tool: name,
+          ok: true,
+          summary: "Read operational memory status",
+          body: await describeMemory(cwd),
+        };
+      }
+
+      case "memory_refresh": {
+        return {
+          tool: name,
+          ok: true,
+          summary: "Refreshed operational memory",
+          body: await refreshMemory(cwd),
+        };
+      }
+
+      case "memory_remember": {
+        const note = String(args.note || "").trim();
+        if (!note) throw new Error("memory_remember requires a note.");
+        const count = await addMemoryNote(cwd, note);
+        return {
+          tool: name,
+          ok: true,
+          summary: "Saved memory note",
+          body: `Remembered: ${note}\n\n${count} note${count !== 1 ? "s" : ""} in memory.`,
+        };
+      }
+
+      case "memory_facts": {
+        const facts = await readMemoryFacts(cwd);
+        return {
+          tool: name,
+          ok: true,
+          summary: "Read memory facts",
+          body: facts.length ? facts.map((fact) => `${fact.key}: ${fact.value}`).join("\n") : "No memory facts. Run memory_refresh first.",
         };
       }
 

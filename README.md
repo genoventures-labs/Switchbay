@@ -124,6 +124,7 @@ switchbay version
 switchbay update
 switchbay engines sync
 switchbay toolbox list
+switchbay memory refresh
 ```
 
 ## Slash Commands
@@ -142,6 +143,7 @@ Inside the TUI:
 /pins              List pinned files
 /remember          Save a workspace memory note
 /memories          List workspace memory notes
+/memory            Show or refresh operational memory
 /review            Review the current diff
 /checkpoint        Save a git-stash checkpoint
 /checkpoints       List checkpoints
@@ -163,6 +165,7 @@ Switchbay looks for:
 
 - `SWITCHBAY.md`: persistent project context injected into coding sessions.
 - `.switchbay/memory.md`: workspace memory.
+- `.switchbay/memory/`: operational memory files.
 - `.switchbay/pins.json`: pinned files and repo notes.
 - `.switchbay/agents/*.md`: custom local specialist agents.
 - `.switchbay/engines/*.engine.json`: workspace engine manifests.
@@ -175,6 +178,47 @@ Compatibility reads are still enabled for the older ORI-Code / code-harness name
 - `~/.code-harness/`, `~/.ori/` global config
 
 New writes use the Switchbay names.
+
+## Operational Memory
+
+Switchbay keeps memory small and workspace-scoped. Human notes stay readable, while refreshable facts and summaries live in a folder that agents can use during sessions.
+
+Files:
+
+- `.switchbay/memory/notes.md`: remembered notes.
+- `.switchbay/memory/summary.md`: refreshed operational summary.
+- `.switchbay/memory/facts.json`: structured facts from project context, package metadata, and git.
+- `.switchbay/memory/config.json`: prompt-size and refresh settings.
+- `.switchbay/memory.md`: compatibility note list written alongside the new store.
+
+Commands:
+
+```bash
+switchbay memory
+switchbay memory refresh
+switchbay memory list
+switchbay memory facts
+```
+
+TUI:
+
+```text
+/remember use Bun for tests
+/memories
+/forget 0
+/memory
+/memory refresh
+/memory facts
+```
+
+Model tools:
+
+- `memory_status`
+- `memory_refresh`
+- `memory_remember`
+- `memory_facts`
+
+Memory is injected into sessions as a compact operational block. Opening a session does not create memory files; `/remember`, `/memory refresh`, or `switchbay memory` initializes the store.
 
 ## Engine Bay
 

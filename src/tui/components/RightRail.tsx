@@ -7,6 +7,7 @@ import { TUI_COLORS } from "../theme";
 
 type RightRailProps = {
   activeAgentId?: string | null;
+  activeSteps?: string[];
   availableAgents?: Agent[];
   changedFiles: string[];
   collapsedReason?: string | null;
@@ -22,6 +23,7 @@ type RightRailProps = {
 
 export function RightRail({
   activeAgentId,
+  activeSteps = [],
   availableAgents = [],
   changedFiles,
   collapsedReason = null,
@@ -54,7 +56,13 @@ export function RightRail({
       </RailPanel>
 
       <RailPanel title="Agent Feed" flexGrow={1}>
-        {toolEntries.length ? (
+        {activeSteps.length ? (
+          activeSteps.slice(0, 5).map((step, index) => (
+            <Box key={`${index}:${step}`} marginBottom={1}>
+              <Text color={TUI_COLORS.accent}>└ <Text color={TUI_COLORS.text}>{truncate(step, width - 6)}</Text></Text>
+            </Box>
+          ))
+        ) : toolEntries.length ? (
           toolEntries.map((entry) => (
             <Box key={entry.id} flexDirection="column" marginBottom={1}>
               <Text color={entry.tone === "error" ? TUI_COLORS.accentBright : TUI_COLORS.accent}>

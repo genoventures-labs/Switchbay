@@ -1547,6 +1547,7 @@ export function SwitchbayApp({
       {showRightRail ? (
         <RightRail
           activeAgentId={state.activeAgentId}
+          activeSteps={turnThoughts}
           availableAgents={availableAgents}
           changedFiles={state.changedFiles}
           mode={mode}

@@ -39,6 +39,8 @@ import { ShortcutDrawer } from "./components/ShortcutDrawer";
 import { getCommandMatches } from "./commands";
 import { runCommand, runShellString } from "../tools/shell";
 import { loadEngineRegistry, type EngineManifest } from "../engines/registry";
+import { ModelDrawer } from "./components/ModelDrawer";
+import { listRuntimeModels, type RuntimeModelOption } from "../runtime/models";
 
 export type SwitchbayAppProps = {
   client: ChatRuntimeClient;
@@ -51,7 +53,7 @@ export type SwitchbayAppProps = {
   resumeId?: string | null;
 };
 
-type ComposerMode = "default" | "edit_file_picker" | "edit_intent" | "resume_picker" | "agent_picker" | "engine_picker" | "create_agent" | "shortcut_picker";
+type ComposerMode = "default" | "edit_file_picker" | "edit_intent" | "resume_picker" | "agent_picker" | "engine_picker" | "model_picker" | "create_agent" | "shortcut_picker";
 
 export function SwitchbayApp({
   client,
@@ -108,6 +110,10 @@ export function SwitchbayApp({
   const [selectedAgentIndex, setSelectedAgentIndex] = useState(0);
   const [availableEngines, setAvailableEngines] = useState<EngineManifest[]>([]);
   const [selectedEngineIndex, setSelectedEngineIndex] = useState(0);
+  const [availableModels, setAvailableModels] = useState<RuntimeModelOption[]>([]);
+  const [selectedModelIndex, setSelectedModelIndex] = useState(0);
+  const [activeRuntimeModel, setActiveRuntimeModel] = useState<RuntimeModelOption | null>(null);
+  const [modelDrawerNotice, setModelDrawerNotice] = useState<string | null>(null);
   const [createAgentGenerating, setCreateAgentGenerating] = useState(false);
   const [pendingAgentDraft, setPendingAgentDraft] = useState<PendingAgentDraft | null>(null);
   const [turnThoughts, setTurnThoughts] = useState<string[]>([]);
@@ -144,7 +150,11 @@ export function SwitchbayApp({
   const resumeDrawerVisible = composerMode === "resume_picker";
   const shortcutDrawerVisible = composerMode === "shortcut_picker";
   const engineDrawerVisible = composerMode === "engine_picker";
+  const modelDrawerVisible = composerMode === "model_picker";
   const engineDrawerItems = useMemo(() => flattenEngineDrawerItems(availableEngines), [availableEngines]);
+  const runtimeBadge = activeRuntimeModel
+    ? `${getRuntimeLaneLabel(runtimeLane)} · ${activeRuntimeModel.id}`
+    : getRuntimeLaneLabel(runtimeLane);
 
   const editPickerState = useMemo(() => {
     if (composerMode !== "edit_file_picker") {
@@ -166,7 +176,7 @@ export function SwitchbayApp({
   const composerRows = initialQuery ? 3 : state.status === "THINKING" ? Math.min(7, 4 + turnThoughts.length) : 4;
   const drawerRows =
     commandDrawerVisible || mentionPickerVisible || resumeDrawerVisible || shortcutDrawerVisible ||
-    editPickerState.visible || composerMode === "agent_picker" || engineDrawerVisible || composerMode === "create_agent"
+    editPickerState.visible || composerMode === "agent_picker" || engineDrawerVisible || modelDrawerVisible || composerMode === "create_agent"
       ? 10
       : composerMode === "edit_intent"
         ? 5
@@ -195,12 +205,46 @@ export function SwitchbayApp({
   function switchRuntimeLane(nextLane?: RuntimeLane) {
     const resolved = nextLane ?? (runtimeLane === "cloud" ? "local" : "cloud");
     setRuntimeLane(resolved);
+    setActiveRuntimeModel(null);
     setRuntimeClient(createRuntimeClient(resolved));
     dispatch({
       type: "assistant/appended",
       message: `Runtime lane switched to **${getRuntimeLaneLabel(resolved)}**.`,
     });
     setQuerySync("");
+  }
+
+  async function openModelDrawer(targetLane: RuntimeLane = runtimeLane) {
+    setComposerMode("model_picker");
+    setSelectedModelIndex(0);
+    setAvailableModels([]);
+    setModelDrawerNotice(targetLane === "local" ? "Checking LM Studio models..." : null);
+    try {
+      const result = await listRuntimeModels(targetLane);
+      setAvailableModels(result.models);
+      setModelDrawerNotice(result.notice ?? null);
+      const activeIndex = result.models.findIndex((model) =>
+        activeRuntimeModel?.id === model.id && activeRuntimeModel.provider === model.provider
+      );
+      setSelectedModelIndex(activeIndex >= 0 ? activeIndex : 0);
+    } catch (error: any) {
+      setModelDrawerNotice(`Model list failed: ${error.message}`);
+    }
+  }
+
+  function selectRuntimeModel(model: RuntimeModelOption) {
+    const provider = model.provider === "openai" || model.provider === "anthropic"
+      ? model.provider
+      : null;
+    setRuntimeLane(model.lane);
+    setActiveRuntimeModel(model);
+    setRuntimeClient(createRuntimeClient(model.lane, { model: model.id, provider }));
+    setComposerMode("default");
+    setQuerySync("");
+    dispatch({
+      type: "assistant/appended",
+      message: `Model switched to **${model.id}** on **${getRuntimeLaneLabel(model.lane)}**.`,
+    });
   }
 
   useInput((input, key) => {
@@ -228,6 +272,30 @@ export function SwitchbayApp({
 
     const agentPickerVisible = composerMode === "agent_picker";
     const enginePickerVisible = composerMode === "engine_picker";
+    const modelPickerVisible = composerMode === "model_picker";
+    if (modelPickerVisible) {
+      if (key.upArrow) {
+        setSelectedModelIndex((prev) => prev <= 0 ? Math.max(0, availableModels.length - 1) : prev - 1);
+        return;
+      }
+      if (key.downArrow) {
+        setSelectedModelIndex((prev) => prev >= availableModels.length - 1 ? 0 : prev + 1);
+        return;
+      }
+      if (key.return || key.tab) {
+        const selected = availableModels[selectedModelIndex];
+        if (selected) {
+          selectRuntimeModel(selected);
+        }
+        return;
+      }
+      if (key.escape) {
+        setComposerMode("default");
+        setQuerySync("");
+        return;
+      }
+    }
+
     if (enginePickerVisible) {
       if (key.upArrow) {
         setSelectedEngineIndex((prev) => prev <= 0 ? Math.max(0, engineDrawerItems.length - 1) : prev - 1);
@@ -682,6 +750,32 @@ export function SwitchbayApp({
       dispatch({
         type: "assistant/appended",
         message: `Unknown lane \`${requested}\`. Use \`/lane cloud\`, \`/lane local\`, or \`/lane\` to toggle.`,
+      });
+      setQuerySync("");
+      return;
+    }
+
+    if (trimmedVal === "/model" || trimmedVal === "/models" || trimmedVal.startsWith("/model ") || trimmedVal.startsWith("/models ")) {
+      const commandName = trimmedVal.startsWith("/models") ? "/models" : "/model";
+      const requested = trimmedVal.slice(commandName.length).trim().toLowerCase();
+      if (!requested) {
+        void openModelDrawer(runtimeLane);
+        setQuerySync("");
+        return;
+      }
+      if (requested === "cloud") {
+        void openModelDrawer("cloud");
+        setQuerySync("");
+        return;
+      }
+      if (requested === "local" || requested === "lm" || requested === "lmstudio") {
+        void openModelDrawer("local");
+        setQuerySync("");
+        return;
+      }
+      dispatch({
+        type: "assistant/appended",
+        message: `Unknown model lane \`${requested}\`. Use \`/model\`, \`/model cloud\`, or \`/model local\`.`,
       });
       setQuerySync("");
       return;
@@ -1243,7 +1337,7 @@ export function SwitchbayApp({
   useEffect(() => {
     const trimmed = query.trim();
 
-    if (composerMode === "edit_intent" || composerMode === "resume_picker" || composerMode === "agent_picker" || composerMode === "create_agent" || composerMode === "shortcut_picker") {
+    if (composerMode === "edit_intent" || composerMode === "resume_picker" || composerMode === "agent_picker" || composerMode === "model_picker" || composerMode === "create_agent" || composerMode === "shortcut_picker") {
       return;
     }
 
@@ -1274,7 +1368,7 @@ export function SwitchbayApp({
     <Box flexDirection="column" width={stdoutWidth} height={stdoutHeight} overflowY="hidden">
       {state.transcript.length > 0 && (
         <Header
-          lane={getRuntimeLaneLabel(runtimeLane)}
+          lane={runtimeBadge}
           mode={mode}
           profile={state.resolvedProfile}
           status={state.status}
@@ -1286,7 +1380,7 @@ export function SwitchbayApp({
       )}
       <Box height={transcriptAreaHeight} flexDirection="column" overflowY="hidden">
         <Transcript
-          lane={getRuntimeLaneLabel(runtimeLane)}
+          lane={runtimeBadge}
           entries={visibleTranscriptEntries}
           hasMoreAbove={transcriptStartIndex > 0}
           hasMoreBelow={transcriptEndIndex < totalTranscriptEntries}
@@ -1325,6 +1419,13 @@ export function SwitchbayApp({
         items={engineDrawerItems}
         selectedIndex={selectedEngineIndex}
         visible={engineDrawerVisible}
+      />
+      <ModelDrawer
+        activeModel={activeRuntimeModel}
+        items={availableModels}
+        notice={modelDrawerNotice}
+        selectedIndex={selectedModelIndex}
+        visible={modelDrawerVisible}
       />
       <CreateAgentDrawer
         visible={composerMode === "create_agent" || createAgentGenerating}

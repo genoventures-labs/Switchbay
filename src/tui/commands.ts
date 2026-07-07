@@ -67,6 +67,18 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     example: "/lane local",
   },
   {
+    category: "runtime",
+    command: "/model",
+    description: "Open the model picker for the active runtime lane.",
+    example: "/model",
+  },
+  {
+    category: "runtime",
+    command: "/models",
+    description: "List/select models for the active runtime lane.",
+    example: "/models",
+  },
+  {
     category: "context",
     command: "/init",
     description: "Generate a project context file for this workspace.",

@@ -76,9 +76,11 @@ Local LM Studio lane:
 
 ```bash
 export SWITCHBAY_LANE=local
-export SWITCHBAY_LMSTUDIO_BASE=http://127.0.0.1:1234/v1
+export SWITCHBAY_LMSTUDIO_BASE=http://192.168.1.50:1234/v1 # use your LM Studio host
 export SWITCHBAY_LMSTUDIO_MODEL=qwen2.5-7b-instruct
 ```
+
+Inside the TUI, use `/lane` to toggle Cloud/LM Studio and `/model` to open the model drawer. Cloud models use built-in OpenAI/Anthropic presets; LM Studio models are fetched from `SWITCHBAY_LMSTUDIO_BASE`.
 
 Per command:
 

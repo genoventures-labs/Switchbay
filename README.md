@@ -155,6 +155,159 @@ switchbay version
 switchbay update
 ```
 
+## Engine Bay
+
+Switchbay can load swappable local engines from JSON manifests. Engines are small adapters around another project, script, or agent module. Drop a manifest into `.switchbay/engines/`, `~/.switchbay/engines/`, or a path listed in `SWITCHBAY_ENGINE_PATHS`, and Switchbay can list and run its tools through the model tool bridge.
+
+Example manifest:
+
+```json
+{
+  "id": "demo",
+  "name": "Demo Engine",
+  "description": "Tiny local helper engine.",
+  "cwd": "/path/to/demo",
+  "tools": [
+    {
+      "name": "say",
+      "description": "Print text.",
+      "command": "printf {{text}}",
+      "parameters": {
+        "text": { "type": "string", "description": "Text to print." }
+      },
+      "required": ["text"]
+    }
+  ],
+  "approval": {
+    "always": ["publish", "refund", "delete"]
+  }
+}
+```
+
+Generic engine tool calls:
+
+- `list_engines`
+- `list_engine_tools`
+- `run_engine_tool`
+- `validate_engines`
+
+`run_engine_tool` accepts `engine_id`, `tool_name`, and `args_json`.
+
+Shell helpers:
+
+- `/engines` lists loaded engines.
+- `/engine-bay` shows the cached GitHub Engine Bay status.
+- `/engine-bay sync` pulls the Switchbay-Engines GitHub repo into the local cache.
+- `/creative` shows the built-in Creative Engine lane.
+
+CLI helpers:
+
+```bash
+switchbay engines
+switchbay engines sync
+switchbay engines list
+switchbay engines templates
+```
+
+By default, Engine Bay syncs from `https://github.com/genoventures-labs/Switchbay-Engines.git` into `~/.switchbay/engine-bay/Switchbay-Engines`. Override with `SWITCHBAY_ENGINE_BAY_REPO` or `SWITCHBAY_ENGINE_BAY_PATH`.
+
+## Creative Engine
+
+Switchbay includes a built-in `creative` engine for local writing support. It does not call an external model by itself; it gives the agent deterministic writing tools for briefs, naming, positioning, hooks, drafting, critique, and content planning.
+
+Creative outputs are saved under:
+
+- `.switchbay/creative/briefs/`
+- `.switchbay/creative/drafts/`
+- `.switchbay/creative/voices/`
+
+Drop markdown voice notes into `.switchbay/creative/voices/<voice>.md` and use `rewrite_voice` or `read_voice` to bring that style guide into a session.
+
+Creative tools include:
+
+- `creative_tools`
+- `creative_packet`
+- `creative_brief`
+- `name_storm`
+- `positioning_routes`
+- `hook_bank`
+- `copy_draft`
+- `rewrite_voice`
+- `tighten_copy`
+- `expand_idea`
+- `critique_copy`
+- `content_calendar`
+- `list_voices`
+- `read_voice`
+
+Use `creative_packet` when you want one saved bundle containing a brief, positioning routes, names, hooks, draft copy, a short content calendar, and next moves.
+
+## GumOps Engine
+
+GumOps is auto-discovered as the first engine when Switchbay can find a GumOps checkout. Point it at the checkout with:
+
+```bash
+export SWITCHBAY_GUMOPS_PATH=/path/to/GumOps
+export GUMROAD_ACCESS_TOKEN=...
+```
+
+Convenience GumOps aliases include:
+
+- `gumops_tools`
+- `gumops_query`
+- `gumops_refresh`
+- `gumops_memory_list`
+- `gumops_memory_get`
+- `gumops_memory_add`
+- `gumops_memory_find`
+- `gumroad_products`
+- `gumroad_sales_summary`
+- `gumroad_account_info`
+- `gumroad_refund_sale`
+
+These aliases now route through the `gumops` engine. Read, query, memory, and reporting tools run directly. `gumroad_refund_sale` always stages an explicit approval before execution.
+
+When a GumOps checkout includes `engine_harnesses/fbgent.py` or `engine_harnesses/shopgent.py`, Switchbay also exposes read-only engine tools such as:
+
+- `facebook_get`
+- `facebook_page_insights`
+- `shopify_shop_info`
+- `shopify_products`
+- `shopify_product`
+- `shopify_orders`
+- `shopify_order`
+- `shopify_insights`
+
+## Thinkapse Engine
+
+Thinkapse is auto-discovered as a local CLI-only engine when Switchbay can find a Thinkapse checkout. Point it at the checkout with:
+
+```bash
+export SWITCHBAY_THINKAPSE_PATH=/path/to/thinkapse
+```
+
+The engine intentionally skips Thinkapse HTTP/API/webhook surfaces. It exposes local harness tools such as:
+
+- `capture`
+- `query_unprocessed`
+- `query_named`
+- `triage`
+- `route_preview`
+- `route_apply`
+- `agents`
+- `agent_show`
+- `agent_validate`
+- `parse_notion_id`
+- `suno_capture`
+- `hellhound_capture`
+- `msc_product_capture`
+- `msc_order_capture`
+- `msc_route_preview`
+- `memory_status`
+- `memory_context`
+
+Preview, query, triage, agent inspection, and ID parsing run directly. Route apply, force capture, mark processed, create/edit/delete/apply-style operations stage approval first.
+
 ## Development
 
 Switchbay is Bun-first:

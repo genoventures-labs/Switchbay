@@ -17,6 +17,8 @@ import type { PatchPreview } from "../tools/patch";
 import { runCommand } from "../tools/shell";
 import { findAgent, loadAllAgents } from "./agents";
 import { extractAssistantText } from "./loop";
+import { describeEngines, loadEngineRegistry } from "../engines/registry";
+import { describeEngineBay, loadEngineBayInventory } from "../engines/hub";
 
 export type LocalCommandResult = {
   handled: boolean;
@@ -108,6 +110,19 @@ export async function tryLocalCommand(
 
   if (trimmed === "/create-agent") {
     return { handled: true, openCreateAgent: true };
+  }
+
+  if (trimmed === "/engines") {
+    const cwd = options.workspace?.cwd ?? process.cwd();
+    return { handled: true, assistantMessage: await describeEngines(cwd) };
+  }
+
+  if (trimmed === "/engine-bay" || trimmed.startsWith("/engine-bay ")) {
+    return handleEngineBayCommand(trimmed);
+  }
+
+  if (trimmed === "/creative") {
+    return handleCreativeCommand(options);
   }
 
   if (trimmed === "/agents" || trimmed === "/agent") {
@@ -313,6 +328,74 @@ function collectProjectSignals(cwd: string, isUpdate: boolean, contextPath: stri
   }
 
   return signals;
+}
+
+async function handleCreativeCommand(options: LocalCommandOptions): Promise<LocalCommandResult> {
+  const cwd = options.workspace?.cwd ?? process.cwd();
+  const registry = await loadEngineRegistry(cwd);
+  const creative = registry.engines.find((engine) => engine.id === "creative");
+  if (!creative) {
+    return { handled: true, assistantMessage: "Creative Engine is not available in this workspace." };
+  }
+
+  const tools = creative.tools
+    .map((tool) => `- \`${tool.name}\` - ${tool.description}`)
+    .join("\n");
+  return {
+    handled: true,
+    assistantMessage: [
+      "**Creative Engine**",
+      "",
+      creative.description,
+      "",
+      tools,
+      "",
+      "Saved outputs:",
+      "- `.switchbay/creative/briefs/`",
+      "- `.switchbay/creative/packets/`",
+      "- `.switchbay/creative/drafts/`",
+      "- `.switchbay/creative/voices/`",
+      "",
+      "Ask for a creative packet when you want the full brief, positioning, names, hooks, draft, and calendar bundle.",
+    ].join("\n"),
+  };
+}
+
+async function handleEngineBayCommand(trimmed: string): Promise<LocalCommandResult> {
+  const action = trimmed.slice("/engine-bay".length).trim();
+  try {
+    if (action === "sync") {
+      return { handled: true, assistantMessage: await describeEngineBay(true) };
+    }
+
+    const inventory = await loadEngineBayInventory();
+    if (action === "templates") {
+      return {
+        handled: true,
+        assistantMessage: inventory.templates.length
+          ? inventory.templates.map((item) => `- \`${item}\``).join("\n")
+          : "No Engine Bay templates found. Run `/engine-bay sync`.",
+      };
+    }
+
+    if (action === "list") {
+      const items = [...inventory.manifests, ...inventory.engineFiles];
+      return {
+        handled: true,
+        assistantMessage: items.length
+          ? items.map((item) => `- \`${item}\``).join("\n")
+          : "No Engine Bay files found. Run `/engine-bay sync`.",
+      };
+    }
+
+    if (action && action !== "status") {
+      return { handled: true, assistantMessage: "Usage: `/engine-bay [status|sync|list|templates]`" };
+    }
+
+    return { handled: true, assistantMessage: await describeEngineBay(false) };
+  } catch (e: any) {
+    return { handled: true, assistantMessage: `Engine Bay failed: ${e.message}` };
+  }
 }
 
 async function handleReviewCommand(

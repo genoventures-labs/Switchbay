@@ -1,5 +1,5 @@
 export type SlashCommand = {
-  category: "session" | "context" | "safety" | "planning" | "agents";
+  category: "session" | "context" | "safety" | "planning" | "agents" | "engines";
   command: string;
   description: string;
   example: string;
@@ -143,6 +143,24 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     command: "/stop",
     description: "Stop the active plan.",
     example: "/stop",
+  },
+  {
+    category: "engines",
+    command: "/engines",
+    description: "List registered Switchbay engines.",
+    example: "/engines",
+  },
+  {
+    category: "engines",
+    command: "/engine-bay",
+    description: "Show or sync the GitHub-backed Switchbay engine/template hub.",
+    example: "/engine-bay sync",
+  },
+  {
+    category: "engines",
+    command: "/creative",
+    description: "Show Creative Engine tools for writing packets, hooks, names, and drafts.",
+    example: "/creative",
   },
   {
     category: "agents",

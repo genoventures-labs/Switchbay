@@ -8,6 +8,7 @@ import { loadSwitchbayConfig } from "./src/config/switchbay-config";
 import { fuzzyMatchLocations, travelTo } from "./src/tools/travel";
 import { listSessions, purgeSessions, loadPersistedSession, savePersistedSession } from "./src/session/persistence";
 import { buildTurn, executeTurn, extractAssistantText, refreshWorkspace, synthesizeAssistantFallback } from "./src/agent/loop";
+import { describeEngineBay, loadEngineBayInventory, syncEngineBayRepo } from "./src/engines/hub";
 
 // ANSI colors for CLI mode
 const CLR = {
@@ -39,6 +40,10 @@ Usage:
   switchbay --purge <duration>       Clean up old sessions (e.g. 1d, 1w)
   switchbay update                   Print update instructions
   switchbay version                  Print version
+  switchbay engines                  Show Engine Bay cache status
+  switchbay engines sync             Pull the Switchbay-Engines GitHub repo
+  switchbay engines list             List cached engine files and manifests
+  switchbay engines templates        List cached templates
 
 Options:
   -s, --surface <type>   Surface context (default: dev)
@@ -50,6 +55,11 @@ Options:
   --new                  Force a fresh session even if a saved one exists
   --purge <duration>     Purge sessions older than duration (1d, 5d, 2w, etc.)
 `);
+    return;
+  }
+
+  if (options.subcommand === "engines") {
+    await runEngineCommand(options.engineAction);
     return;
   }
 
@@ -117,6 +127,31 @@ Options:
       resumeId={resumeId}
     />,
   );
+}
+
+async function runEngineCommand(action: "status" | "sync" | "list" | "templates") {
+  try {
+    if (action === "sync") {
+      console.log(await describeEngineBay(true));
+      return;
+    }
+
+    const inventory = await loadEngineBayInventory();
+    if (action === "templates") {
+      console.log(inventory.templates.length ? inventory.templates.join("\n") : "No Engine Bay templates found. Run `switchbay engines sync`.");
+      return;
+    }
+    if (action === "list") {
+      const items = [...inventory.manifests, ...inventory.engineFiles];
+      console.log(items.length ? items.join("\n") : "No Engine Bay files found. Run `switchbay engines sync`.");
+      return;
+    }
+    console.log(await describeEngineBay(false));
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`switchbay engines: ${msg}`);
+    process.exit(1);
+  }
 }
 
 async function runCliMode(options: any, resumeId: string | null) {

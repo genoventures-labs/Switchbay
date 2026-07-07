@@ -4,6 +4,13 @@ import type { WorkspaceSnapshot } from "../session/workspace";
 import type { ShellCommand } from "./turn-state";
 import { buildPatchPreview, type PatchPreview } from "../tools/patch";
 import { runCommand, runShellString } from "../tools/shell";
+import {
+  describeEngines,
+  loadEngineRegistry,
+  parseEngineArgs,
+  renderEngineToolCommand,
+  shellQuote,
+} from "../engines/registry";
 
 // Commands that still require approval in the private-tool lane because they
 // are destructive, privileged, publishing, or have broad external impact.
@@ -313,6 +320,308 @@ export const AGENT_TOOLS: ToolDefinition[] = [
           remote: { type: "string", description: "Remote name (default: origin)." },
           branch: { type: "string", description: "Branch name (default: current branch)." },
         },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "list_engines",
+      description: "List swappable external engines registered with Switchbay.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "list_engine_tools",
+      description: "List tools exposed by a registered Switchbay engine.",
+      parameters: {
+        type: "object",
+        properties: {
+          engine_id: { type: "string", description: "Engine id, such as gumops." },
+        },
+        required: ["engine_id"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "run_engine_tool",
+      description: "Run a tool exposed by a registered Switchbay engine. Provide args_json as a JSON object string.",
+      parameters: {
+        type: "object",
+        properties: {
+          engine_id: { type: "string", description: "Engine id, such as gumops." },
+          tool_name: { type: "string", description: "Tool name inside that engine." },
+          args_json: { type: "string", description: "Tool arguments as a JSON object string." },
+        },
+        required: ["engine_id", "tool_name"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "validate_engines",
+      description: "Validate registered Switchbay engine manifests and report warnings.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "creative_tools",
+      description: "List built-in Creative Engine tools for writing, naming, positioning, hooks, critique, and packets.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "creative_packet",
+      description: "Build and save a complete creative packet: brief, positioning, names, hooks, draft copy, and content calendar.",
+      parameters: {
+        type: "object",
+        properties: {
+          brief: { type: "string", description: "Project, product, offer, or writing brief." },
+          audience: { type: "string", description: "Target audience." },
+          format: { type: "string", description: "Primary output format, such as post, email, landing, script, or announcement." },
+          days: { type: "number", description: "Content calendar length, up to 31 days." },
+        },
+        required: ["brief"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "creative_brief",
+      description: "Turn rough notes into a structured creative brief and save it locally.",
+      parameters: {
+        type: "object",
+        properties: {
+          notes: { type: "string", description: "Rough notes, idea, or context." },
+        },
+        required: ["notes"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "name_storm",
+      description: "Generate naming routes from a brief.",
+      parameters: {
+        type: "object",
+        properties: {
+          brief: { type: "string", description: "Naming brief or context." },
+          count: { type: "number", description: "Number of name options." },
+        },
+        required: ["brief"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "positioning_routes",
+      description: "Explore positioning angles from a brief.",
+      parameters: {
+        type: "object",
+        properties: {
+          brief: { type: "string", description: "Project, product, or offer brief." },
+        },
+        required: ["brief"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "hook_bank",
+      description: "Generate hooks for a topic, audience, and format.",
+      parameters: {
+        type: "object",
+        properties: {
+          topic: { type: "string", description: "Topic or campaign theme." },
+          audience: { type: "string", description: "Target audience." },
+          format: { type: "string", description: "Post, email, ad, script, or other format." },
+        },
+        required: ["topic"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "copy_draft",
+      description: "Draft practical copy for a selected format and save it locally.",
+      parameters: {
+        type: "object",
+        properties: {
+          brief: { type: "string", description: "Copy brief." },
+          format: { type: "string", description: "Post, email, landing, product, bio, or announcement." },
+        },
+        required: ["brief"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "critique_copy",
+      description: "Critique copy for clarity, specificity, CTA strength, and cringe risk.",
+      parameters: {
+        type: "object",
+        properties: {
+          text: { type: "string", description: "Copy to critique." },
+        },
+        required: ["text"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "content_calendar",
+      description: "Turn a theme into a simple content calendar and save it locally.",
+      parameters: {
+        type: "object",
+        properties: {
+          theme: { type: "string", description: "Theme, product, or campaign." },
+          days: { type: "number", description: "Number of days, up to 31." },
+        },
+        required: ["theme"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "gumops_tools",
+      description: "List the available GumOps tools through the Switchbay engine registry.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "gumops_query",
+      description: "Ask the GumOps agent a Gumroad operations question through its local CLI.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "Question or instruction for the GumOps agent." },
+          model: { type: "string", description: "Optional LM Studio model name." },
+          no_tools: { type: "boolean", description: "If true, ask GumOps without its own tool-enabled agent actions." },
+        },
+        required: ["query"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "gumops_refresh",
+      description: "Refresh GumOps working memory from Gumroad data.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "gumops_memory_list",
+      description: "List keys in GumOps working memory.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "gumops_memory_get",
+      description: "Read a GumOps working-memory item by key.",
+      parameters: {
+        type: "object",
+        properties: {
+          key: { type: "string", description: "Memory key to read." },
+        },
+        required: ["key"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "gumops_memory_add",
+      description: "Add or update a GumOps working-memory item.",
+      parameters: {
+        type: "object",
+        properties: {
+          key: { type: "string", description: "Memory key to add or update." },
+          value: { type: "string", description: "Memory value as text or JSON." },
+        },
+        required: ["key", "value"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "gumops_memory_find",
+      description: "Search GumOps working memory.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "Search text." },
+        },
+        required: ["query"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "gumroad_products",
+      description: "List Gumroad products through GumOps.",
+      parameters: {
+        type: "object",
+        properties: {
+          page: { type: "number", description: "Gumroad products page to fetch." },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "gumroad_sales_summary",
+      description: "Return Gumroad sales, revenue, and refund summary through GumOps.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "gumroad_account_info",
+      description: "Return Gumroad seller account info through GumOps.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "gumroad_refund_sale",
+      description: "Stage a Gumroad refund through GumOps. This always requires explicit approval before execution.",
+      parameters: {
+        type: "object",
+        properties: {
+          sale_id: { type: "string", description: "Gumroad sale ID to refund." },
+          amount: { type: "number", description: "Optional refund amount. Omit for a full refund." },
+          approval_reason: { type: "string", description: "Reason to show before asking the user to approve the refund." },
+        },
+        required: ["sale_id"],
       },
     },
   },
@@ -739,6 +1048,194 @@ export async function executeToolCall(
         };
       }
 
+      case "list_engines": {
+        return {
+          tool: name,
+          ok: true,
+          summary: "Listed Switchbay engines",
+          body: await describeEngines(cwd),
+        };
+      }
+
+      case "list_engine_tools": {
+        const engineId = String(args.engine_id || "").trim();
+        if (!engineId) throw new Error("list_engine_tools requires an engine_id.");
+        const registry = await loadEngineRegistry(cwd);
+        const engine = registry.engines.find((entry) => entry.id === engineId);
+        if (!engine) throw new Error(`Engine not found: ${engineId}`);
+        const body = engine.tools
+          .map((tool) => {
+            const params = Object.entries(tool.parameters ?? {})
+              .map(([param, config]) => `${param}:${config.type}`)
+              .join(", ");
+            return `${tool.name}${params ? ` (${params})` : ""} - ${tool.description}`;
+          })
+          .join("\n");
+        return {
+          tool: name,
+          ok: true,
+          summary: `Listed tools for ${engineId}`,
+          body: body || `Engine ${engineId} has no tools.`,
+        };
+      }
+
+      case "validate_engines": {
+        const registry = await loadEngineRegistry(cwd);
+        return {
+          tool: name,
+          ok: registry.warnings.length === 0,
+          summary: registry.warnings.length === 0 ? "Engine registry is valid" : "Engine registry has warnings",
+          body: registry.warnings.length === 0
+            ? `Loaded ${registry.engines.length} engine(s): ${registry.engines.map((engine) => engine.id).join(", ") || "(none)"}`
+            : registry.warnings.join("\n"),
+        };
+      }
+
+      case "run_engine_tool": {
+        const engineId = String(args.engine_id || "").trim();
+        const toolName = String(args.tool_name || "").trim();
+        if (!engineId) throw new Error("run_engine_tool requires an engine_id.");
+        if (!toolName) throw new Error("run_engine_tool requires a tool_name.");
+        return executeEngineTool(name, engineId, toolName, parseEngineArgs(args.args_json), cwd);
+      }
+
+      case "creative_tools": {
+        return executeEngineTool(name, "creative", "list_voices", {}, cwd)
+          .then(async (voices) => {
+            const registry = await loadEngineRegistry(cwd);
+            const creative = registry.engines.find((entry) => entry.id === "creative");
+            const tools = creative?.tools.map((tool) => `- ${tool.name}: ${tool.description}`).join("\n") ?? "No creative tools found.";
+            return {
+              ...voices,
+              summary: "Listed Creative Engine tools",
+              body: `${tools}\n\nVoices:\n${voices.body}`,
+            };
+          });
+      }
+
+      case "creative_packet": {
+        const brief = String(args.brief || "").trim();
+        if (!brief) throw new Error("creative_packet requires a brief.");
+        return executeEngineTool(name, "creative", "creative_packet", {
+          brief,
+          audience: stringOrDefault(args.audience, "the target audience"),
+          format: stringOrDefault(args.format, "post"),
+          days: positiveNumberOrDefault(args.days, 7),
+        }, cwd);
+      }
+
+      case "creative_brief": {
+        const notes = String(args.notes || "").trim();
+        if (!notes) throw new Error("creative_brief requires notes.");
+        return executeEngineTool(name, "creative", "creative_brief", { notes }, cwd);
+      }
+
+      case "name_storm": {
+        const brief = String(args.brief || "").trim();
+        if (!brief) throw new Error("name_storm requires a brief.");
+        return executeEngineTool(name, "creative", "name_storm", { brief, count: positiveNumberOrDefault(args.count, 12) }, cwd);
+      }
+
+      case "positioning_routes": {
+        const brief = String(args.brief || "").trim();
+        if (!brief) throw new Error("positioning_routes requires a brief.");
+        return executeEngineTool(name, "creative", "positioning_routes", { brief }, cwd);
+      }
+
+      case "hook_bank": {
+        const topic = String(args.topic || "").trim();
+        if (!topic) throw new Error("hook_bank requires a topic.");
+        return executeEngineTool(name, "creative", "hook_bank", {
+          topic,
+          audience: stringOrDefault(args.audience, "the target audience"),
+          format: stringOrDefault(args.format, "post"),
+        }, cwd);
+      }
+
+      case "copy_draft": {
+        const brief = String(args.brief || "").trim();
+        if (!brief) throw new Error("copy_draft requires a brief.");
+        return executeEngineTool(name, "creative", "copy_draft", {
+          brief,
+          format: stringOrDefault(args.format, "post"),
+        }, cwd);
+      }
+
+      case "critique_copy": {
+        const text = String(args.text || "").trim();
+        if (!text) throw new Error("critique_copy requires text.");
+        return executeEngineTool(name, "creative", "critique_copy", { text }, cwd);
+      }
+
+      case "content_calendar": {
+        const theme = String(args.theme || "").trim();
+        if (!theme) throw new Error("content_calendar requires a theme.");
+        return executeEngineTool(name, "creative", "content_calendar", { theme, days: positiveNumberOrDefault(args.days, 7) }, cwd);
+      }
+
+      case "gumops_tools": {
+        return executeEngineTool(name, "gumops", "tools", {}, cwd);
+      }
+
+      case "gumops_query": {
+        const query = String(args.query || "").trim();
+        if (!query) throw new Error("gumops_query requires a query.");
+        return executeEngineTool(name, "gumops", args.no_tools === true ? "query_no_tools" : "query", { query }, cwd);
+      }
+
+      case "gumops_refresh": {
+        return executeEngineTool(name, "gumops", "refresh", {}, cwd);
+      }
+
+      case "gumops_memory_list": {
+        return executeEngineTool(name, "gumops", "memory_list", {}, cwd);
+      }
+
+      case "gumops_memory_get": {
+        const key = String(args.key || "").trim();
+        if (!key) throw new Error("gumops_memory_get requires a key.");
+        return executeEngineTool(name, "gumops", "memory_get", { key }, cwd);
+      }
+
+      case "gumops_memory_add": {
+        const key = String(args.key || "").trim();
+        const value = String(args.value || "").trim();
+        if (!key) throw new Error("gumops_memory_add requires a key.");
+        if (!value) throw new Error("gumops_memory_add requires a value.");
+        return executeEngineTool(name, "gumops", "memory_add", { key, value }, cwd);
+      }
+
+      case "gumops_memory_find": {
+        const query = String(args.query || "").trim();
+        if (!query) throw new Error("gumops_memory_find requires a query.");
+        return executeEngineTool(name, "gumops", "memory_find", { query }, cwd);
+      }
+
+      case "gumroad_products": {
+        const page = Math.max(1, Number(args.page) || 1);
+        return executeEngineTool(name, "gumops", "products", { page }, cwd);
+      }
+
+      case "gumroad_sales_summary": {
+        return executeEngineTool(name, "gumops", "sales_summary", {}, cwd);
+      }
+
+      case "gumroad_account_info": {
+        return executeEngineTool(name, "gumops", "account_info", {}, cwd);
+      }
+
+      case "gumroad_refund_sale": {
+        const saleId = String(args.sale_id || "").trim();
+        if (!saleId) throw new Error("gumroad_refund_sale requires a sale_id.");
+        const amount = args.amount === undefined || args.amount === null || args.amount === ""
+          ? null
+          : Number(args.amount);
+        if (amount !== null && (!Number.isFinite(amount) || amount <= 0)) {
+          throw new Error("gumroad_refund_sale amount must be a positive number when provided.");
+        }
+        return executeEngineTool(name, "gumops", "refund_sale", { sale_id: saleId, amount }, cwd);
+      }
+
       default:
         return {
           tool: name,
@@ -786,4 +1283,53 @@ async function detectTestCommand(cwd: string): Promise<string> {
   }
 
   return "bun run build || npm run build || true";
+}
+
+async function executeEngineTool(
+  tool: string,
+  engineId: string,
+  toolName: string,
+  args: Record<string, unknown>,
+  cwd: string,
+): Promise<AgentToolExecution> {
+  const rendered = await renderEngineToolCommand(engineId, toolName, args, cwd);
+  if (rendered.requiresApproval || ALWAYS_APPROVE_PATTERN.test(rendered.command)) {
+    const reason = rendered.approvalReason;
+    return {
+      tool,
+      ok: true,
+      summary: `Engine pending: ${rendered.engine.id}.${rendered.tool.name}`,
+      body: `Awaiting approval to run engine tool:\n\`${rendered.command}\`\n\n${reason}`,
+      shellPending: {
+        command: `cd ${shellQuote(rendered.cwd)} && ${rendered.command}`,
+        reason,
+      },
+    };
+  }
+
+  const result = await runShellString(rendered.command, rendered.cwd);
+  return engineResult(
+    tool,
+    result.ok ? `Ran ${rendered.engine.id}.${rendered.tool.name}` : `${rendered.engine.id}.${rendered.tool.name} failed`,
+    result,
+  );
+}
+
+function engineResult(tool: string, summary: string, result: Awaited<ReturnType<typeof runCommand>>): AgentToolExecution {
+  const body = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();
+  return {
+    tool,
+    ok: result.ok,
+    summary,
+    body: body || (result.ok ? "Done." : `Command exited with ${result.exitCode}.`),
+  };
+}
+
+function stringOrDefault(value: unknown, fallback: string): string {
+  return typeof value === "string" && value.trim() ? value.trim() : fallback;
+}
+
+function positiveNumberOrDefault(value: unknown, fallback: number): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }

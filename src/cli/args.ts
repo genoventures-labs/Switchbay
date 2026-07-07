@@ -10,7 +10,8 @@ export type CliOptions = {
   resume: string | boolean; // string (id/index) or true (latest)
   newSession: boolean;
   purge: string | null;
-  subcommand: "run" | "update" | "version" | "help";
+  subcommand: "run" | "update" | "version" | "help" | "engines";
+  engineAction: "status" | "sync" | "list" | "templates";
 };
 
 export function parseCliArgs(argv: string[]): CliOptions {
@@ -49,6 +50,24 @@ export function parseCliArgs(argv: string[]): CliOptions {
       newSession = true;
     } else if (arg === "--purge") {
       purge = args[++i] ?? null;
+    } else if (arg === "engines" || arg === "engine-bay") {
+      const action = args[i + 1];
+      const engineAction = action === "sync" || action === "list" || action === "templates" || action === "status"
+        ? action
+        : "status";
+      return {
+        surface,
+        profile,
+        mode,
+        lane,
+        initialQuery: "",
+        hop,
+        resume,
+        newSession,
+        purge,
+        subcommand: "engines",
+        engineAction,
+      };
     } else if (arg === "update") {
       console.log("Run this to update Switchbay from source:\n");
       console.log("  bun install -g github:genoventures-labs/ori-code#main\n");
@@ -59,7 +78,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
       console.log("switchbay 0.9.46");
       process.exit(0);
     } else if (arg === undefined || arg === "help" || arg === "--help" || arg === "-h") {
-      return { surface, profile, mode, lane, initialQuery: "", hop: null, resume: false, newSession: false, purge: null, subcommand: "help" };
+      return { surface, profile, mode, lane, initialQuery: "", hop: null, resume: false, newSession: false, purge: null, subcommand: "help", engineAction: "status" };
     } else if (!arg.startsWith("-")) {
       positional.push(arg);
     }
@@ -76,5 +95,6 @@ export function parseCliArgs(argv: string[]): CliOptions {
     newSession,
     purge,
     subcommand: "run",
+    engineAction: "status",
   };
 }

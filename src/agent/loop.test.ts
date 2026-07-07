@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { expect, test } from "bun:test";
@@ -196,6 +196,271 @@ test("shell approval is reserved for broad-impact commands", async () => {
   expect(gated.shellPending?.command).toBe("git push origin main");
 });
 
+test("GumOps tools run through configured checkout", async () => {
+  const gumOpsPath = await mkdtemp(join(tmpdir(), "switchbay-gumops-"));
+  const previous = Bun.env.SWITCHBAY_GUMOPS_PATH;
+  Bun.env.SWITCHBAY_GUMOPS_PATH = gumOpsPath;
+  await writeFile(
+    join(gumOpsPath, "gumgent.py"),
+    [
+      "import sys",
+      "if sys.argv[1:] == ['memory', 'list']:",
+      "    print('gumroad:products')",
+      "else:",
+      "    print('ARGS:' + ' '.join(sys.argv[1:]))",
+    ].join("\n"),
+    "utf-8",
+  );
+
+  try {
+    const result = await executeToolCall("gumops_memory_list", {}, { cwd: gumOpsPath });
+    expect(result.ok).toBe(true);
+    expect(result.body).toBe("gumroad:products");
+  } finally {
+    if (previous === undefined) {
+      delete Bun.env.SWITCHBAY_GUMOPS_PATH;
+    } else {
+      Bun.env.SWITCHBAY_GUMOPS_PATH = previous;
+    }
+  }
+});
+
+test("GumOps optional harnesses are exposed when present", async () => {
+  const gumOpsPath = await mkdtemp(join(tmpdir(), "switchbay-gumops-harnesses-"));
+  const previous = Bun.env.SWITCHBAY_GUMOPS_PATH;
+  Bun.env.SWITCHBAY_GUMOPS_PATH = gumOpsPath;
+  await mkdir(join(gumOpsPath, "engine_harnesses"), { recursive: true });
+  await writeFile(join(gumOpsPath, "gumgent.py"), "print('fake gumops')\n", "utf-8");
+  await writeFile(
+    join(gumOpsPath, "engine_harnesses", "shopgent.py"),
+    "import sys\nprint('SHOP:' + ' '.join(sys.argv[1:]))\n",
+    "utf-8",
+  );
+  await writeFile(
+    join(gumOpsPath, "engine_harnesses", "fbgent.py"),
+    "import sys\nprint('FB:' + ' '.join(sys.argv[1:]))\n",
+    "utf-8",
+  );
+
+  try {
+    const listed = await executeToolCall("list_engine_tools", { engine_id: "gumops" }, { cwd: gumOpsPath });
+    expect(listed.ok).toBe(true);
+    expect(listed.body).toContain("shopify_products");
+    expect(listed.body).toContain("facebook_page_insights");
+
+    const products = await executeToolCall(
+      "run_engine_tool",
+      {
+        engine_id: "gumops",
+        tool_name: "shopify_products",
+        args_json: JSON.stringify({ limit: 2, published_status: "any" }),
+      },
+      { cwd: gumOpsPath },
+    );
+    expect(products.ok).toBe(true);
+    expect(products.body).toContain("SHOP:products --limit 2 --published-status any");
+  } finally {
+    if (previous === undefined) {
+      delete Bun.env.SWITCHBAY_GUMOPS_PATH;
+    } else {
+      Bun.env.SWITCHBAY_GUMOPS_PATH = previous;
+    }
+  }
+});
+
+test("Gumroad refunds are always staged for approval", async () => {
+  const gumOpsPath = await mkdtemp(join(tmpdir(), "switchbay-gumops-refund-"));
+  const previous = Bun.env.SWITCHBAY_GUMOPS_PATH;
+  Bun.env.SWITCHBAY_GUMOPS_PATH = gumOpsPath;
+  await writeFile(join(gumOpsPath, "gumgent.py"), "print('fake')\n", "utf-8");
+
+  try {
+    const result = await executeToolCall("gumroad_refund_sale", { sale_id: "sale_123", amount: 4.5 }, { cwd: gumOpsPath });
+    expect(result.ok).toBe(true);
+    expect(result.shellPending?.command).toContain("refund_gumroad_sale");
+    expect(result.shellPending?.command).toContain("sale_123");
+    expect(result.body).toContain("Awaiting approval");
+  } finally {
+    if (previous === undefined) {
+      delete Bun.env.SWITCHBAY_GUMOPS_PATH;
+    } else {
+      Bun.env.SWITCHBAY_GUMOPS_PATH = previous;
+    }
+  }
+});
+
+test("engine registry loads manifest tools from workspace", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "switchbay-engine-registry-"));
+  const engineDir = join(cwd, ".switchbay", "engines");
+  await mkdir(engineDir, { recursive: true });
+  await writeFile(
+    join(engineDir, "demo.engine.json"),
+    JSON.stringify({
+      id: "demo",
+      name: "Demo Engine",
+      description: "Tiny test engine.",
+      tools: [
+        {
+          name: "say",
+          description: "Say text.",
+          command: "printf {{text}}",
+          parameters: { text: { type: "string", description: "Text to print." } },
+          required: ["text"],
+        },
+      ],
+    }),
+    "utf-8",
+  );
+
+  const listed = await executeToolCall("list_engines", {}, { cwd });
+  expect(listed.ok).toBe(true);
+  expect(listed.body).toContain("demo - Demo Engine");
+
+  const result = await executeToolCall(
+    "run_engine_tool",
+    { engine_id: "demo", tool_name: "say", args_json: JSON.stringify({ text: "hello engine" }) },
+    { cwd },
+  );
+  expect(result.ok).toBe(true);
+  expect(result.body).toBe("hello engine");
+});
+
+test("engine registry includes synced Engine Bay manifests", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "switchbay-engine-bay-workspace-"));
+  const hubPath = await mkdtemp(join(tmpdir(), "switchbay-engine-bay-cache-"));
+  const previous = Bun.env.SWITCHBAY_ENGINE_BAY_PATH;
+  Bun.env.SWITCHBAY_ENGINE_BAY_PATH = hubPath;
+  await mkdir(join(hubPath, "engines", "Demo"), { recursive: true });
+  await writeFile(
+    join(hubPath, "engines", "Demo", "demo.engine.json"),
+    JSON.stringify({
+      id: "hub_demo",
+      name: "Hub Demo",
+      description: "Demo engine from Engine Bay.",
+      tools: [
+        {
+          name: "status",
+          description: "Print status.",
+          command: "printf hub-ok",
+        },
+      ],
+    }),
+    "utf-8",
+  );
+
+  try {
+    const listed = await executeToolCall("list_engines", {}, { cwd });
+    expect(listed.ok).toBe(true);
+    expect(listed.body).toContain("hub_demo - Hub Demo");
+
+    const result = await executeToolCall(
+      "run_engine_tool",
+      { engine_id: "hub_demo", tool_name: "status" },
+      { cwd },
+    );
+    expect(result.ok).toBe(true);
+    expect(result.body).toBe("hub-ok");
+  } finally {
+    if (previous === undefined) {
+      delete Bun.env.SWITCHBAY_ENGINE_BAY_PATH;
+    } else {
+      Bun.env.SWITCHBAY_ENGINE_BAY_PATH = previous;
+    }
+  }
+});
+
+test("creative engine is built in and writes local briefs", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "switchbay-creative-engine-"));
+
+  const listed = await executeToolCall("list_engine_tools", { engine_id: "creative" }, { cwd });
+  expect(listed.ok).toBe(true);
+  expect(listed.body).toContain("creative_brief");
+  expect(listed.body).toContain("creative_packet");
+  expect(listed.body).toContain("name_storm");
+
+  const result = await executeToolCall(
+    "run_engine_tool",
+    {
+      engine_id: "creative",
+      tool_name: "creative_brief",
+      args_json: JSON.stringify({ notes: "Switchbay helps internal builders route creative work and local tools." }),
+    },
+    { cwd },
+  );
+  expect(result.ok).toBe(true);
+  expect(result.body).toContain("# Creative Brief");
+  expect(result.body).toContain("Saved: .switchbay/creative/briefs/");
+});
+
+test("creative packet alias writes a complete packet", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "switchbay-creative-packet-"));
+
+  const result = await executeToolCall(
+    "creative_packet",
+    {
+      brief: "A terminal-first writing workbench for solo builders who want local creative control.",
+      audience: "solo builders",
+      format: "email",
+      days: 3,
+    },
+    { cwd },
+  );
+
+  expect(result.ok).toBe(true);
+  expect(result.body).toContain("# Creative Packet");
+  expect(result.body).toContain("# Positioning Routes");
+  expect(result.body).toContain("# Name Storm");
+  expect(result.body).toContain("# Hook Bank");
+  expect(result.body).toContain("# Email Draft");
+  expect(result.body).toContain("Saved: .switchbay/creative/packets/");
+});
+
+test("Thinkapse auto-discovery exposes local harness tools", async () => {
+  const thinkapsePath = await mkdtemp(join(tmpdir(), "switchbay-thinkapse-"));
+  const previous = Bun.env.SWITCHBAY_THINKAPSE_PATH;
+  Bun.env.SWITCHBAY_THINKAPSE_PATH = thinkapsePath;
+  await writeFile(
+    join(thinkapsePath, "harness.py"),
+    [
+      "import sys",
+      "if sys.argv[1:] == ['clean', '--dry-run']:",
+      "    print('preview routes')",
+      "else:",
+      "    print('ARGS:' + ' '.join(sys.argv[1:]))",
+    ].join("\n"),
+    "utf-8",
+  );
+
+  try {
+    const listed = await executeToolCall("list_engine_tools", { engine_id: "thinkapse" }, { cwd: thinkapsePath });
+    expect(listed.ok).toBe(true);
+    expect(listed.body).toContain("route_preview");
+
+    const preview = await executeToolCall(
+      "run_engine_tool",
+      { engine_id: "thinkapse", tool_name: "route_preview" },
+      { cwd: thinkapsePath },
+    );
+    expect(preview.ok).toBe(true);
+    expect(preview.shellPending).toBeUndefined();
+    expect(preview.body).toBe("preview routes");
+
+    const apply = await executeToolCall(
+      "run_engine_tool",
+      { engine_id: "thinkapse", tool_name: "route_apply" },
+      { cwd: thinkapsePath },
+    );
+    expect(apply.ok).toBe(true);
+    expect(apply.shellPending?.command).toContain("python3 harness.py clean");
+  } finally {
+    if (previous === undefined) {
+      delete Bun.env.SWITCHBAY_THINKAPSE_PATH;
+    } else {
+      Bun.env.SWITCHBAY_THINKAPSE_PATH = previous;
+    }
+  }
+});
+
 test("/apply is not a local slash command", async () => {
   const cwd = await mkdtemp(join(tmpdir(), "ori-code-apply-"));
   const filePath = join(cwd, "demo.txt");
@@ -239,4 +504,57 @@ test("agent commands use explicit /agent id activation", async () => {
 
   const oldDirectCommand = await tryLocalCommand("/backend", baseOptions);
   expect(oldDirectCommand.handled).toBe(false);
+});
+
+test("engine slash commands describe registered engines and creative tools", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "switchbay-engine-commands-"));
+  const baseOptions = {
+    client: {} as any,
+    profile: "ori_code",
+    sessionId: "test-session",
+    surface: "dev",
+    workspace: {
+      cwd,
+      repoRoot: cwd,
+      branch: null,
+      dirtyFiles: [],
+      recentFiles: [],
+      diff: { hasChanges: false, stat: "" },
+    },
+  };
+
+  const engines = await tryLocalCommand("/engines", baseOptions);
+  expect(engines.handled).toBe(true);
+  expect(engines.assistantMessage).toContain("creative - Creative Engine");
+
+  const creative = await tryLocalCommand("/creative", baseOptions);
+  expect(creative.handled).toBe(true);
+  expect(creative.assistantMessage).toContain("**Creative Engine**");
+  expect(creative.assistantMessage).toContain("creative_packet");
+});
+
+test("engine bay slash command lists cached templates", async () => {
+  const hubPath = await mkdtemp(join(tmpdir(), "switchbay-engine-bay-command-"));
+  const previous = Bun.env.SWITCHBAY_ENGINE_BAY_PATH;
+  Bun.env.SWITCHBAY_ENGINE_BAY_PATH = hubPath;
+  await mkdir(join(hubPath, "template"), { recursive: true });
+  await writeFile(join(hubPath, "template", "default.engine.json"), "{}", "utf-8");
+
+  try {
+    const result = await tryLocalCommand("/engine-bay templates", {
+      client: {} as any,
+      profile: "ori_code",
+      sessionId: "test-session",
+      surface: "dev",
+      workspace: null,
+    });
+    expect(result.handled).toBe(true);
+    expect(result.assistantMessage).toContain("template/default.engine.json");
+  } finally {
+    if (previous === undefined) {
+      delete Bun.env.SWITCHBAY_ENGINE_BAY_PATH;
+    } else {
+      Bun.env.SWITCHBAY_ENGINE_BAY_PATH = previous;
+    }
+  }
 });

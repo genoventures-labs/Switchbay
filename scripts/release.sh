@@ -28,9 +28,10 @@ sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" package.json
 # 2. Bump version string in CLI
 sed -i "s/switchbay [0-9]*\.[0-9]*\.[0-9]*/switchbay $VERSION/" src/cli/args.ts
 sed -i "s/version-[0-9]*\.[0-9]*\.[0-9]*/version-$VERSION/" README.md
+sed -i "s/version=\"[0-9]*\.[0-9]*\.[0-9]*\"/version=\"$VERSION\"/" src/tui/components/Transcript.tsx
 
 # 3. Commit, tag, push
-git add package.json src/cli/args.ts README.md
+git add package.json src/cli/args.ts README.md src/tui/components/Transcript.tsx
 git commit -m "switchbay $TAG"
 git tag "$TAG"
 git push origin main

@@ -101,7 +101,7 @@ export function Transcript({
           if (entry.tone === "info" && entry.body) {
             return (
               <Box key={entry.id} flexDirection="column" marginBottom={0}>
-                <Text color={dimColor}>↳ {entry.body}</Text>
+                <Text color={grayColor}><Text color={greenColor}>↳</Text> {entry.body}</Text>
               </Box>
             );
           }

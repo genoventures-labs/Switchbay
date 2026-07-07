@@ -31,12 +31,14 @@ import { MentionPicker } from "./components/MentionPicker";
 import { Transcript } from "./components/Transcript";
 import { ResumeDrawer } from "./components/ResumeDrawer";
 import { AgentDrawer } from "./components/AgentDrawer";
+import { EngineDrawer, flattenEngineDrawerItems } from "./components/EngineDrawer";
 import { CreateAgentDrawer, type CreateAgentAnswers } from "./components/CreateAgentDrawer";
 import { generateAgentDefinition, generatePlan, type PendingAgentDraft } from "../agent/loop";
 import type { ActivePlan } from "../agent/turn-state";
 import { ShortcutDrawer } from "./components/ShortcutDrawer";
 import { getCommandMatches } from "./commands";
 import { runCommand, runShellString } from "../tools/shell";
+import { loadEngineRegistry, type EngineManifest } from "../engines/registry";
 
 export type SwitchbayAppProps = {
   client: ChatRuntimeClient;
@@ -49,7 +51,7 @@ export type SwitchbayAppProps = {
   resumeId?: string | null;
 };
 
-type ComposerMode = "default" | "edit_file_picker" | "edit_intent" | "resume_picker" | "agent_picker" | "create_agent" | "shortcut_picker";
+type ComposerMode = "default" | "edit_file_picker" | "edit_intent" | "resume_picker" | "agent_picker" | "engine_picker" | "create_agent" | "shortcut_picker";
 
 export function SwitchbayApp({
   client,
@@ -101,6 +103,8 @@ export function SwitchbayApp({
   const [selectedResumeIndex, setSelectedResumeIndex] = useState(0);
   const [availableAgents, setAvailableAgents] = useState<Agent[]>([]);
   const [selectedAgentIndex, setSelectedAgentIndex] = useState(0);
+  const [availableEngines, setAvailableEngines] = useState<EngineManifest[]>([]);
+  const [selectedEngineIndex, setSelectedEngineIndex] = useState(0);
   const [createAgentGenerating, setCreateAgentGenerating] = useState(false);
   const [pendingAgentDraft, setPendingAgentDraft] = useState<PendingAgentDraft | null>(null);
   const [turnThoughts, setTurnThoughts] = useState<string[]>([]);
@@ -136,6 +140,8 @@ export function SwitchbayApp({
   
   const resumeDrawerVisible = composerMode === "resume_picker";
   const shortcutDrawerVisible = composerMode === "shortcut_picker";
+  const engineDrawerVisible = composerMode === "engine_picker";
+  const engineDrawerItems = useMemo(() => flattenEngineDrawerItems(availableEngines), [availableEngines]);
 
   const editPickerState = useMemo(() => {
     if (composerMode !== "edit_file_picker") {
@@ -157,7 +163,7 @@ export function SwitchbayApp({
   const composerRows = initialQuery ? 3 : state.status === "THINKING" ? Math.min(7, 4 + turnThoughts.length) : 4;
   const drawerRows =
     commandDrawerVisible || mentionPickerVisible || resumeDrawerVisible || shortcutDrawerVisible ||
-    editPickerState.visible || composerMode === "agent_picker" || composerMode === "create_agent"
+    editPickerState.visible || composerMode === "agent_picker" || engineDrawerVisible || composerMode === "create_agent"
       ? 10
       : composerMode === "edit_intent"
         ? 5
@@ -202,6 +208,36 @@ export function SwitchbayApp({
     }
 
     const agentPickerVisible = composerMode === "agent_picker";
+    const enginePickerVisible = composerMode === "engine_picker";
+    if (enginePickerVisible) {
+      if (key.upArrow) {
+        setSelectedEngineIndex((prev) => prev <= 0 ? Math.max(0, engineDrawerItems.length - 1) : prev - 1);
+        return;
+      }
+      if (key.downArrow) {
+        setSelectedEngineIndex((prev) => prev >= engineDrawerItems.length - 1 ? 0 : prev + 1);
+        return;
+      }
+      if (key.return || key.tab) {
+        const selected = engineDrawerItems[selectedEngineIndex];
+        if (selected?.type === "tool") {
+          const required = selected.tool.required?.length
+            ? ` with ${selected.tool.required.map((key) => `${key}=...`).join(", ")}`
+            : "";
+          setQuerySync(`Use engine ${selected.engine.id}.${selected.tool.name}${required}: `);
+        } else if (selected?.type === "engine") {
+          setQuerySync(`Use the ${selected.engine.name} engine to `);
+        }
+        setComposerMode("default");
+        return;
+      }
+      if (key.escape) {
+        setComposerMode("default");
+        setQuerySync("");
+        return;
+      }
+    }
+
     if (agentPickerVisible) {
       if (key.upArrow) {
         setSelectedAgentIndex((prev) => prev <= 0 ? availableAgents.length - 1 : prev - 1);
@@ -458,6 +494,16 @@ export function SwitchbayApp({
       return Math.min(previous, editPickerState.files.length - 1);
     });
   }, [editPickerState.files.length]);
+
+  useEffect(() => {
+    setSelectedEngineIndex((previous) => {
+      if (engineDrawerItems.length === 0) {
+        return 0;
+      }
+
+      return Math.min(previous, engineDrawerItems.length - 1);
+    });
+  }, [engineDrawerItems.length]);
 
   useEffect(() => {
     setTranscriptScrollOffset((previous) =>
@@ -906,6 +952,15 @@ export function SwitchbayApp({
         return;
       }
 
+      if (localCommand.openEnginePicker) {
+        const registry = await loadEngineRegistry(state.workspace?.cwd ?? process.cwd());
+        setAvailableEngines(registry.engines);
+        setSelectedEngineIndex(0);
+        setComposerMode("engine_picker");
+        setQuerySync("");
+        return;
+      }
+
       if ("activateAgent" in localCommand) {
         dispatch({ type: "agent/activated", agentId: localCommand.activateAgent ?? null });
         dispatch({
@@ -1224,6 +1279,11 @@ export function SwitchbayApp({
         activeAgentId={state.activeAgentId}
         selectedIndex={selectedAgentIndex}
         visible={composerMode === "agent_picker"}
+      />
+      <EngineDrawer
+        items={engineDrawerItems}
+        selectedIndex={selectedEngineIndex}
+        visible={engineDrawerVisible}
       />
       <CreateAgentDrawer
         visible={composerMode === "create_agent" || createAgentGenerating}

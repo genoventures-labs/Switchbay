@@ -153,8 +153,14 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   {
     category: "engines",
     command: "/engines",
-    description: "List registered Switchbay engines.",
+    description: "Open the registered engine drawer.",
     example: "/engines",
+  },
+  {
+    category: "engines",
+    command: "/engines list",
+    description: "Print registered Switchbay engines as text.",
+    example: "/engines list",
   },
   {
     category: "engines",

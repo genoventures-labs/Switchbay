@@ -40,6 +40,7 @@ export type LocalCommandResult = {
   activateAgent?: string | null;
   openAgentPicker?: boolean;
   openCreateAgent?: boolean;
+  openEnginePicker?: boolean;
   planGoal?: string;
   checkpointOp?: { op: "create"; name: string } | { op: "list" } | { op: "restore"; index: number };
   travel?: { toPath: string; label: string; workspace: WorkspaceSnapshot };
@@ -123,6 +124,10 @@ export async function tryLocalCommand(
   }
 
   if (trimmed === "/engines") {
+    return { handled: true, openEnginePicker: true };
+  }
+
+  if (trimmed === "/engines list") {
     const cwd = options.workspace?.cwd ?? process.cwd();
     return { handled: true, assistantMessage: await describeEngines(cwd) };
   }

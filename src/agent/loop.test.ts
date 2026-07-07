@@ -644,7 +644,11 @@ test("engine slash commands describe registered engines and creative tools", asy
 
   const engines = await tryLocalCommand("/engines", baseOptions);
   expect(engines.handled).toBe(true);
-  expect(engines.assistantMessage).toContain("creative - Creative Engine");
+  expect(engines.openEnginePicker).toBe(true);
+
+  const engineList = await tryLocalCommand("/engines list", baseOptions);
+  expect(engineList.handled).toBe(true);
+  expect(engineList.assistantMessage).toContain("creative - Creative Engine");
 
   const creative = await tryLocalCommand("/creative", baseOptions);
   expect(creative.handled).toBe(true);

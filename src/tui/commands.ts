@@ -1,5 +1,5 @@
 export type SlashCommand = {
-  category: "session" | "context" | "safety" | "planning" | "agents" | "engines" | "toolbox";
+  category: "session" | "context" | "safety" | "planning" | "agents" | "engines" | "toolbox" | "runtime";
   command: string;
   description: string;
   example: string;
@@ -47,6 +47,24 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     command: "/clear",
     description: "Clear the current conversation and session view.",
     example: "/clear",
+  },
+  {
+    category: "runtime",
+    command: "/lane",
+    description: "Toggle runtime lane between Cloud and LM Studio.",
+    example: "/lane",
+  },
+  {
+    category: "runtime",
+    command: "/lane cloud",
+    description: "Switch this TUI session to the cloud model lane.",
+    example: "/lane cloud",
+  },
+  {
+    category: "runtime",
+    command: "/lane local",
+    description: "Switch this TUI session to the local LM Studio lane.",
+    example: "/lane local",
   },
   {
     category: "context",

@@ -9,6 +9,7 @@ type ShortcutDrawerProps = {
 const SHORTCUTS = [
   { key: "/", label: "Slash commands", description: "Browse and run internal commands" },
   { key: "@", label: "File mentions", description: "Add file/directory context to your query" },
+  { key: "Ctrl+L", label: "Toggle lane", description: "Switch between Cloud and LM Studio lanes" },
   { key: "?", label: "Help", description: "Show this shortcuts drawer" },
   { key: "Ctrl+U", label: "Scroll up", description: "Page up through the transcript" },
   { key: "Ctrl+D", label: "Scroll down", description: "Page down through the transcript" },

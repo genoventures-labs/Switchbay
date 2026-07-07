@@ -10,7 +10,7 @@ import {
 import { parseApprovalIntent, tryLocalCommand } from "../agent/commands";
 import { resolveAgentPolicy } from "../agent/policy";
 import type { ChatRuntimeClient } from "../runtime/client";
-import { getRuntimeLaneLabel } from "../runtime/client";
+import { createRuntimeClient, getRuntimeLaneLabel } from "../runtime/client";
 import type { RuntimeLane } from "../config/env";
 import { createSessionStore, sessionReducer } from "../session/store";
 import { createTranscriptEntry } from "../agent/turn-state";
@@ -63,6 +63,9 @@ export function SwitchbayApp({
   surface,
   resumeId = null,
 }: SwitchbayAppProps) {
+  const initialLane = lane ?? "cloud";
+  const [runtimeLane, setRuntimeLane] = useState<RuntimeLane>(initialLane);
+  const [runtimeClient, setRuntimeClient] = useState<ChatRuntimeClient>(() => client ?? createRuntimeClient(initialLane));
   const { stdout } = useStdout();
   const [dimensions, setDimensions] = useState({
     columns: stdout?.columns ?? 120,
@@ -189,6 +192,17 @@ export function SwitchbayApp({
     setSelectedMentionIndex(0);
   }
 
+  function switchRuntimeLane(nextLane?: RuntimeLane) {
+    const resolved = nextLane ?? (runtimeLane === "cloud" ? "local" : "cloud");
+    setRuntimeLane(resolved);
+    setRuntimeClient(createRuntimeClient(resolved));
+    dispatch({
+      type: "assistant/appended",
+      message: `Runtime lane switched to **${getRuntimeLaneLabel(resolved)}**.`,
+    });
+    setQuerySync("");
+  }
+
   useInput((input, key) => {
     if (composerMode === "edit_intent") {
       if (key.escape) {
@@ -205,6 +219,11 @@ export function SwitchbayApp({
             setQuerySync("");
         }
         return;
+    }
+
+    if (key.ctrl && input.toLowerCase() === "l") {
+      switchRuntimeLane();
+      return;
     }
 
     const agentPickerVisible = composerMode === "agent_picker";
@@ -646,6 +665,28 @@ export function SwitchbayApp({
       return;
     }
 
+    if (trimmedVal === "/lane" || trimmedVal.startsWith("/lane ")) {
+      const requested = trimmedVal.slice("/lane".length).trim().toLowerCase();
+      if (!requested) {
+        switchRuntimeLane();
+        return;
+      }
+      if (requested === "cloud") {
+        switchRuntimeLane("cloud");
+        return;
+      }
+      if (requested === "local" || requested === "lm" || requested === "lmstudio") {
+        switchRuntimeLane("local");
+        return;
+      }
+      dispatch({
+        type: "assistant/appended",
+        message: `Unknown lane \`${requested}\`. Use \`/lane cloud\`, \`/lane local\`, or \`/lane\` to toggle.`,
+      });
+      setQuerySync("");
+      return;
+    }
+
     // ── Plan flow — approval, continue, skip, stop ────────────────────────
     if (state.activePlan) {
       const { activePlan } = state;
@@ -812,7 +853,7 @@ export function SwitchbayApp({
     setTurnThoughts([]);
 
     const localCommand = await tryLocalCommand(trimmedVal, {
-      client,
+      client: runtimeClient,
       profile: state.resolvedProfile,
       sessionId: state.sessionId,
       surface,
@@ -858,7 +899,7 @@ export function SwitchbayApp({
         const cwd = state.workspace?.cwd ?? process.cwd();
         dispatch({ type: "assistant/appended", message: `Planning: _${goal}_…` });
         try {
-          const steps = await generatePlan(client, surface, goal, cwd);
+          const steps = await generatePlan(runtimeClient, surface, goal, cwd);
           const plan: ActivePlan = {
             id: `plan-${Date.now()}`,
             goal,
@@ -1008,7 +1049,7 @@ export function SwitchbayApp({
     }
     const effectiveInput = mentionContext ? `${mentionContext}${cleanQuery || value}` : value;
 
-    const turn = await buildTurn({
+      const turn = await buildTurn({
       input: effectiveInput,
       mode,
       profile,
@@ -1031,7 +1072,7 @@ export function SwitchbayApp({
 
     try {
       const executedTurn = await executeTurn({
-        client,
+        client: runtimeClient,
         cwd: process.cwd(),
         sessionId: state.sessionId,
         surface,
@@ -1166,7 +1207,7 @@ export function SwitchbayApp({
   async function handleCreateAgentComplete(answers: CreateAgentAnswers) {
     setCreateAgentGenerating(true);
     try {
-      const draft = await generateAgentDefinition(client, surface, answers);
+      const draft = await generateAgentDefinition(runtimeClient, surface, answers);
       setComposerMode("default");
       setCreateAgentGenerating(false);
       setPendingAgentDraft(draft);
@@ -1233,7 +1274,7 @@ export function SwitchbayApp({
     <Box flexDirection="column" width={stdoutWidth} height={stdoutHeight} overflowY="hidden">
       {state.transcript.length > 0 && (
         <Header
-          lane={getRuntimeLaneLabel(lane)}
+          lane={getRuntimeLaneLabel(runtimeLane)}
           mode={mode}
           profile={state.resolvedProfile}
           status={state.status}
@@ -1245,7 +1286,7 @@ export function SwitchbayApp({
       )}
       <Box height={transcriptAreaHeight} flexDirection="column" overflowY="hidden">
         <Transcript
-          lane={getRuntimeLaneLabel(lane)}
+          lane={getRuntimeLaneLabel(runtimeLane)}
           entries={visibleTranscriptEntries}
           hasMoreAbove={transcriptStartIndex > 0}
           hasMoreBelow={transcriptEndIndex < totalTranscriptEntries}

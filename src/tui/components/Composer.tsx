@@ -129,7 +129,7 @@ export function Composer({
           ) : disabled ? (
             <Text>Enter to <Text color={brandColor}>draft</Text> · Esc to <Text color={brandColor}>cancel</Text></Text>
           ) : (
-            <Text>? for <Text color={brandColor}>shortcuts</Text> · / for <Text color={brandColor}>commands</Text></Text>
+            <Text>? shortcuts · / commands · <Text color={brandColor}>Ctrl+L</Text> lane</Text>
           )}
         </Text>
       </Box>

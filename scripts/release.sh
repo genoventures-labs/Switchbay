@@ -81,6 +81,7 @@ fi
 
 perl -0pi -e 's|exec bun "#\{prefix\}/index\.tsx" ""|exec bun "#{prefix}/index.tsx" "$@"|g' "$TMP_TAP/$FORMULA_PATH"
 perl -0pi -e 's|exec bun "#\{prefix\}/index\.tsx"$|exec bun "#{prefix}/index.tsx" "$@"|gm' "$TMP_TAP/$FORMULA_PATH"
+perl -0pi -e 's|export SWITCHBAY_LMSTUDIO_BASE=http://127\.0\.0\.1:1234/v1|export SWITCHBAY_LMSTUDIO_BASE=http://YOUR-LM-STUDIO-HOST:1234/v1|g' "$TMP_TAP/$FORMULA_PATH"
 
 cd "$TMP_TAP"
 git add "$FORMULA_PATH"

@@ -3,8 +3,8 @@ import { render } from "ink";
 import { parseCliArgs } from "./src/cli/args";
 import { createRuntimeClient } from "./src/runtime/client";
 import { normalizeRuntimeLane } from "./src/config/env";
-import { OriApp } from "./src/tui/app";
-import { loadHarnessConfig } from "./src/config/harness-config";
+import { SwitchbayApp } from "./src/tui/app";
+import { loadSwitchbayConfig } from "./src/config/switchbay-config";
 import { fuzzyMatchLocations, travelTo } from "./src/tools/travel";
 import { listSessions, purgeSessions, loadPersistedSession, savePersistedSession } from "./src/session/persistence";
 import { buildTurn, executeTurn, extractAssistantText, refreshWorkspace, synthesizeAssistantFallback } from "./src/agent/loop";
@@ -20,31 +20,31 @@ const CLR = {
 };
 
 // Ensure config is initialized on first boot
-loadHarnessConfig();
+loadSwitchbayConfig();
 
 const options = parseCliArgs(process.argv);
 
 async function boot() {
   if (options.subcommand === "help") {
     console.log(`
-Code Harness — terminal coding agent shell
+Switchbay — terminal coding agent shell
 
 Usage:
-  code-harness                          Launch the TUI (interactive mode)
-  code-harness "query"                  One-shot request
-  code-harness "query" --hop <name>     Launch in a different workspace
-  code-harness --resume                 Resume the last session
-  code-harness --resume <id|index>      Resume a specific session by ID or index
-  code-harness --new                    Start a fresh session
-  code-harness --purge <duration>       Clean up old sessions (e.g. 1d, 1w)
-  code-harness update                   Print update instructions
-  code-harness version                  Print version
+  switchbay                          Launch the TUI (interactive mode)
+  switchbay "query"                  One-shot request
+  switchbay "query" --hop <name>     Launch in a different workspace
+  switchbay --resume                 Resume the last session
+  switchbay --resume <id|index>      Resume a specific session by ID or index
+  switchbay --new                    Start a fresh session
+  switchbay --purge <duration>       Clean up old sessions (e.g. 1d, 1w)
+  switchbay update                   Print update instructions
+  switchbay version                  Print version
 
 Options:
   -s, --surface <type>   Surface context (default: dev)
   -p, --profile <name>   Working style (default: ori_code)
   -m, --mode <name>      Agent mode: build | design | debug (default: build)
-  --lane <name>          Runtime lane: cloud | local | lmstudio (default: HARNESS_LANE or cloud)
+  --lane <name>          Runtime lane: cloud | local | lmstudio (default: SWITCHBAY_LANE or cloud)
   --hop <name>           Travel to a whitelisted location before launching
   --resume <val>         Resume last saved session, or specific ID/Index (0=latest)
   --new                  Force a fresh session even if a saved one exists
@@ -65,12 +65,12 @@ Options:
       if (unit === "d") ms = count * 24 * 60 * 60 * 1000;
       else if (unit === "w") ms = count * 7 * 24 * 60 * 60 * 1000;
     } else {
-      console.error(`code-harness: invalid purge duration "${options.purge}". Use e.g. 1d, 5d, 2w.`);
+      console.error(`switchbay: invalid purge duration "${options.purge}". Use e.g. 1d, 5d, 2w.`);
       process.exit(1);
     }
     
     const count = await purgeSessions(ms);
-    console.log(`code-harness: purged ${count} old session(s).`);
+    console.log(`switchbay: purged ${count} old session(s).`);
     if (!options.resume && !options.initialQuery) {
         process.exit(0);
     }
@@ -85,7 +85,7 @@ Options:
         if (sessions[index]) {
           resumeId = sessions[index].id;
         } else {
-          console.error(`code-harness: session index ${index} not found. Use /sessions to see history.`);
+          console.error(`switchbay: session index ${index} not found. Use /sessions to see history.`);
           process.exit(1);
         }
       } else {
@@ -106,7 +106,7 @@ Options:
   const lane = normalizeRuntimeLane(options.lane);
   const client = createRuntimeClient(lane);
   render(
-    <OriApp
+    <SwitchbayApp
       client={client}
       lane={lane}
       initialHopLabel={null}
@@ -186,6 +186,6 @@ async function runCliMode(options: any, resumeId: string | null) {
 }
 
 boot().catch((err) => {
-  console.error("code-harness: fatal boot error:", err);
+  console.error("switchbay: fatal boot error:", err);
   process.exit(1);
 });

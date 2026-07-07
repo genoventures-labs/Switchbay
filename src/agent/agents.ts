@@ -107,6 +107,12 @@ Praise what's done well — good reviews are balanced, not just a list of proble
 
 const CUSTOM_AGENT_DIR = path.join(
   process.env.HOME ?? process.cwd(),
+  ".switchbay",
+  "agents",
+);
+
+const HARNESS_CUSTOM_AGENT_DIR = path.join(
+  process.env.HOME ?? process.cwd(),
   ".code-harness",
   "agents",
 );
@@ -121,6 +127,7 @@ export async function loadAllAgents(): Promise<Agent[]> {
   const agents: Agent[] = [...BUILTIN_AGENTS];
   const dirs = [
     CUSTOM_AGENT_DIR,
+    HARNESS_CUSTOM_AGENT_DIR,
     LEGACY_CUSTOM_AGENT_DIR,
     path.join(workspaceStorageDir(), "agents"),
     path.join(legacyWorkspaceStorageDir(), "agents"),

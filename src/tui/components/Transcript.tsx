@@ -47,7 +47,7 @@ export function Transcript({
 
       {entries.length === 0 && !streamingText ? (
         <WelcomeBoard
-          appName="Code Harness"
+          appName="Switchbay"
           version="0.9.45"
           lane={lane}
           cwd={process.cwd()}

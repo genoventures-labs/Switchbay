@@ -5,14 +5,15 @@ node_modules/
 .env
 .env.*
 
-# harness session scratchpad
-.harness/
+# switchbay session scratchpad
+.switchbay/
 .ori/
 .memory/
 .oricli/
 
 # build output
 dist/
+bin/switchbay-native
 bin/code-harness-native
 bin/ori-code-native
 

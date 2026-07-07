@@ -167,7 +167,7 @@ export function createInitialSessionState(input: {
     recentActivity: [
       createActivityEvent(
         "info",
-        `Booted coding harness in ${input.mode} mode on ${input.surface}.`,
+        `Booted coding switchbay in ${input.mode} mode on ${input.surface}.`,
       ),
     ],
     mode: input.mode,

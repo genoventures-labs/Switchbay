@@ -1,7 +1,7 @@
 import path from "node:path";
 import fs from "node:fs";
 import os from "node:os";
-import { loadHarnessConfig } from "../config/harness-config";
+import { loadSwitchbayConfig } from "../config/switchbay-config";
 import { loadWorkspaceSnapshot } from "../session/workspace";
 
 export type TravelLocation = {
@@ -18,11 +18,11 @@ export type TravelLocation = {
 const DISCOVER_MAX_DEPTH = 4;
 
 /**
- * Build the full list of locations the harness can travel to:
+ * Build the full list of locations the switchbay can travel to:
  * explicit whitelist + auto-discovered git repos under home dir.
  */
 export async function listTravelLocations(): Promise<TravelLocation[]> {
-  const config = loadHarnessConfig();
+  const config = loadSwitchbayConfig();
   const seen = new Set<string>();
   const results: TravelLocation[] = [];
 
@@ -91,7 +91,7 @@ export type TravelResult = {
  * Returns the new workspace snapshot on success.
  */
 export async function travelTo(absPath: string): Promise<TravelResult> {
-  const config = loadHarnessConfig();
+  const config = loadSwitchbayConfig();
   const all = await listTravelLocations();
 
   const target = all.find((l) => l.absPath === absPath);
@@ -104,7 +104,7 @@ export async function travelTo(absPath: string): Promise<TravelResult> {
     if (!isAllowed) {
       return {
         ok: false,
-        error: `Location not whitelisted: ${absPath}. Add it to ~/.code-harness/config.json or enable auto_discover.`,
+        error: `Location not whitelisted: ${absPath}. Add it to ~/.switchbay/config.json or enable auto_discover.`,
       };
     }
   }

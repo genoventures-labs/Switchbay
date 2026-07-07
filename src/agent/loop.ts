@@ -1,6 +1,6 @@
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { DEFAULTS } from "../config/defaults";
 import {
   APP_STORAGE_DIR,
@@ -250,7 +250,7 @@ export async function buildTurn(input: {
   if (contextPath) {
     try {
       const context = readFileSync(contextPath, "utf-8").trim();
-      if (context) oriMdBlock = `\n\nPROJECT CONTEXT (${contextPath.endsWith(PROJECT_CONTEXT_FILE) ? PROJECT_CONTEXT_FILE : "legacy ORI.md"} — treat as authoritative):\n${context}`;
+      if (context) oriMdBlock = `\n\nPROJECT CONTEXT (${contextPath.endsWith(PROJECT_CONTEXT_FILE) ? PROJECT_CONTEXT_FILE : `legacy ${basename(contextPath)}`} — treat as authoritative):\n${context}`;
     } catch { /* ignore */ }
   }
 
@@ -291,7 +291,7 @@ export async function buildTurn(input: {
     if (activeAgent) agentBlock = agentSystemPrompt(activeAgent);
   }
 
-  let systemPrompt = `You are a local-first coding agent running inside a terminal harness.
+  let systemPrompt = `You are a local-first coding agent running inside a terminal switchbay.
 Current Mode: ${mode}
 Current Profile: ${input.profile}
 Current Workspace: ${cwd}${oriMdBlock}${memoryBlock}${pinsBlock}${agentBlock}

@@ -86,7 +86,7 @@ export class AnthropicClient {
         const text = normalized.choices?.[0]?.message?.content;
         const tools = normalized.choices?.[0]?.message?.tool_calls;
         if ((typeof text !== "string" || text.trim().length === 0) && !tools?.length) {
-          console.error("[code-harness] empty-looking Anthropic response:");
+          console.error("[switchbay] empty-looking Anthropic response:");
           console.error(rawText);
         }
       }

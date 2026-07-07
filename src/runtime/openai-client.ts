@@ -61,7 +61,7 @@ export class OpenAiClient {
       if (getDebugEmptyResponses()) {
         const content = parsed.choices?.[0]?.message?.content;
         if ((typeof content !== "string" || content.trim().length === 0) && !parsed.choices?.[0]?.message?.tool_calls?.length) {
-          console.error("[code-harness] empty-looking OpenAI response:");
+          console.error("[switchbay] empty-looking OpenAI response:");
           console.error(rawText);
         }
       }

@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "ori-code",
+      "name": "switchbay",
       "dependencies": {
         "ink": "^7.0.0",
         "ink-text-input": "^6.0.0",

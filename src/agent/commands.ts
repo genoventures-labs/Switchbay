@@ -225,7 +225,7 @@ async function handleInitCommand(
   }
 
   const signals = collectProjectSignals(cwd, isUpdate, contextPath);
-  const prompt = `You are generating a ${PROJECT_CONTEXT_FILE} file for a software project. This file is injected at the top of every coding harness session for this workspace — it is the agent's persistent project context.
+  const prompt = `You are generating a ${PROJECT_CONTEXT_FILE} file for a software project. This file is injected at the top of every coding switchbay session for this workspace — it is the agent's persistent project context.
 
 Analyze the project signals below and write a concise, dense ${PROJECT_CONTEXT_FILE}. It should cover:
 1. **What this project is** — one tight paragraph, no fluff

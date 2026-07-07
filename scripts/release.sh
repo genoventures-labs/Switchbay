@@ -26,11 +26,12 @@ fi
 sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" package.json
 
 # 2. Bump version string in CLI
-sed -i "s/code-harness [0-9]*\.[0-9]*\.[0-9]*/code-harness $VERSION/" src/cli/args.ts
+sed -i "s/switchbay [0-9]*\.[0-9]*\.[0-9]*/switchbay $VERSION/" src/cli/args.ts
+sed -i "s/version-[0-9]*\.[0-9]*\.[0-9]*/version-$VERSION/" README.md
 
 # 3. Commit, tag, push
-git add package.json src/cli/args.ts
-git commit -m "code-harness $TAG"
+git add package.json src/cli/args.ts README.md
+git commit -m "switchbay $TAG"
 git tag "$TAG"
 git push origin main
 git push origin "$TAG"
@@ -61,11 +62,19 @@ git clone "https://github.com/$TAP_REPO.git" "$TMP_TAP"
 sed -i \
   -e "s|url \".*\"|url \"$TARBALL_URL\"|" \
   -e "s|sha256 \".*\"|sha256 \"$SHA256\"|" \
+  -e 's|desc ".*"|desc "Terminal-first AI coding workbench with cloud and local model lanes"|' \
+  -e 's|export HARNESS_LANE|export SWITCHBAY_LANE|g' \
+  -e 's|HARNESS_LMSTUDIO|SWITCHBAY_LMSTUDIO|g' \
+  -e 's|assert_match "code-harness", shell_output("#{bin}/code-harness --help 2>&1")|assert_match "switchbay", shell_output("#{bin}/switchbay --help 2>\&1")|' \
   "$TMP_TAP/$FORMULA_PATH"
+
+if ! grep -q 'bin/"switchbay"' "$TMP_TAP/$FORMULA_PATH"; then
+  perl -0pi -e 's|(def install\n\s+system "bun", "install", "--frozen-lockfile"\n)|$1    (bin/"switchbay").write <<~SH\n      #!/bin/bash\n      exec bun "#{prefix}/index.tsx" "$@"\n    SH\n|s' "$TMP_TAP/$FORMULA_PATH"
+fi
 
 cd "$TMP_TAP"
 git add "$FORMULA_PATH"
-git commit -m "ori-code $TAG"
+git commit -m "switchbay $TAG"
 git push origin main
 
 cd -
@@ -74,3 +83,4 @@ rm -rf "$TMP_TAP"
 echo ""
 echo "==> Done. Released $TAG"
 echo "    brew upgrade ori-code  — will pick up the new version."
+echo "    switchbay              — launches the renamed command."

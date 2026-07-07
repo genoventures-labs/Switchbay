@@ -2,7 +2,7 @@
 
 ## Working Description
 
-A terminal-first coding agent harness that stays useful even when any single private backend, hosted API, or local model setup is unavailable. It gives a developer one shell for agentic coding work, then lets them choose between a high-intelligence cloud lane and a local LM Studio lane.
+A terminal-first coding agent switchbay that stays useful even when any single private backend, hosted API, or local model setup is unavailable. It gives a developer one shell for agentic coding work, then lets them choose between a high-intelligence cloud lane and a local LM Studio lane.
 
 ## Core Idea
 
@@ -19,8 +19,8 @@ The product promise is portability: the user’s coding workflow should not beco
   - **cloud**: routes between OpenAI and Anthropic based on task shape.
   - **local**: talks to LM Studio for local SLM utility work.
 - Maintains local session history.
-- Loads persistent workspace context from `HARNESS.md`.
-- Supports workspace memory and pinned files in `.harness/`.
+- Loads persistent workspace context from `SWITCHBAY.md`.
+- Supports workspace memory and pinned files in `.switchbay/`.
 - Supports specialist agents like backend, UI, security, debugger, architect, docs, and reviewer.
 - Keeps approvals focused on risky commands instead of hand-holding every normal development action.
 
@@ -51,7 +51,7 @@ They want:
 
 ## Positioning Angles
 
-- **Portable AI coding harness**: bring your own models, keep your workflow.
+- **Portable AI coding switchbay**: bring your own models, keep your workflow.
 - **Terminal workbench for agentic coding**: the shell around cloud and local intelligence.
 - **Model-agnostic coding cockpit**: OpenAI, Anthropic, and LM Studio as lanes, not lock-in.
 - **Local-first agent shell**: repo context and tools stay on the machine.
@@ -89,7 +89,7 @@ Avoid names that feel:
 
 ## Useful Metaphors
 
-- Harness
+- Switchbay
 - Workbench
 - Rig
 - Console
@@ -107,17 +107,17 @@ Avoid names that feel:
 
 ## One-Sentence Pitch Options
 
-- A terminal coding harness that lets you route work between frontier APIs and local models without rebuilding your workflow.
+- A terminal coding switchbay that lets you route work between frontier APIs and local models without rebuilding your workflow.
 - A local-first agent shell for developers who want cloud intelligence, local tools, and provider independence in one TUI.
 - A portable AI coding workbench: OpenAI when it helps, Anthropic when it fits, LM Studio when you want local.
 - The coding-agent shell that keeps working when the backend, provider, or internet plan changes.
 
 ## Current Working Names In Code
 
-- App label: `Code Harness`
-- Command alias: `code-harness`
-- Workspace context file: `HARNESS.md`
-- Workspace data directory: `.harness/`
-- Global config directory: `~/.code-harness/`
+- App label: `Switchbay`
+- Command alias: `switchbay`
+- Workspace context file: `SWITCHBAY.md`
+- Workspace data directory: `.switchbay/`
+- Global config directory: `~/.switchbay/`
 
 These are placeholders, not final brand recommendations.

@@ -9,7 +9,7 @@ type WelcomeBoardProps = {
   terminalWidth: number;
 };
 
-const HARNESS_LOGO = [
+const SWITCHBAY_LOGO = [
   "██╗  ██╗ █████╗ ██████╗ ",
   "██║  ██║██╔══██╗██╔══██╗",
   "███████║███████║██████╔╝",
@@ -65,11 +65,11 @@ export function WelcomeBoard({ appName, lane, version, cwd, terminalWidth }: Wel
 
         {/* ASCII logo */}
         <Box flexDirection="column">
-          {HARNESS_LOGO.map((line, i) => (
+          {SWITCHBAY_LOGO.map((line, i) => (
             <Text key={i} color={brandColor}>{line}</Text>
           ))}
           <Box marginTop={0}>
-            <Text color={dimColor}>{"          "}coding harness</Text>
+            <Text color={dimColor}>{"          "}coding switchbay</Text>
           </Box>
         </Box>
 

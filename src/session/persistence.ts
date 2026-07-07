@@ -7,11 +7,12 @@ import {
 } from "../agent/turn-state";
 
 function getSessionPaths() {
-  const sessionDir = Bun.env.HARNESS_SESSION_DIR ??
+  const sessionDir = Bun.env.SWITCHBAY_SESSION_DIR ??
+    Bun.env.HARNESS_SESSION_DIR ??
     Bun.env.ORI_SESSION_DIR ??
     path.join(
       Bun.env.HOME ?? process.env.HOME ?? process.cwd(),
-      ".code-harness",
+      ".switchbay",
       "sessions",
     );
 

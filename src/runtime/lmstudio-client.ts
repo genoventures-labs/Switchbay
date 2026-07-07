@@ -73,7 +73,7 @@ export class LmStudioClient {
         const hasOutputText =
           typeof parsed.output_text === "string" && parsed.output_text.trim().length > 0;
         if (!hasStringContent && !hasOutputText) {
-          console.error("[code-harness] empty-looking LM Studio response:");
+          console.error("[switchbay] empty-looking LM Studio response:");
           console.error(rawText);
         }
       }

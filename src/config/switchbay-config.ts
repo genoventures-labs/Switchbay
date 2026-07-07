@@ -2,11 +2,14 @@ import path from "node:path";
 import fs from "node:fs";
 import os from "node:os";
 
-const CONFIG_PATH = path.join(os.homedir(), ".code-harness", "config.json");
-const LEGACY_CONFIG_PATH = path.join(os.homedir(), ".ori", "config.json");
+const CONFIG_PATH = path.join(os.homedir(), ".switchbay", "config.json");
+const LEGACY_CONFIG_PATHS = [
+  path.join(os.homedir(), ".code-harness", "config.json"),
+  path.join(os.homedir(), ".ori", "config.json"),
+];
 
-export type HarnessConfig = {
-  /** Explicit list of whitelisted locations the harness can travel to. */
+export type SwitchbayConfig = {
+  /** Explicit list of whitelisted locations the switchbay can travel to. */
   locations: string[];
   /** If true, auto-discover git repos under home dir (depth-limited). */
   auto_discover: boolean;
@@ -14,7 +17,7 @@ export type HarnessConfig = {
   discover_exclude: string[];
 };
 
-const DEFAULTS: HarnessConfig = {
+const DEFAULTS: SwitchbayConfig = {
   locations: [],
   auto_discover: true,
   discover_exclude: [
@@ -31,16 +34,18 @@ const DEFAULTS: HarnessConfig = {
   ],
 };
 
-let _cached: HarnessConfig | null = null;
+let _cached: SwitchbayConfig | null = null;
 
-export function loadHarnessConfig(): HarnessConfig {
+export function loadSwitchbayConfig(): SwitchbayConfig {
   if (_cached) return _cached;
 
-  const configPath = fs.existsSync(CONFIG_PATH) ? CONFIG_PATH : LEGACY_CONFIG_PATH;
+  const configPath = fs.existsSync(CONFIG_PATH)
+    ? CONFIG_PATH
+    : LEGACY_CONFIG_PATHS.find((legacyPath) => fs.existsSync(legacyPath)) ?? CONFIG_PATH;
   try {
     if (fs.existsSync(configPath)) {
       const raw = fs.readFileSync(configPath, "utf-8");
-      const parsed = JSON.parse(raw) as Partial<HarnessConfig>;
+      const parsed = JSON.parse(raw) as Partial<SwitchbayConfig>;
       _cached = {
         locations: Array.isArray(parsed.locations)
           ? parsed.locations.map((l) => path.resolve(l.replace(/^~/, os.homedir())))
@@ -60,19 +65,19 @@ export function loadHarnessConfig(): HarnessConfig {
   return _cached;
 }
 
-export function saveHarnessConfig(config: HarnessConfig): void {
+export function saveSwitchbayConfig(config: SwitchbayConfig): void {
   const dir = path.dirname(CONFIG_PATH);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), "utf-8");
   _cached = config;
 }
 
-export function addWhitelistedLocation(location: string): HarnessConfig {
-  const config = loadHarnessConfig();
+export function addWhitelistedLocation(location: string): SwitchbayConfig {
+  const config = loadSwitchbayConfig();
   const resolved = path.resolve(location.replace(/^~/, os.homedir()));
   if (!config.locations.includes(resolved)) {
     config.locations = [...config.locations, resolved];
-    saveHarnessConfig(config);
+    saveSwitchbayConfig(config);
   }
   return config;
 }

@@ -361,7 +361,7 @@ export function sessionReducer(
       // Inject a system note into conversation so the provider knows the workspace changed.
       const systemNote: OriMessage = {
         role: "system",
-        content: `[LOCATION CHANGE] The harness has switched to a new workspace.\nPath: ${action.toPath}\nLabel: ${action.label}\nAll subsequent file operations and context apply to this new location.`,
+        content: `[LOCATION CHANGE] The switchbay has switched to a new workspace.\nPath: ${action.toPath}\nLabel: ${action.label}\nAll subsequent file operations and context apply to this new location.`,
       };
       return {
         ...state,

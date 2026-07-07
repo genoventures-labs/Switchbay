@@ -38,7 +38,7 @@ import { ShortcutDrawer } from "./components/ShortcutDrawer";
 import { getCommandMatches } from "./commands";
 import { runCommand, runShellString } from "../tools/shell";
 
-export type OriAppProps = {
+export type SwitchbayAppProps = {
   client: ChatRuntimeClient;
   lane?: RuntimeLane;
   initialHopLabel: string | null;
@@ -51,7 +51,7 @@ export type OriAppProps = {
 
 type ComposerMode = "default" | "edit_file_picker" | "edit_intent" | "resume_picker" | "agent_picker" | "create_agent" | "shortcut_picker";
 
-export function OriApp({
+export function SwitchbayApp({
   client,
   lane,
   initialHopLabel,
@@ -60,7 +60,7 @@ export function OriApp({
   profile,
   surface,
   resumeId = null,
-}: OriAppProps) {
+}: SwitchbayAppProps) {
   const { stdout } = useStdout();
   const [dimensions, setDimensions] = useState({
     columns: stdout?.columns ?? 120,
@@ -517,7 +517,7 @@ export function OriApp({
           const date = new Date(s.updatedAt).toLocaleString();
           list += `${i}. ${s.title} (${date})\n`;
         });
-        list += "\nUse /resume to pick one, or code-harness --resume <index>";
+        list += "\nUse /resume to pick one, or switchbay --resume <index>";
         dispatch({
           type: "assistant/appended",
           message: list,
@@ -832,7 +832,7 @@ export function OriApp({
 
           if (op === "create") {
             const { name } = localCommand.checkpointOp as { op: "create"; name: string };
-            await runGit(["git", "stash", "push", "--include-untracked", "-m", `harness: ${name}`]);
+            await runGit(["git", "stash", "push", "--include-untracked", "-m", `switchbay: ${name}`]);
             dispatch({ type: "assistant/appended", message: `Checkpoint saved: **${name}**\n\nRestore with \`/restore\` or \`/checkpoints\` to list all.` });
           }
 
@@ -840,9 +840,9 @@ export function OriApp({
             const out = await runGit(["git", "stash", "list"]);
             const checkpoints = out
               .split("\n")
-              .filter(isHarnessCheckpointLine)
+              .filter(isSwitchbayCheckpointLine)
               .map((l, i) => {
-                const match = l.match(/(?:harness|ori):\s*(.+)$/);
+                const match = l.match(/(?:switchbay|harness|ori):\s*(.+)$/);
                 return `${i}. ${match?.[1] ?? l}`;
               });
             dispatch({
@@ -856,15 +856,15 @@ export function OriApp({
           if (op === "restore") {
             const { index } = localCommand.checkpointOp as { op: "restore"; index: number };
             const out = await runGit(["git", "stash", "list"]);
-            const harnessStashes = out.split("\n").filter(isHarnessCheckpointLine);
-            if (index >= harnessStashes.length) {
+            const switchbayStashes = out.split("\n").filter(isSwitchbayCheckpointLine);
+            if (index >= switchbayStashes.length) {
               dispatch({ type: "assistant/appended", message: `No checkpoint at index ${index}. Run \`/checkpoints\` to list.` });
             } else {
-              const stashLine = harnessStashes[index] ?? "";
+              const stashLine = switchbayStashes[index] ?? "";
               const stashRef = stashLine.match(/^(stash@\{\d+\})/)?.[1];
               if (stashRef) {
                 await runGit(["git", "stash", "apply", stashRef]);
-                const nameMatch = stashLine.match(/(?:harness|ori):\s*(.+)$/);
+                const nameMatch = stashLine.match(/(?:switchbay|harness|ori):\s*(.+)$/);
                 dispatch({ type: "assistant/appended", message: `Restored checkpoint: **${nameMatch?.[1] ?? stashRef}**` });
               }
             }
@@ -1218,6 +1218,6 @@ export function OriApp({
   );
 }
 
-function isHarnessCheckpointLine(line: string): boolean {
-  return /\b(?:harness|ori):\s*/.test(line);
+function isSwitchbayCheckpointLine(line: string): boolean {
+  return /\b(?:switchbay|harness|ori):\s*/.test(line);
 }

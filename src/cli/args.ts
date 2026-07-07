@@ -50,11 +50,13 @@ export function parseCliArgs(argv: string[]): CliOptions {
     } else if (arg === "--purge") {
       purge = args[++i] ?? null;
     } else if (arg === "update") {
-      console.log("Run this to update the coding harness:\n");
+      console.log("Run this to update Switchbay from source:\n");
       console.log("  bun install -g github:genoventures-labs/ori-code#main\n");
+      console.log("Or, if installed through Homebrew:\n");
+      console.log("  brew upgrade ori-code\n");
       process.exit(0);
     } else if (arg === "version" || arg === "--version" || arg === "-v") {
-      console.log("code-harness 0.9.46");
+      console.log("switchbay 0.9.46");
       process.exit(0);
     } else if (arg === undefined || arg === "help" || arg === "--help" || arg === "-h") {
       return { surface, profile, mode, lane, initialQuery: "", hop: null, resume: false, newSession: false, purge: null, subcommand: "help" };

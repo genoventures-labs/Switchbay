@@ -6,8 +6,8 @@ import type { ChatCompletionRequest } from "./types";
 const savedEnv = {
   OPENAI_API_KEY: Bun.env.OPENAI_API_KEY,
   ANTHROPIC_API_KEY: Bun.env.ANTHROPIC_API_KEY,
-  HARNESS_CLOUD_PROVIDER: Bun.env.HARNESS_CLOUD_PROVIDER,
-  HARNESS_CLOUD_ROUTER: Bun.env.HARNESS_CLOUD_ROUTER,
+  SWITCHBAY_CLOUD_PROVIDER: Bun.env.SWITCHBAY_CLOUD_PROVIDER,
+  SWITCHBAY_CLOUD_ROUTER: Bun.env.SWITCHBAY_CLOUD_ROUTER,
 };
 
 afterEach(() => {
@@ -45,7 +45,7 @@ function request(text: string): ChatCompletionRequest {
 test("cloud router honors an explicit provider", async () => {
   Bun.env.OPENAI_API_KEY = "test-openai";
   Bun.env.ANTHROPIC_API_KEY = "test-anthropic";
-  Bun.env.HARNESS_CLOUD_PROVIDER = "anthropic";
+  Bun.env.SWITCHBAY_CLOUD_PROVIDER = "anthropic";
   const calls: string[] = [];
   const router = new CloudRouterClient({
     openAi: mockProvider("openai", calls),
@@ -61,7 +61,7 @@ test("cloud router honors an explicit provider", async () => {
 test("cloud router picks OpenAI for structured summaries", async () => {
   Bun.env.OPENAI_API_KEY = "test-openai";
   Bun.env.ANTHROPIC_API_KEY = "test-anthropic";
-  delete Bun.env.HARNESS_CLOUD_PROVIDER;
+  delete Bun.env.SWITCHBAY_CLOUD_PROVIDER;
   const calls: string[] = [];
   const router = new CloudRouterClient({
     openAi: mockProvider("openai", calls),
@@ -77,7 +77,7 @@ test("cloud router picks OpenAI for structured summaries", async () => {
 test("cloud router picks Anthropic for code work", async () => {
   Bun.env.OPENAI_API_KEY = "test-openai";
   Bun.env.ANTHROPIC_API_KEY = "test-anthropic";
-  delete Bun.env.HARNESS_CLOUD_PROVIDER;
+  delete Bun.env.SWITCHBAY_CLOUD_PROVIDER;
   const calls: string[] = [];
   const router = new CloudRouterClient({
     openAi: mockProvider("openai", calls),

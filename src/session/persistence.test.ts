@@ -15,16 +15,16 @@ let previousSessionDir: string | undefined;
 let sessionDir: string;
 
 beforeEach(async () => {
-  previousSessionDir = Bun.env.HARNESS_SESSION_DIR;
+  previousSessionDir = Bun.env.SWITCHBAY_SESSION_DIR;
   sessionDir = await mkdtemp(join(tmpdir(), "ori-code-sessions-"));
-  Bun.env.HARNESS_SESSION_DIR = sessionDir;
+  Bun.env.SWITCHBAY_SESSION_DIR = sessionDir;
 });
 
 afterEach(() => {
   if (previousSessionDir === undefined) {
-    delete Bun.env.HARNESS_SESSION_DIR;
+    delete Bun.env.SWITCHBAY_SESSION_DIR;
   } else {
-    Bun.env.HARNESS_SESSION_DIR = previousSessionDir;
+    Bun.env.SWITCHBAY_SESSION_DIR = previousSessionDir;
   }
 });
 

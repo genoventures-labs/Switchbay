@@ -94,6 +94,13 @@ export type PendingEngineDraft = {
   savePath: string;
 };
 
+export type PendingSkillDraft = {
+  id: string;
+  name: string;
+  content: string;
+  savePath: string;
+};
+
 export async function generateAgentDefinition(
   client: ChatRuntimeClient,
   surface: string,
@@ -145,6 +152,77 @@ ${generatedPrompt}
 `;
 
   return { id, name: answers.name, content: fileContent, savePath };
+}
+
+export async function generateSkillDefinition(
+  client: ChatRuntimeClient,
+  surface: string,
+  answers: { name: string; purpose: string; triggers: string; method: string; guardrails: string },
+): Promise<PendingSkillDraft> {
+  const id = answers.name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 40);
+
+  const prompt = `Create a Switchbay Toolbox skill markdown file.
+
+Output ONLY markdown with YAML frontmatter. No preamble.
+
+Required format:
+---
+id: ${id}
+name: ${answers.name}
+description: one concise sentence
+languages: [any]
+agents: [any]
+tags: [short, useful, tags]
+triggers: [words or phrases that should activate this skill]
+---
+
+# ${answers.name}
+
+## Use When
+
+- ...
+
+## Inputs
+
+- ...
+
+## Method
+
+1. ...
+
+## Output
+
+- ...
+
+## Guardrails
+
+- ...
+
+Brief:
+- Purpose: ${answers.purpose}
+- Trigger signals: ${answers.triggers || "Infer sensible trigger signals"}
+- Preferred method/checklist: ${answers.method || "Create a practical repeatable workflow"}
+- Guardrails: ${answers.guardrails || "Use normal Switchbay local-work safety defaults"}`;
+
+  const resp = await client.createChatCompletion(surface, {
+    model: undefined,
+    messages: [
+      {
+        role: "system",
+        content: "You write concise reusable Toolbox skills for local coding agents. Output only the markdown file content.",
+      },
+      { role: "user", content: prompt },
+    ],
+  });
+
+  const content = stripMarkdownFence(extractAssistantText(resp).trim());
+  if (!content) throw new Error("The model returned no skill content.");
+  const savePath = join(workspaceStorageDir(process.cwd()), "toolbox", "skills", `${id}.skill.md`);
+  return { id, name: answers.name, content: `${content}\n`, savePath };
 }
 
 export async function generateEngineManifest(
@@ -222,6 +300,13 @@ Brief:
 function stripJsonFence(value: string): string {
   return value
     .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+}
+
+function stripMarkdownFence(value: string): string {
+  return value
+    .replace(/^```(?:markdown|md)?\s*/i, "")
     .replace(/\s*```$/i, "")
     .trim();
 }

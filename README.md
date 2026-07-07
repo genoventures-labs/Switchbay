@@ -158,6 +158,7 @@ Inside the TUI:
 /agent             Activate a specialist agent
 /agents            Browse available agents
 /create-agent      Create a custom local agent
+/create-skill      Create a custom Toolbox skill
 /edit              Open the file edit picker
 /engines           List registered engines
 /create-engine     Create a custom workspace engine manifest

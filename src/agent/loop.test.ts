@@ -10,6 +10,7 @@ import {
   executeTurn,
   extractAssistantText,
   generateEngineManifest,
+  generateSkillDefinition,
   synthesizeAssistantFallback,
 } from "./loop";
 import { parseApprovalIntent, tryLocalCommand } from "./commands";
@@ -107,6 +108,43 @@ test("generateEngineManifest produces a workspace engine draft", async () => {
   expect(draft.name).toBe("File Helper");
   expect(draft.savePath).toContain(".switchbay/engines/file-helper.engine.json");
   expect(JSON.parse(draft.content).tools[0].name).toBe("list_files");
+});
+
+test("generateSkillDefinition produces a workspace Toolbox skill draft", async () => {
+  const { client } = createMockClient([
+    createResponse(`---
+id: launch-check
+name: Launch Check
+description: Check release readiness.
+languages: [any]
+agents: [any]
+tags: [release]
+triggers: [launch, release]
+---
+
+# Launch Check
+
+## Use When
+
+- Before a release.
+
+## Method
+
+1. Check tests.
+`),
+  ]);
+
+  const draft = await generateSkillDefinition(client, "dev", {
+    name: "Launch Check",
+    purpose: "Check release readiness.",
+    triggers: "launch, release",
+    method: "Check tests.",
+    guardrails: "Do not publish without approval.",
+  });
+
+  expect(draft.id).toBe("launch-check");
+  expect(draft.savePath).toContain(".switchbay/toolbox/skills/launch-check.skill.md");
+  expect(draft.content).toContain("id: launch-check");
 });
 
 test("tool fallback returns the first useful tool body", () => {

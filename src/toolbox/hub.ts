@@ -2,6 +2,7 @@ import path from "node:path";
 import os from "node:os";
 import fs from "node:fs/promises";
 import { existsSync } from "node:fs";
+import { workspaceStorageDir } from "../config/paths";
 import { runCommand } from "../tools/shell";
 
 export const DEFAULT_TOOLBOX_REPO = "https://github.com/genoventures-labs/Engine-Toolboxes.git";
@@ -59,18 +60,20 @@ export async function syncToolboxRepo(): Promise<string> {
   return clone.stdout || clone.stderr || `Cloned ${repo}`;
 }
 
-export async function loadToolboxInventory(): Promise<ToolboxInventory> {
+export async function loadToolboxInventory(cwd = process.cwd()): Promise<ToolboxInventory> {
   const cachePath = toolboxCachePath();
   const exists = existsSync(cachePath);
   const builtinPath = builtinToolboxPath();
-  const [builtinSkills, syncedSkills, templates, head] = await Promise.all([
+  const workspacePath = path.join(workspaceStorageDir(cwd), "toolbox");
+  const [builtinSkills, syncedSkills, workspaceSkills, templates, head] = await Promise.all([
     loadSkillsFromRoot(builtinPath, "builtin"),
     exists ? loadSkillsFromRoot(cachePath, "synced") : Promise.resolve([]),
+    loadSkillsFromRoot(workspacePath, "workspace"),
     exists ? findRelativeFiles(cachePath, isTemplateFile) : Promise.resolve([]),
     exists ? readHead(cachePath) : Promise.resolve(null),
   ]);
 
-  const merged = mergeSkills([...builtinSkills, ...syncedSkills]);
+  const merged = mergeSkills([...builtinSkills, ...syncedSkills, ...workspaceSkills]);
   return {
     path: cachePath,
     repo: toolboxRepoUrl(),

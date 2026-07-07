@@ -41,6 +41,7 @@ export type LocalCommandResult = {
   openAgentPicker?: boolean;
   openCreateAgent?: boolean;
   openCreateEngine?: boolean;
+  openCreateSkill?: boolean;
   openEnginePicker?: boolean;
   openSkillPicker?: boolean;
   planGoal?: string;
@@ -127,6 +128,10 @@ export async function tryLocalCommand(
 
   if (trimmed === "/create-engine") {
     return { handled: true, openCreateEngine: true };
+  }
+
+  if (trimmed === "/create-skill") {
+    return { handled: true, openCreateSkill: true };
   }
 
   if (trimmed === "/engines") {

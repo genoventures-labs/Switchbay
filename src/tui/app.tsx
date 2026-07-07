@@ -34,7 +34,8 @@ import { AgentDrawer } from "./components/AgentDrawer";
 import { EngineDrawer, flattenEngineDrawerItems } from "./components/EngineDrawer";
 import { CreateAgentDrawer, type CreateAgentAnswers } from "./components/CreateAgentDrawer";
 import { CreateEngineDrawer, type CreateEngineAnswers } from "./components/CreateEngineDrawer";
-import { generateAgentDefinition, generateEngineManifest, generatePlan, type PendingAgentDraft, type PendingEngineDraft } from "../agent/loop";
+import { CreateSkillDrawer, type CreateSkillAnswers } from "./components/CreateSkillDrawer";
+import { generateAgentDefinition, generateEngineManifest, generatePlan, generateSkillDefinition, type PendingAgentDraft, type PendingEngineDraft, type PendingSkillDraft } from "../agent/loop";
 import type { ActivePlan } from "../agent/turn-state";
 import { ShortcutDrawer } from "./components/ShortcutDrawer";
 import { getCommandMatches } from "./commands";
@@ -57,7 +58,7 @@ export type SwitchbayAppProps = {
   resumeId?: string | null;
 };
 
-type ComposerMode = "default" | "edit_file_picker" | "edit_intent" | "resume_picker" | "agent_picker" | "engine_picker" | "model_picker" | "skill_picker" | "create_agent" | "create_engine" | "shortcut_picker";
+type ComposerMode = "default" | "edit_file_picker" | "edit_intent" | "resume_picker" | "agent_picker" | "engine_picker" | "model_picker" | "skill_picker" | "create_agent" | "create_engine" | "create_skill" | "shortcut_picker";
 
 export function SwitchbayApp({
   client,
@@ -125,6 +126,8 @@ export function SwitchbayApp({
   const [pendingAgentDraft, setPendingAgentDraft] = useState<PendingAgentDraft | null>(null);
   const [createEngineGenerating, setCreateEngineGenerating] = useState(false);
   const [pendingEngineDraft, setPendingEngineDraft] = useState<PendingEngineDraft | null>(null);
+  const [createSkillGenerating, setCreateSkillGenerating] = useState(false);
+  const [pendingSkillDraft, setPendingSkillDraft] = useState<PendingSkillDraft | null>(null);
   const [turnThoughts, setTurnThoughts] = useState<string[]>([]);
   const [alwaysApprovedShellCommands, setAlwaysApprovedShellCommands] = useState<Set<string>>(() => new Set());
   const [rightRailCollapsed, setRightRailCollapsed] = useState(false);
@@ -193,7 +196,7 @@ export function SwitchbayApp({
   const composerRows = initialQuery ? 3 : state.status === "THINKING" ? Math.min(7, 4 + turnThoughts.length) : 4;
   const drawerRows =
     commandDrawerVisible || mentionPickerVisible || resumeDrawerVisible || shortcutDrawerVisible ||
-    editPickerState.visible || composerMode === "agent_picker" || engineDrawerVisible || modelDrawerVisible || skillDrawerVisible || composerMode === "create_agent" || composerMode === "create_engine"
+    editPickerState.visible || composerMode === "agent_picker" || engineDrawerVisible || modelDrawerVisible || skillDrawerVisible || composerMode === "create_agent" || composerMode === "create_engine" || composerMode === "create_skill"
       ? 10
       : composerMode === "edit_intent"
         ? 5
@@ -966,6 +969,35 @@ export function SwitchbayApp({
       }
     }
 
+    if (pendingSkillDraft) {
+      const intent = parseApprovalIntent(trimmedVal);
+      if (intent === "apply" || intent === "always") {
+        try {
+          const dir = pendingSkillDraft.savePath.replace(/\/[^/]+$/, "");
+          const { mkdir, writeFile: wf } = await import("node:fs/promises");
+          await mkdir(dir, { recursive: true });
+          await wf(pendingSkillDraft.savePath, pendingSkillDraft.content, "utf-8");
+          const inventory = await loadToolboxInventory(state.workspace?.cwd ?? process.cwd());
+          setAvailableSkills(inventory.skills);
+          dispatch({
+            type: "assistant/appended",
+            message: `✓ Skill **${pendingSkillDraft.name}** saved to \`${pendingSkillDraft.savePath}\`\n\nOpen it with \`/skills\` or ask Bay to use \`${pendingSkillDraft.id}\`.`,
+          });
+        } catch (e: any) {
+          dispatch({ type: "assistant/appended", message: `Save failed: ${e.message}` });
+        }
+        setPendingSkillDraft(null);
+        setQuerySync("");
+        return;
+      }
+      if (intent === "cancel") {
+        setPendingSkillDraft(null);
+        dispatch({ type: "assistant/appended", message: "Skill discarded." });
+        setQuerySync("");
+        return;
+      }
+    }
+
     // Shell command approval — handled before tryLocalCommand so we can exec async
     if (state.pendingShell && state.pendingApproval?.kind === "shell_command") {
       const intent = parseApprovalIntent(trimmedVal);
@@ -1181,6 +1213,12 @@ export function SwitchbayApp({
 
       if (localCommand.openCreateEngine) {
         setComposerMode("create_engine");
+        setQuerySync("");
+        return;
+      }
+
+      if (localCommand.openCreateSkill) {
+        setComposerMode("create_skill");
         setQuerySync("");
         return;
       }
@@ -1448,6 +1486,24 @@ export function SwitchbayApp({
     }
   }
 
+  async function handleCreateSkillComplete(answers: CreateSkillAnswers) {
+    setCreateSkillGenerating(true);
+    try {
+      const draft = await generateSkillDefinition(runtimeClient, surface, answers);
+      setComposerMode("default");
+      setCreateSkillGenerating(false);
+      setPendingSkillDraft(draft);
+      dispatch({
+        type: "assistant/appended",
+        message: `Here's your **${draft.name}** skill:\n\n\`\`\`markdown\n${draft.content}\`\`\`\n\nSave path: \`${draft.savePath}\`\n\n**y** to save · **n** to discard`,
+      });
+    } catch (e: any) {
+      setComposerMode("default");
+      setCreateSkillGenerating(false);
+      dispatch({ type: "assistant/appended", message: `Failed to generate skill: ${e.message}` });
+    }
+  }
+
   async function handleEditIntentSubmit(value: string) {
     if (!selectedEditFile || !value.trim()) {
       return;
@@ -1469,7 +1525,7 @@ export function SwitchbayApp({
   useEffect(() => {
     const trimmed = query.trim();
 
-    if (composerMode === "edit_intent" || composerMode === "resume_picker" || composerMode === "agent_picker" || composerMode === "model_picker" || composerMode === "skill_picker" || composerMode === "create_agent" || composerMode === "create_engine" || composerMode === "shortcut_picker") {
+    if (composerMode === "edit_intent" || composerMode === "resume_picker" || composerMode === "agent_picker" || composerMode === "model_picker" || composerMode === "skill_picker" || composerMode === "create_agent" || composerMode === "create_engine" || composerMode === "create_skill" || composerMode === "shortcut_picker") {
       return;
     }
 
@@ -1578,6 +1634,12 @@ export function SwitchbayApp({
           onComplete={handleCreateEngineComplete}
           onCancel={() => { setComposerMode("default"); setQuerySync(""); }}
         />
+        <CreateSkillDrawer
+          visible={composerMode === "create_skill" || createSkillGenerating}
+          generating={createSkillGenerating}
+          onComplete={handleCreateSkillComplete}
+          onCancel={() => { setComposerMode("default"); setQuerySync(""); }}
+        />
         <ShortcutDrawer
           visible={shortcutDrawerVisible}
         />
@@ -1592,10 +1654,11 @@ export function SwitchbayApp({
           visible={mentionPickerVisible}
         />
         <Composer
-          disabled={composerMode === "edit_intent" || composerMode === "create_engine"}
+          disabled={composerMode === "edit_intent" || composerMode === "create_engine" || composerMode === "create_skill"}
           initialQuery={initialQuery}
           pendingApprovalKind={
             pendingEngineDraft ? "engine_draft" :
+            pendingSkillDraft ? "skill_draft" :
             pendingAgentDraft ? "agent_draft" :
             state.activePlan?.status === "pending_approval" ? "plan_approval" :
             state.activePlan?.status === "awaiting_continue" ? "plan_continue" :

@@ -235,6 +235,12 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     example: "/skills sync",
   },
   {
+    category: "skills",
+    command: "/create-skill",
+    description: "Open the guided Toolbox skill markdown wizard.",
+    example: "/create-skill",
+  },
+  {
     category: "agents",
     command: "/agents",
     description: "Open the agent picker to browse and toggle specialist agents.",

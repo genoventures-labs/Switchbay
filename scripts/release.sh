@@ -73,6 +73,9 @@ if ! grep -q 'bin/"switchbay"' "$TMP_TAP/$FORMULA_PATH"; then
   perl -0pi -e 's|(def install\n\s+system "bun", "install", "--frozen-lockfile"\n)|$1    (bin/"switchbay").write <<~SH\n      #!/bin/bash\n      exec bun "#{prefix}/index.tsx" "$@"\n    SH\n|s' "$TMP_TAP/$FORMULA_PATH"
 fi
 
+perl -0pi -e 's|exec bun "#\{prefix\}/index\.tsx" ""|exec bun "#{prefix}/index.tsx" "$@"|g' "$TMP_TAP/$FORMULA_PATH"
+perl -0pi -e 's|exec bun "#\{prefix\}/index\.tsx"$|exec bun "#{prefix}/index.tsx" "$@"|gm' "$TMP_TAP/$FORMULA_PATH"
+
 cd "$TMP_TAP"
 git add "$FORMULA_PATH"
 git commit -m "switchbay $TAG"

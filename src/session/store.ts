@@ -1,4 +1,4 @@
-import type { OriMessage } from "../runtime/types";
+import type { ChatMessage } from "../runtime/types";
 import type { PatchPreview } from "../tools/patch";
 import {
   createApprovalRequest,
@@ -25,7 +25,7 @@ export type SessionAction =
   | { type: "shell/cleared" }
   | {
       type: "turn/submitted";
-      message: OriMessage;
+      message: ChatMessage;
       objective: string;
       pendingPlan: string[];
       mode: AgentMode;
@@ -43,7 +43,7 @@ export type SessionAction =
   | { type: "activity/add"; kind: "info" | "tool" | "status" | "error"; message: string }
   | { type: "travel/completed"; toPath: string; label: string; workspace: WorkspaceSnapshot | null }
   | { type: "transcript/cleared" }
-  | { type: "conversation/replaced"; messages: import("../runtime/types").OriMessage[] }
+  | { type: "conversation/replaced"; messages: import("../runtime/types").ChatMessage[] }
   | { type: "agent/activated"; agentId: string | null }
   | { type: "plan/created"; plan: import("../agent/turn-state").ActivePlan }
   | { type: "plan/started" }
@@ -359,7 +359,7 @@ export function sessionReducer(
         tone: "info",
       });
       // Inject a system note into conversation so the provider knows the workspace changed.
-      const systemNote: OriMessage = {
+      const systemNote: ChatMessage = {
         role: "system",
         content: `[LOCATION CHANGE] The switchbay has switched to a new workspace.\nPath: ${action.toPath}\nLabel: ${action.label}\nAll subsequent file operations and context apply to this new location.`,
       };

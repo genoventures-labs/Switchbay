@@ -64,7 +64,7 @@ They want:
 - Not a model provider.
 - Not an IDE replacement.
 - Not a public competitor to Claude Code or Codex.
-- Not an ORI API client anymore.
+- Not tied to a private backend API anymore.
 - Not a branding-heavy assistant persona.
 
 ## Tone To Name Toward
@@ -85,7 +85,7 @@ Avoid names that feel:
 - Too chatbot-like
 - Too cute
 - Too bound to one model/provider
-- Too ORI-specific
+- Too tied to the old internal project name
 
 ## Useful Metaphors
 

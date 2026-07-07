@@ -11,7 +11,7 @@ import {
   workspaceStorageDir,
 } from "../config/paths";
 import type { ChatRuntimeClient } from "../runtime/client";
-import type { OriMessage } from "../runtime/types";
+import type { ChatMessage } from "../runtime/types";
 import type { WorkspaceSnapshot } from "../session/workspace";
 import type { PatchPreview } from "../tools/patch";
 import { runCommand } from "../tools/shell";
@@ -36,7 +36,7 @@ export type LocalCommandResult = {
   patch?: PatchPreview;
   changedFile?: string;
   clearTranscript?: boolean;
-  compactedConversation?: OriMessage[];
+  compactedConversation?: ChatMessage[];
   activateAgent?: string | null;
   openAgentPicker?: boolean;
   openCreateAgent?: boolean;
@@ -49,7 +49,7 @@ export type LocalCommandResult = {
 export type LocalCommandOptions = {
   activeAgentId?: string | null;
   client: ChatRuntimeClient;
-  conversation?: OriMessage[];
+  conversation?: ChatMessage[];
   lastChangedFile?: string | null;
   profile: string;
   sessionId: string;

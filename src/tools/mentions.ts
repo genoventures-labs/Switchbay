@@ -3,7 +3,7 @@ import fs from "node:fs";
 import { readWorkspaceFile } from "./files";
 
 const IGNORED_DIRS = new Set([
-  "node_modules", ".git", ".switchbay", ".harness", ".ori", "dist", "build", ".next",
+  "node_modules", ".git", ".switchbay", "dist", "build", ".next",
   ".nuxt", "coverage", ".cache", "__pycache__", ".venv",
 ]);
 

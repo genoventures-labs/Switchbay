@@ -7,9 +7,7 @@
   "private": false,
   "license": "MIT",
   "bin": {
-    "switchbay": "./bin/switchbay",
-    "ori-code": "./bin/ori-code",
-    "ori": "./bin/ori-code"
+    "switchbay": "./bin/switchbay"
   },
   "scripts": {
     "build": "bun build index.tsx --compile --outfile bin/switchbay-native",
@@ -30,7 +28,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/genoventures-labs/ori-code"
+    "url": "https://github.com/genoventures-labs/Switchbay.git"
   },
   "keywords": ["ai", "coding-agent", "terminal", "cli", "developer-tools", "lm-studio", "openai", "anthropic"],
   "engines": {

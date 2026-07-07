@@ -1,6 +1,6 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 const hasCloudKey = process.env.OPENAI_API_KEY?.trim() || process.env.ANTHROPIC_API_KEY?.trim();
-const hasLocalLane = process.env.SWITCHBAY_LANE === "local" || process.env.HARNESS_LANE === "local" || process.env.ORI_LANE === "local";
+const hasLocalLane = process.env.SWITCHBAY_LANE === "local";
 
 if (!hasCloudKey && !hasLocalLane) {
   console.log(`

@@ -10,9 +10,10 @@ if [[ -z "$VERSION" ]]; then
 fi
 
 TAG="v$VERSION"
-REPO="genoventures-labs/ori-code"
+REPO="genoventures-labs/Switchbay"
+PACKAGE_NAME="switchbay"
 TAP_REPO="genoventures-labs/homebrew-tap"
-FORMULA_PATH="Formula/ori-code.rb"
+FORMULA_PATH="Formula/switchbay.rb"
 
 echo "==> Releasing $TAG"
 
@@ -38,10 +39,10 @@ git push origin main
 git push origin "$TAG"
 
 # 4. Create tarball from git archive (avoids relying on GitHub's slow auto-generated archive)
-TARBALL_NAME="${REPO##*/}-${VERSION}.tar.gz"
+TARBALL_NAME="${PACKAGE_NAME}-${VERSION}.tar.gz"
 TARBALL_PATH="/tmp/$TARBALL_NAME"
 echo "==> Building release tarball"
-git archive --format=tar.gz --prefix="${REPO##*/}-${VERSION}/" "$TAG" -o "$TARBALL_PATH"
+git archive --format=tar.gz --prefix="${PACKAGE_NAME}-${VERSION}/" "$TAG" -o "$TARBALL_PATH"
 SHA256=$(shasum -a 256 "$TARBALL_PATH" | awk '{print $1}')
 echo "    SHA256: $SHA256"
 
@@ -60,13 +61,18 @@ echo "==> Updating homebrew-tap formula"
 TMP_TAP=$(mktemp -d)
 git clone "https://github.com/$TAP_REPO.git" "$TMP_TAP"
 
+if [[ ! -f "$TMP_TAP/$FORMULA_PATH" ]]; then
+  echo "Release aborted: $FORMULA_PATH does not exist in $TAP_REPO."
+  echo "Create or rename the formula before running the release."
+  exit 1
+fi
+
 sed -i \
+  -e "s|^class .* < Formula|class Switchbay < Formula|" \
+  -e "s|homepage \".*\"|homepage \"https://github.com/$REPO\"|" \
   -e "s|url \".*\"|url \"$TARBALL_URL\"|" \
   -e "s|sha256 \".*\"|sha256 \"$SHA256\"|" \
   -e 's|desc ".*"|desc "Terminal-first AI coding workbench with cloud and local model lanes"|' \
-  -e 's|export HARNESS_LANE|export SWITCHBAY_LANE|g' \
-  -e 's|HARNESS_LMSTUDIO|SWITCHBAY_LMSTUDIO|g' \
-  -e 's|assert_match "code-harness", shell_output("#{bin}/code-harness --help 2>&1")|assert_match "switchbay", shell_output("#{bin}/switchbay --help 2>\&1")|' \
   "$TMP_TAP/$FORMULA_PATH"
 
 if ! grep -q 'bin/"switchbay"' "$TMP_TAP/$FORMULA_PATH"; then
@@ -86,5 +92,5 @@ rm -rf "$TMP_TAP"
 
 echo ""
 echo "==> Done. Released $TAG"
-echo "    brew upgrade ori-code  — will pick up the new version."
+echo "    brew upgrade switchbay  — will pick up the new version."
 echo "    switchbay              — launches the renamed command."

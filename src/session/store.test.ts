@@ -5,8 +5,8 @@ import { createSessionStore, sessionReducer } from "./store";
 function createState() {
   return createSessionStore({
     mode: "build",
-    profile: "ori_code",
-    resolvedProfile: "ori_code",
+    profile: "switchbay",
+    resolvedProfile: "switchbay",
     sessionId: "test-session",
     surface: "dev",
   });

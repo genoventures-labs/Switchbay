@@ -1,4 +1,4 @@
-import type { OriMessage } from "../runtime/types";
+import type { ChatMessage } from "../runtime/types";
 import type { PatchPreview } from "../tools/patch";
 import type { WorkspaceSnapshot } from "../session/workspace";
 
@@ -69,7 +69,7 @@ export type ApprovalRequest = {
 
 export type SessionState = {
   sessionId: string;
-  conversation: OriMessage[];
+  conversation: ChatMessage[];
   transcript: TranscriptEntry[];
   status: SessionStatus;
   streamingText: string;

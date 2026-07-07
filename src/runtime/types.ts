@@ -1,7 +1,7 @@
-export type OriRole = "system" | "user" | "assistant" | "tool";
+export type ChatRole = "system" | "user" | "assistant" | "tool";
 
-export type OriMessage = {
-  role: OriRole;
+export type ChatMessage = {
+  role: ChatRole;
   content: string | unknown;
   tool_call_id?: string;
   tool_calls?: ToolCall[];
@@ -29,7 +29,7 @@ export type ToolCall = {
 
 export type ChatCompletionRequest = {
   model?: string;
-  messages: OriMessage[];
+  messages: ChatMessage[];
   profile?: string;
   stream?: boolean;
   tools?: ToolDefinition[];
@@ -37,7 +37,7 @@ export type ChatCompletionRequest = {
 };
 
 export type ChatCompletionChoice = {
-  message?: OriMessage & { tool_calls?: ToolCall[] };
+  message?: ChatMessage & { tool_calls?: ToolCall[] };
   finish_reason?: "stop" | "tool_calls" | string;
 };
 

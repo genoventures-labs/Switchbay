@@ -16,7 +16,7 @@ let sessionDir: string;
 
 beforeEach(async () => {
   previousSessionDir = Bun.env.SWITCHBAY_SESSION_DIR;
-  sessionDir = await mkdtemp(join(tmpdir(), "ori-code-sessions-"));
+  sessionDir = await mkdtemp(join(tmpdir(), "switchbay-sessions-"));
   Bun.env.SWITCHBAY_SESSION_DIR = sessionDir;
 });
 
@@ -31,8 +31,8 @@ afterEach(() => {
 function createState(sessionId = "session-a"): SessionState {
   return createSessionStore({
     mode: "build",
-    profile: "ori_code",
-    resolvedProfile: "ori_code",
+    profile: "switchbay",
+    resolvedProfile: "switchbay",
     sessionId,
     surface: "dev",
   });
@@ -59,7 +59,7 @@ test("loadPersistedSession returns normalized latest or specific state", async (
     objective: "Build the thing",
     pendingPlan: [],
     mode: "build",
-    resolvedProfile: "ori_code",
+    resolvedProfile: "switchbay",
   });
 
   await savePersistedSession(state);
@@ -98,13 +98,13 @@ test("normalization preserves pending state and strips old error noise", async (
     JSON.stringify({
       sessionId: "legacy",
       mode: "build",
-      requestedProfile: "ori_code",
-      resolvedProfile: "ori_code",
+      requestedProfile: "switchbay",
+      resolvedProfile: "switchbay",
       surface: "dev",
       pendingApproval,
       pendingShell,
       transcript: [
-        { id: "ok", kind: "assistant", title: "ORI", body: "ok", timestamp: 1 },
+        { id: "ok", kind: "assistant", title: "Switchbay", body: "ok", timestamp: 1 },
         { id: "err", kind: "tool", title: "Turn Failed", body: "bad", tone: "error", timestamp: 2 },
       ],
       recentActivity: [

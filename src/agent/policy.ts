@@ -1,12 +1,12 @@
 import { DEFAULTS } from "../config/defaults";
-import type { OriMessage } from "../runtime/types";
+import type { ChatMessage } from "../runtime/types";
 import type { AgentMode } from "./turn-state";
 
 export type ResolvedAgentPolicy = {
   mode: AgentMode;
   requestedProfile: string;
   runtimeProfile: string;
-  modePrompt: OriMessage | null;
+  modePrompt: ChatMessage | null;
 };
 
 const MODE_PROMPTS: Record<AgentMode, string | null> = {

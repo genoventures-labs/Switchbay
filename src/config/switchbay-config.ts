@@ -3,10 +3,6 @@ import fs from "node:fs";
 import os from "node:os";
 
 const CONFIG_PATH = path.join(os.homedir(), ".switchbay", "config.json");
-const LEGACY_CONFIG_PATHS = [
-  path.join(os.homedir(), ".code-harness", "config.json"),
-  path.join(os.homedir(), ".ori", "config.json"),
-];
 
 export type SwitchbayConfig = {
   /** Explicit list of whitelisted locations the switchbay can travel to. */
@@ -39,12 +35,9 @@ let _cached: SwitchbayConfig | null = null;
 export function loadSwitchbayConfig(): SwitchbayConfig {
   if (_cached) return _cached;
 
-  const configPath = fs.existsSync(CONFIG_PATH)
-    ? CONFIG_PATH
-    : LEGACY_CONFIG_PATHS.find((legacyPath) => fs.existsSync(legacyPath)) ?? CONFIG_PATH;
   try {
-    if (fs.existsSync(configPath)) {
-      const raw = fs.readFileSync(configPath, "utf-8");
+    if (fs.existsSync(CONFIG_PATH)) {
+      const raw = fs.readFileSync(CONFIG_PATH, "utf-8");
       const parsed = JSON.parse(raw) as Partial<SwitchbayConfig>;
       _cached = {
         locations: Array.isArray(parsed.locations)

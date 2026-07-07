@@ -842,7 +842,7 @@ export function SwitchbayApp({
               .split("\n")
               .filter(isSwitchbayCheckpointLine)
               .map((l, i) => {
-                const match = l.match(/(?:switchbay|harness|ori):\s*(.+)$/);
+                const match = l.match(/switchbay:\s*(.+)$/);
                 return `${i}. ${match?.[1] ?? l}`;
               });
             dispatch({
@@ -864,7 +864,7 @@ export function SwitchbayApp({
               const stashRef = stashLine.match(/^(stash@\{\d+\})/)?.[1];
               if (stashRef) {
                 await runGit(["git", "stash", "apply", stashRef]);
-                const nameMatch = stashLine.match(/(?:switchbay|harness|ori):\s*(.+)$/);
+                const nameMatch = stashLine.match(/switchbay:\s*(.+)$/);
                 dispatch({ type: "assistant/appended", message: `Restored checkpoint: **${nameMatch?.[1] ?? stashRef}**` });
               }
             }
@@ -1219,5 +1219,5 @@ export function SwitchbayApp({
 }
 
 function isSwitchbayCheckpointLine(line: string): boolean {
-  return /\b(?:switchbay|harness|ori):\s*/.test(line);
+  return /\bswitchbay:\s*/.test(line);
 }

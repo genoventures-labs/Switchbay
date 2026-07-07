@@ -1,7 +1,7 @@
 import path from "node:path";
 import fs from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
-import { workspaceStorageDir, legacyWorkspaceStorageDir } from "../config/paths";
+import { workspaceStorageDir } from "../config/paths";
 
 export type BuiltinAgent = {
   id: string;
@@ -111,26 +111,11 @@ const CUSTOM_AGENT_DIR = path.join(
   "agents",
 );
 
-const HARNESS_CUSTOM_AGENT_DIR = path.join(
-  process.env.HOME ?? process.cwd(),
-  ".code-harness",
-  "agents",
-);
-
-const LEGACY_CUSTOM_AGENT_DIR = path.join(
-  process.env.HOME ?? process.cwd(),
-  ".ori",
-  "agents",
-);
-
 export async function loadAllAgents(): Promise<Agent[]> {
   const agents: Agent[] = [...BUILTIN_AGENTS];
   const dirs = [
     CUSTOM_AGENT_DIR,
-    HARNESS_CUSTOM_AGENT_DIR,
-    LEGACY_CUSTOM_AGENT_DIR,
     path.join(workspaceStorageDir(), "agents"),
-    path.join(legacyWorkspaceStorageDir(), "agents"),
   ];
 
   for (const dir of dirs) {

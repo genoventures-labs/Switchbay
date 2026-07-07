@@ -7,7 +7,7 @@ import {
 import type {
   ChatCompletionRequest,
   ChatCompletionResponse,
-  OriMessage,
+  ChatMessage,
   ToolCall,
   ToolDefinition,
 } from "./types";
@@ -98,7 +98,7 @@ export class AnthropicClient {
   }
 }
 
-function convertMessages(messages: OriMessage[]): { system: string; messages: AnthropicMessage[] } {
+function convertMessages(messages: ChatMessage[]): { system: string; messages: AnthropicMessage[] } {
   const system: string[] = [];
   const converted: AnthropicMessage[] = [];
 

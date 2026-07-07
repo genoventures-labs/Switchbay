@@ -9,7 +9,7 @@ import {
 import { AnthropicClient } from "./anthropic-client";
 import { OpenAiClient } from "./openai-client";
 import type { ChatRuntimeClient } from "./client";
-import type { ChatCompletionRequest, ChatCompletionResponse, OriMessage, WorkspaceFocus } from "./types";
+import type { ChatCompletionRequest, ChatCompletionResponse, ChatMessage, WorkspaceFocus } from "./types";
 
 type ProviderName = Exclude<CloudProvider, "auto">;
 
@@ -98,7 +98,7 @@ function shouldPreferAnthropic(request: ChatCompletionRequest): boolean {
   return Boolean(request.tools?.length);
 }
 
-function messageText(message: OriMessage): string {
+function messageText(message: ChatMessage): string {
   if (typeof message.content === "string") return message.content;
   if (message.content == null) return "";
   try {

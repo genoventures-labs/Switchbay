@@ -37,7 +37,7 @@ Most AI coding tools make one model, hosted service, or private backend feel lik
 - Use cloud models for deeper reasoning, code review, architecture, and complex implementation.
 - Use local LM Studio models for smaller utility work, offline-friendly tasks, private machine-close work, and quick summaries.
 - Keep approvals practical: broad-impact, destructive, privileged, publishing, refunding, and deploy-style actions still gate.
-- Keep the harness useful even if a provider, hosted API, VPS, or local model setup changes.
+- Keep the workbench useful even if a provider, hosted API, VPS, or local model setup changes.
 - Keep extensions portable through Engine Bay instead of baking every workflow into the core app.
 - Keep reusable agent methods portable through Toolbox instead of hiding them in one-off prompts.
 
@@ -47,11 +47,11 @@ Homebrew:
 
 ```bash
 brew tap genoventures-labs/tap
-brew install ori-code
+brew install switchbay
 switchbay
 ```
 
-The formula is still named `ori-code` during the rename period, but it installs the `switchbay` command. Legacy aliases `ori-code` and `ori` continue to work.
+The Homebrew formula and terminal command are both named `switchbay`.
 
 From source:
 
@@ -170,14 +170,7 @@ Switchbay looks for:
 - `.switchbay/agents/*.md`: custom local specialist agents.
 - `.switchbay/engines/*.engine.json`: workspace engine manifests.
 
-Compatibility reads are still enabled for the older ORI-Code / code-harness names:
-
-- `HARNESS.md`, `ORI.md`
-- `.harness/`, `.ori/`
-- `HARNESS_*`, `ORI_*` environment variables
-- `~/.code-harness/`, `~/.ori/` global config
-
-New writes use the Switchbay names.
+Switchbay reads and writes the Switchbay names directly. Old project aliases are no longer part of the active workflow.
 
 ## Operational Memory
 

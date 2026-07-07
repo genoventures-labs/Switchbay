@@ -34,7 +34,7 @@ function createTurn(): BuiltTurn {
     mode: "build",
     objective: "test",
     pendingPlan: [],
-    resolvedProfile: "ori_code",
+    resolvedProfile: "switchbay",
     request: {
       messages: [{ role: "user", content: "test" }],
     },
@@ -98,7 +98,7 @@ test("buildTurn injects Toolbox skills into system context", async () => {
     input: "review this change",
     mode: "build",
     previousObjective: null,
-    profile: "ori_code",
+    profile: "switchbay",
     transcript: [],
     workspace: {
       cwd,
@@ -121,7 +121,7 @@ test("operational memory commands save, refresh, and inject context", async () =
 
   const remembered = await tryLocalCommand("/remember use Bun for tests", {
     client: {} as any,
-    profile: "ori_code",
+    profile: "switchbay",
     sessionId: "test-session",
     surface: "dev",
     workspace: {
@@ -138,7 +138,7 @@ test("operational memory commands save, refresh, and inject context", async () =
 
   const refreshed = await tryLocalCommand("/memory refresh", {
     client: {} as any,
-    profile: "ori_code",
+    profile: "switchbay",
     sessionId: "test-session",
     surface: "dev",
     workspace: {
@@ -161,7 +161,7 @@ test("operational memory commands save, refresh, and inject context", async () =
     input: "what should you remember?",
     mode: "build",
     previousObjective: null,
-    profile: "ori_code",
+    profile: "switchbay",
     transcript: [],
     workspace: {
       cwd,
@@ -178,7 +178,7 @@ test("operational memory commands save, refresh, and inject context", async () =
 });
 
 test("executeTurn feeds native tool results back into the next model call", async () => {
-  const cwd = await mkdtemp(join(tmpdir(), "ori-code-loop-tool-"));
+  const cwd = await mkdtemp(join(tmpdir(), "switchbay-loop-tool-"));
   await writeFile(join(cwd, "demo.txt"), "file body\n", "utf-8");
   const { client, calls } = createMockClient([
     createResponse(null, [
@@ -270,7 +270,7 @@ test("executeTurn preserves shell pending metadata from gated commands", async (
 });
 
 test("shell approval is reserved for broad-impact commands", async () => {
-  const cwd = await mkdtemp(join(tmpdir(), "ori-code-shell-"));
+  const cwd = await mkdtemp(join(tmpdir(), "switchbay-shell-"));
 
   const safe = await executeToolCall("shell", { command: "printf ok" }, { cwd });
   expect(safe.ok).toBe(true);
@@ -548,13 +548,13 @@ test("Thinkapse auto-discovery exposes local harness tools", async () => {
 });
 
 test("/apply is not a local slash command", async () => {
-  const cwd = await mkdtemp(join(tmpdir(), "ori-code-apply-"));
+  const cwd = await mkdtemp(join(tmpdir(), "switchbay-apply-"));
   const filePath = join(cwd, "demo.txt");
   await writeFile(filePath, "old\n", "utf-8");
 
   const result = await tryLocalCommand("/apply", {
     client: {} as any,
-    profile: "ori_code",
+    profile: "switchbay",
     sessionId: "test-session",
     surface: "dev",
     workspace: {
@@ -574,7 +574,7 @@ test("/apply is not a local slash command", async () => {
 test("agent commands use explicit /agent id activation", async () => {
   const baseOptions = {
     client: {} as any,
-    profile: "ori_code",
+    profile: "switchbay",
     sessionId: "test-session",
     surface: "dev",
     workspace: null,
@@ -596,7 +596,7 @@ test("engine slash commands describe registered engines and creative tools", asy
   const cwd = await mkdtemp(join(tmpdir(), "switchbay-engine-commands-"));
   const baseOptions = {
     client: {} as any,
-    profile: "ori_code",
+    profile: "switchbay",
     sessionId: "test-session",
     surface: "dev",
     workspace: {
@@ -631,7 +631,7 @@ test("toolbox tools and slash command expose built-in skills", async () => {
 
   const slash = await tryLocalCommand("/toolbox list", {
     client: {} as any,
-    profile: "ori_code",
+    profile: "switchbay",
     sessionId: "test-session",
     surface: "dev",
     workspace: null,
@@ -650,7 +650,7 @@ test("engine bay slash command lists cached templates", async () => {
   try {
     const result = await tryLocalCommand("/engine-bay templates", {
       client: {} as any,
-      profile: "ori_code",
+      profile: "switchbay",
       sessionId: "test-session",
       surface: "dev",
       workspace: null,

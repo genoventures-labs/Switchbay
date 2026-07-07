@@ -13,7 +13,7 @@ import type { ChatRuntimeClient } from "../runtime/client";
 import type {
   ChatCompletionRequest,
   ChatCompletionResponse,
-  OriMessage,
+  ChatMessage,
 } from "../runtime/types";
 import {
   AGENT_TOOLS,
@@ -225,7 +225,7 @@ function isGenericEmptyFallbackText(text: string): boolean {
   return (
     lower === "i’m here, but that turn came back empty. ask again with a little more detail." ||
     lower === "i'm here, but that turn came back empty. ask again with a little more detail." ||
-    lower === "ori returned no assistant text for this turn."
+    lower === "switchbay returned no assistant text for this turn."
   );
 }
 
@@ -238,7 +238,7 @@ export async function buildTurn(input: {
   mode: string;
   previousObjective: string | null;
   profile: string;
-  transcript: OriMessage[];
+  transcript: ChatMessage[];
   workspace: WorkspaceSnapshot | null;
   activeAgentId?: string | null;
 }): Promise<BuiltTurn> {
@@ -356,7 +356,7 @@ You have access to tools that execute on the user's local machine via this app's
 - Chain multiple tool calls in one response when needed.
 - NEVER say you lack shell or filesystem access — you have full local access via the tool bridge.`;
 
-  const messages: OriMessage[] = [
+  const messages: ChatMessage[] = [
     {
       role: "system",
       content: systemPrompt,
@@ -415,7 +415,7 @@ export async function executeTurn(input: {
   onTokens?: (count: number) => void;
 }): Promise<ExecutedTurn> {
   const toolExecutions: AgentToolExecution[] = [];
-  const messages: OriMessage[] = [...input.turn.request.messages];
+  const messages: ChatMessage[] = [...input.turn.request.messages];
   const MAX_ITERATIONS = 12;
   let emptyReplyRetries = 0;
   const MAX_EMPTY_REPLY_RETRIES = 1;

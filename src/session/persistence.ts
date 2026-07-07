@@ -8,8 +8,6 @@ import {
 
 function getSessionPaths() {
   const sessionDir = Bun.env.SWITCHBAY_SESSION_DIR ??
-    Bun.env.HARNESS_SESSION_DIR ??
-    Bun.env.ORI_SESSION_DIR ??
     path.join(
       Bun.env.HOME ?? process.env.HOME ?? process.cwd(),
       ".switchbay",
@@ -136,8 +134,8 @@ export async function purgeSessions(olderThanMs: number): Promise<number> {
 function normalizeSessionState(parsed: Partial<SessionState>): SessionState {
   const fallback = createInitialSessionState({
     mode: parsed.mode ?? "build",
-    profile: parsed.requestedProfile ?? "ori_code",
-    resolvedProfile: parsed.resolvedProfile ?? parsed.requestedProfile ?? "ori_code",
+    profile: parsed.requestedProfile ?? "switchbay",
+    resolvedProfile: parsed.resolvedProfile ?? parsed.requestedProfile ?? "switchbay",
     sessionId: parsed.sessionId,
     surface: parsed.surface ?? "dev",
   });

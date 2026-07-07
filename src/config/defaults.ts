@@ -3,7 +3,7 @@ export const DEFAULTS = {
   anthropicModel: "claude-sonnet-4-5",
   lmStudioModel: "qwen2.5-7b-instruct",
   surface: "dev",
-  profile: "ori_code",
+  profile: "switchbay",
   mode: "build",
   lane: "cloud",
   openAiBase: "https://api.openai.com/v1",

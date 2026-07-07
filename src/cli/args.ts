@@ -118,9 +118,9 @@ export function parseCliArgs(argv: string[]): CliOptions {
       };
     } else if (arg === "update") {
       console.log("Run this to update Switchbay from source:\n");
-      console.log("  bun install -g github:genoventures-labs/ori-code#main\n");
+      console.log("  bun install -g github:genoventures-labs/Switchbay#main\n");
       console.log("Or, if installed through Homebrew:\n");
-      console.log("  brew upgrade ori-code\n");
+      console.log("  brew upgrade switchbay\n");
       process.exit(0);
     } else if (arg === "version" || arg === "--version" || arg === "-v") {
       console.log("switchbay 0.9.47");

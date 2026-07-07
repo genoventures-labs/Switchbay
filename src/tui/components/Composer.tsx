@@ -119,13 +119,13 @@ export function Composer({
       <Box paddingX={2} paddingTop={0} paddingBottom={1}>
         <Text color={grayColor}>
           {pendingApprovalKind === "shell_command" ? (
-            <Text><Text color={brandColor}>y</Text> run · <Text color={grayColor}>n</Text> skip</Text>
+            <Text><Text color={grayColor}>1</Text> no · <Text color={brandColor}>2</Text> yes · <Text color={brandColor}>3</Text> yes always</Text>
           ) : pendingApprovalKind === "agent_draft" ? (
-            <Text><Text color={brandColor}>y</Text> save agent · <Text color={grayColor}>n</Text> discard</Text>
+            <Text><Text color={grayColor}>1</Text> discard · <Text color={brandColor}>2</Text> save</Text>
           ) : pendingApprovalKind === "plan_approval" ? (
-            <Text><Text color={brandColor}>y</Text> execute plan · <Text color={grayColor}>n</Text> cancel</Text>
+            <Text><Text color={grayColor}>1</Text> cancel · <Text color={brandColor}>2</Text> execute plan</Text>
           ) : pendingApprovalKind === "plan_continue" ? (
-            <Text><Text color={brandColor}>y</Text> next step · <Text color={grayColor}>skip</Text> · <Text color={grayColor}>stop</Text></Text>
+            <Text><Text color={brandColor}>2</Text> next step · <Text color={grayColor}>skip</Text> · <Text color={grayColor}>stop</Text></Text>
           ) : disabled ? (
             <Text>Enter to <Text color={brandColor}>draft</Text> · Esc to <Text color={brandColor}>cancel</Text></Text>
           ) : (

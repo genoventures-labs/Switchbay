@@ -69,13 +69,13 @@ export function PlanPanel({ plan }: PlanPanelProps) {
       {/* Footer hint */}
       {isApproval && (
         <Box marginTop={1} gap={3}>
-          <Text color={greenColor}>y → execute</Text>
-          <Text color={grayColor}>n → cancel</Text>
+          <Text color={grayColor}>1 cancel</Text>
+          <Text color={greenColor}>2 execute</Text>
         </Box>
       )}
       {isContinue && (
         <Box marginTop={1} gap={3}>
-          <Text color={greenColor}>y → continue</Text>
+          <Text color={greenColor}>2 continue</Text>
           <Text color={grayColor}>skip → skip step</Text>
           <Text color={grayColor}>stop → abort</Text>
         </Box>

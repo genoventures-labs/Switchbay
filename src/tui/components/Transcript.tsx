@@ -136,8 +136,9 @@ export function Transcript({
           </Box>
           <Text color={TUI_COLORS.text}>{pendingApproval.summary}</Text>
           <Box marginTop={1} gap={3}>
-            <Text color={greenColor}>y → run</Text>
-            <Text color={grayColor}>n → skip</Text>
+            <Text color={grayColor}>1 no</Text>
+            <Text color={greenColor}>2 yes</Text>
+            <Text color={greenColor}>3 yes always</Text>
           </Box>
         </Box>
       )}
@@ -151,8 +152,8 @@ export function Transcript({
           </Box>
           <Text color={grayColor}>{pendingAgentDraft.savePath}</Text>
           <Box marginTop={1} gap={3}>
-            <Text color={greenColor}>y → save</Text>
-            <Text color={grayColor}>n → discard</Text>
+            <Text color={grayColor}>1 discard</Text>
+            <Text color={greenColor}>2 save</Text>
           </Box>
         </Box>
       )}

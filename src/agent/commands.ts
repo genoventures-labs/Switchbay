@@ -57,10 +57,11 @@ export type LocalCommandOptions = {
   workspace: WorkspaceSnapshot | null;
 };
 
-export function parseApprovalIntent(input: string): "apply" | "cancel" | null {
+export function parseApprovalIntent(input: string): "apply" | "cancel" | "always" | null {
   const normalized = input.trim().toLowerCase();
-  if (["y", "yes"].includes(normalized)) return "apply";
-  if (["n", "no"].includes(normalized)) return "cancel";
+  if (["2", "y", "yes"].includes(normalized)) return "apply";
+  if (["1", "n", "no"].includes(normalized)) return "cancel";
+  if (["3", "always", "yes always", "y always"].includes(normalized)) return "always";
   return null;
 }
 

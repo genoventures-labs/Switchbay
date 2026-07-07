@@ -60,7 +60,11 @@ function createMockClient(responses: ChatCompletionResponse[]) {
 
 test("approval intent accepts short apply and cancel inputs", () => {
   expect(parseApprovalIntent("y")).toBe("apply");
+  expect(parseApprovalIntent("2")).toBe("apply");
   expect(parseApprovalIntent("n")).toBe("cancel");
+  expect(parseApprovalIntent("1")).toBe("cancel");
+  expect(parseApprovalIntent("3")).toBe("always");
+  expect(parseApprovalIntent("yes always")).toBe("always");
   expect(parseApprovalIntent("apply")).toBeNull();
   expect(parseApprovalIntent("/cancel")).toBeNull();
   expect(parseApprovalIntent("later")).toBeNull();

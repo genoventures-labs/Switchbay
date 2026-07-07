@@ -166,7 +166,7 @@ export function sessionReducer(
               kind: "shell_command",
               title: "Run shell command",
               summary: action.command,
-              commandHint: "y to run · n to skip",
+              commandHint: "1 no · 2 yes · 3 yes always",
             }),
           },
           "tool",

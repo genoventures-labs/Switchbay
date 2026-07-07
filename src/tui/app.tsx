@@ -104,6 +104,7 @@ export function SwitchbayApp({
   const [createAgentGenerating, setCreateAgentGenerating] = useState(false);
   const [pendingAgentDraft, setPendingAgentDraft] = useState<PendingAgentDraft | null>(null);
   const [turnThoughts, setTurnThoughts] = useState<string[]>([]);
+  const [alwaysApprovedShellCommands, setAlwaysApprovedShellCommands] = useState<Set<string>>(() => new Set());
   
   const didHydrateRef = useRef(false);
   const historyRef = useRef<string[]>([]);
@@ -605,7 +606,7 @@ export function SwitchbayApp({
 
       if (activePlan.status === "pending_approval") {
         const intent = parseApprovalIntent(trimmedVal);
-        if (intent === "apply") {
+        if (intent === "apply" || intent === "always") {
           const firstStep = activePlan.steps[0];
           if (!firstStep) return;
           dispatch({ type: "plan/started" });
@@ -642,7 +643,7 @@ export function SwitchbayApp({
           return;
         }
         const intent = parseApprovalIntent(trimmedVal);
-        if (intent === "apply") {
+        if (intent === "apply" || intent === "always") {
           const currentStep = activePlan.steps[activePlan.currentStep];
           if (!currentStep) return;
           dispatch({ type: "plan/started" });
@@ -656,7 +657,7 @@ export function SwitchbayApp({
     // Pending agent draft approval — y to save, n to discard
     if (pendingAgentDraft) {
       const intent = parseApprovalIntent(trimmedVal);
-      if (intent === "apply") {
+      if (intent === "apply" || intent === "always") {
         try {
           const dir = pendingAgentDraft.savePath.replace(/\/[^/]+$/, "");
           const { mkdir, writeFile: wf } = await import("node:fs/promises");
@@ -686,14 +687,18 @@ export function SwitchbayApp({
     // Shell command approval — handled before tryLocalCommand so we can exec async
     if (state.pendingShell && state.pendingApproval?.kind === "shell_command") {
       const intent = parseApprovalIntent(trimmedVal);
-      if (intent === "apply") {
+      if (intent === "apply" || intent === "always") {
         const shellCmd = state.pendingShell;
         const shellCwd = state.workspace?.cwd ?? process.cwd();
+        if (intent === "always") {
+          setAlwaysApprovedShellCommands((previous) => new Set(previous).add(shellCmd.command));
+        }
+        setQuerySync("");
         dispatch({ type: "approval/approved", requestId: state.pendingApproval.id });
         dispatch({ type: "shell/cleared" });
         dispatch({
           type: "turn/submitted",
-          message: { role: "user", content: trimmedVal },
+          message: { role: "user", content: intent === "always" ? `approve always: ${shellCmd.command}` : `approve: ${shellCmd.command}` },
           objective: `Run: ${shellCmd.command}`,
           pendingPlan: [],
           mode: state.mode,
@@ -713,6 +718,7 @@ export function SwitchbayApp({
         return;
       }
       if (intent === "cancel") {
+        setQuerySync("");
         dispatch({ type: "approval/rejected", requestId: state.pendingApproval.id });
         dispatch({ type: "shell/cleared" });
         dispatch({ type: "assistant/appended", message: "Canceled." });
@@ -981,6 +987,8 @@ export function SwitchbayApp({
         onTokens,
       });
       const response = executedTurn.response;
+      let autoApprovedShellContent: string | null = null;
+      let autoApprovedShellFailed = false;
 
       for (const toolExecution of executedTurn.toolExecutions) {
         dispatch({
@@ -1007,6 +1015,26 @@ export function SwitchbayApp({
           });
         }
 
+        if (toolExecution.shellPending && alwaysApprovedShellCommands.has(toolExecution.shellPending.command)) {
+          const shellCwd = state.workspace?.cwd ?? process.cwd();
+          dispatch({
+            type: "assistant/appended",
+            message: `Auto-approved remembered command:\n\`${toolExecution.shellPending.command}\``,
+          });
+          try {
+            const result = await runShellString(toolExecution.shellPending.command, shellCwd);
+            if (!result.ok) {
+              throw new Error(result.stderr || result.stdout || `exit ${result.exitCode}`);
+            }
+            const output = [result.stdout, result.stderr].filter(Boolean).join("\n") || "Done.";
+            autoApprovedShellContent = `\`${toolExecution.shellPending.command}\`\n\n${output}`;
+          } catch (err: any) {
+            autoApprovedShellFailed = true;
+            dispatch({ type: "turn/failed", error: `Shell failed: ${err.message}` });
+          }
+          continue;
+        }
+
         if (toolExecution.shellPending) {
           dispatch({
             type: "shell/staged",
@@ -1016,7 +1044,13 @@ export function SwitchbayApp({
         }
       }
 
+      if (autoApprovedShellFailed) {
+        setTurnThoughts([]);
+        return;
+      }
+
       const assistantContent =
+        autoApprovedShellContent ||
         extractAssistantText(response) ||
         synthesizeAssistantFallback(value, executedTurn.toolExecutions, workspace);
 

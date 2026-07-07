@@ -9,6 +9,7 @@ import { fuzzyMatchLocations, travelTo } from "./src/tools/travel";
 import { listSessions, purgeSessions, loadPersistedSession, savePersistedSession } from "./src/session/persistence";
 import { buildTurn, executeTurn, extractAssistantText, refreshWorkspace, synthesizeAssistantFallback } from "./src/agent/loop";
 import { describeEngineBay, loadEngineBayInventory, syncEngineBayRepo } from "./src/engines/hub";
+import { describeToolbox, loadToolboxInventory, readToolboxSkill } from "./src/toolbox/hub";
 
 // ANSI colors for CLI mode
 const CLR = {
@@ -44,6 +45,11 @@ Usage:
   switchbay engines sync             Pull the Switchbay-Engines GitHub repo
   switchbay engines list             List cached engine files and manifests
   switchbay engines templates        List cached templates
+  switchbay toolbox                  Show Toolbox cache and skill status
+  switchbay toolbox sync             Pull the Engine-Toolboxes GitHub repo
+  switchbay toolbox list             List available skills
+  switchbay toolbox templates        List cached skill templates
+  switchbay toolbox read <id>        Print a skill
 
 Options:
   -s, --surface <type>   Surface context (default: dev)
@@ -60,6 +66,11 @@ Options:
 
   if (options.subcommand === "engines") {
     await runEngineCommand(options.engineAction);
+    return;
+  }
+
+  if (options.subcommand === "toolbox") {
+    await runToolboxCommand(options.toolboxAction, options.toolboxSkill);
     return;
   }
 
@@ -150,6 +161,45 @@ async function runEngineCommand(action: "status" | "sync" | "list" | "templates"
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`switchbay engines: ${msg}`);
+    process.exit(1);
+  }
+}
+
+async function runToolboxCommand(action: "status" | "sync" | "list" | "templates" | "read", skillId: string | null) {
+  try {
+    if (action === "sync") {
+      console.log(await describeToolbox(true));
+      return;
+    }
+
+    const inventory = await loadToolboxInventory();
+    if (action === "templates") {
+      console.log(inventory.templates.length ? inventory.templates.join("\n") : "No Toolbox templates found. Run `switchbay toolbox sync`.");
+      return;
+    }
+    if (action === "list") {
+      console.log(inventory.skills.length
+        ? inventory.skills.map((skill) => `${skill.id} - ${skill.name}: ${skill.description}`).join("\n")
+        : "No Toolbox skills found.");
+      return;
+    }
+    if (action === "read") {
+      if (!skillId) {
+        console.error("switchbay toolbox: read requires a skill id.");
+        process.exit(1);
+      }
+      const skill = await readToolboxSkill(skillId);
+      if (!skill) {
+        console.error(`switchbay toolbox: skill not found: ${skillId}`);
+        process.exit(1);
+      }
+      console.log(skill.body);
+      return;
+    }
+    console.log(await describeToolbox(false));
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`switchbay toolbox: ${msg}`);
     process.exit(1);
   }
 }

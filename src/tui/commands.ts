@@ -1,5 +1,5 @@
 export type SlashCommand = {
-  category: "session" | "context" | "safety" | "planning" | "agents" | "engines";
+  category: "session" | "context" | "safety" | "planning" | "agents" | "engines" | "toolbox";
   command: string;
   description: string;
   example: string;
@@ -161,6 +161,12 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     command: "/creative",
     description: "Show Creative Engine tools for writing packets, hooks, names, and drafts.",
     example: "/creative",
+  },
+  {
+    category: "toolbox",
+    command: "/toolbox",
+    description: "Show or sync agent skills and reusable working methods.",
+    example: "/toolbox list",
   },
   {
     category: "agents",

@@ -5,6 +5,7 @@
 [![UI](https://img.shields.io/badge/UI-React%20%2B%20Ink-2563eb)](https://github.com/vadimdemedes/ink)
 [![Model lanes](https://img.shields.io/badge/lanes-cloud%20%7C%20local-16a34a)](#model-lanes)
 [![Engine Bay](https://img.shields.io/badge/Engine%20Bay-GitHub%20sync-7c3aed)](#engine-bay)
+[![Toolbox](https://img.shields.io/badge/Toolbox-agent%20skills-0f766e)](#toolbox)
 [![License](https://img.shields.io/badge/license-MIT-0f766e)](#license)
 
 **Switchbay** is a terminal-first AI coding workbench for developers who want cloud intelligence, local control, and provider independence without rebuilding their workflow every time the model stack changes.
@@ -25,6 +26,7 @@ Switchbay gives you one fast shell for everyday agentic development:
 - Resume sessions, pin context, save local memories, and keep work visible in the terminal.
 - Route between cloud models and local LM Studio models without changing the workflow.
 - Add swappable engines from local manifests or the GitHub-backed Engine Bay.
+- Give agents reusable Toolbox skills for review, debugging, planning, testing, API checks, UI polish, and releases.
 
 Switchbay is built for solo builders, senior developers, technical founders, and internal-tool people who live in the terminal and want the useful parts of AI coding close to the repo.
 
@@ -37,6 +39,7 @@ Most AI coding tools make one model, hosted service, or private backend feel lik
 - Keep approvals practical: broad-impact, destructive, privileged, publishing, refunding, and deploy-style actions still gate.
 - Keep the harness useful even if a provider, hosted API, VPS, or local model setup changes.
 - Keep extensions portable through Engine Bay instead of baking every workflow into the core app.
+- Keep reusable agent methods portable through Toolbox instead of hiding them in one-off prompts.
 
 ## Install
 
@@ -119,6 +122,8 @@ CLI helpers:
 switchbay --help
 switchbay version
 switchbay update
+switchbay engines sync
+switchbay toolbox list
 ```
 
 ## Slash Commands
@@ -149,6 +154,7 @@ Inside the TUI:
 /engines           List registered engines
 /engine-bay        Show or sync the GitHub engine hub
 /creative          Show the built-in Creative Engine lane
+/toolbox           Show or sync reusable agent skills
 ```
 
 ## Workspace Files
@@ -250,6 +256,91 @@ Generic engine tools exposed to the model:
 - `list_engine_tools`
 - `run_engine_tool`
 - `validate_engines`
+
+## Toolbox
+
+Toolbox is Switchbay's reusable skill layer. Engine Bay gives agents callable machinery; Toolbox gives agents working methods.
+
+Skills are markdown files with frontmatter. They are human-readable, GitHub-syncable, and injected into session context as concise operating procedures.
+
+Built-in skills include:
+
+- `api-contract-check`
+- `code-review-pass`
+- `debugging-triage`
+- `implementation-plan`
+- `release-readiness`
+- `test-strategy`
+- `ui-polish-pass`
+
+CLI:
+
+```bash
+switchbay toolbox
+switchbay toolbox sync
+switchbay toolbox list
+switchbay toolbox templates
+switchbay toolbox read release-readiness
+```
+
+TUI:
+
+```text
+/toolbox
+/toolbox sync
+/toolbox list
+/toolbox templates
+/toolbox read release-readiness
+```
+
+By default, Toolbox syncs from:
+
+```text
+https://github.com/genoventures-labs/Engine-Toolboxes.git
+```
+
+into:
+
+```text
+~/.switchbay/toolbox/Engine-Toolboxes
+```
+
+Override with:
+
+```bash
+export SWITCHBAY_TOOLBOX_REPO=https://github.com/you/your-toolbox.git
+export SWITCHBAY_TOOLBOX_PATH=~/.switchbay/toolbox/Engine-Toolboxes
+```
+
+Skill template:
+
+```markdown
+---
+id: my-skill
+name: My Skill
+description: A reusable working method that Switchbay agents can apply during a session.
+languages: [any]
+agents: [any]
+tags: [workflow]
+triggers: [when this should be used]
+---
+
+# My Skill
+
+## Use When
+
+## Method
+
+## Output
+
+## Guardrails
+```
+
+Toolbox tools exposed to the model:
+
+- `list_toolbox_skills`
+- `read_toolbox_skill`
+- `sync_toolbox`
 
 ## Creative Engine
 

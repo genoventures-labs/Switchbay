@@ -6,6 +6,7 @@ import type { ChatRuntimeClient } from "../runtime/client";
 import type { ChatCompletionRequest, ChatCompletionResponse, ToolCall } from "../runtime/types";
 import { executeToolCall } from "./tools";
 import {
+  buildTurn,
   executeTurn,
   extractAssistantText,
   synthesizeAssistantFallback,
@@ -89,6 +90,29 @@ test("executeTurn returns a text-only response without tool work", async () => {
   expect(result.toolExecutions).toHaveLength(0);
   expect(calls).toHaveLength(1);
   expect(steps.at(-1)).toBe("Done.");
+});
+
+test("buildTurn injects Toolbox skills into system context", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "switchbay-toolbox-context-"));
+  const turn = await buildTurn({
+    input: "review this change",
+    mode: "build",
+    previousObjective: null,
+    profile: "ori_code",
+    transcript: [],
+    workspace: {
+      cwd,
+      repoRoot: cwd,
+      branch: null,
+      dirtyFiles: [],
+      recentFiles: [],
+      diff: { hasChanges: false, stat: "" },
+    },
+  });
+
+  const system = turn.request.messages.find((message) => message.role === "system")?.content ?? "";
+  expect(system).toContain("TOOLBOX SKILLS");
+  expect(system).toContain("code-review-pass");
 });
 
 test("executeTurn feeds native tool results back into the next model call", async () => {
@@ -531,6 +555,27 @@ test("engine slash commands describe registered engines and creative tools", asy
   expect(creative.handled).toBe(true);
   expect(creative.assistantMessage).toContain("**Creative Engine**");
   expect(creative.assistantMessage).toContain("creative_packet");
+});
+
+test("toolbox tools and slash command expose built-in skills", async () => {
+  const listed = await executeToolCall("list_toolbox_skills", {}, { cwd: process.cwd() });
+  expect(listed.ok).toBe(true);
+  expect(listed.body).toContain("code-review-pass");
+  expect(listed.body).toContain("release-readiness");
+
+  const read = await executeToolCall("read_toolbox_skill", { skill_id: "debugging-triage" }, { cwd: process.cwd() });
+  expect(read.ok).toBe(true);
+  expect(read.body).toContain("# Debugging Triage");
+
+  const slash = await tryLocalCommand("/toolbox list", {
+    client: {} as any,
+    profile: "ori_code",
+    sessionId: "test-session",
+    surface: "dev",
+    workspace: null,
+  });
+  expect(slash.handled).toBe(true);
+  expect(slash.assistantMessage).toContain("implementation-plan");
 });
 
 test("engine bay slash command lists cached templates", async () => {

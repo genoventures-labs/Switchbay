@@ -11,6 +11,7 @@ import {
   renderEngineToolCommand,
   shellQuote,
 } from "../engines/registry";
+import { describeToolbox, readToolboxSkill } from "../toolbox/hub";
 
 // Commands that still require approval in the private-tool lane because they
 // are destructive, privileged, publishing, or have broad external impact.
@@ -366,6 +367,36 @@ export const AGENT_TOOLS: ToolDefinition[] = [
     function: {
       name: "validate_engines",
       description: "Validate registered Switchbay engine manifests and report warnings.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "list_toolbox_skills",
+      description: "List reusable Toolbox skills available to Switchbay agents.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "read_toolbox_skill",
+      description: "Read a Toolbox skill by id.",
+      parameters: {
+        type: "object",
+        properties: {
+          skill_id: { type: "string", description: "Toolbox skill id, such as code-review-pass." },
+        },
+        required: ["skill_id"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "sync_toolbox",
+      description: "Pull the GitHub-backed Engine-Toolboxes repo into the local Toolbox cache.",
       parameters: { type: "object", properties: {} },
     },
   },
@@ -1088,6 +1119,36 @@ export async function executeToolCall(
           body: registry.warnings.length === 0
             ? `Loaded ${registry.engines.length} engine(s): ${registry.engines.map((engine) => engine.id).join(", ") || "(none)"}`
             : registry.warnings.join("\n"),
+        };
+      }
+
+      case "list_toolbox_skills": {
+        return {
+          tool: name,
+          ok: true,
+          summary: "Listed Toolbox skills",
+          body: await describeToolbox(false),
+        };
+      }
+
+      case "read_toolbox_skill": {
+        const skillId = String(args.skill_id || "").trim();
+        if (!skillId) throw new Error("read_toolbox_skill requires a skill_id.");
+        const skill = await readToolboxSkill(skillId);
+        return {
+          tool: name,
+          ok: Boolean(skill),
+          summary: skill ? `Read Toolbox skill ${skill.id}` : `Toolbox skill not found: ${skillId}`,
+          body: skill?.body ?? `Toolbox skill not found: ${skillId}`,
+        };
+      }
+
+      case "sync_toolbox": {
+        return {
+          tool: name,
+          ok: true,
+          summary: "Synced Toolbox",
+          body: await describeToolbox(true),
         };
       }
 

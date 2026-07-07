@@ -25,6 +25,7 @@ import {
   findAgent,
   agentSystemPrompt,
 } from "./agents";
+import { buildToolboxPromptBlock } from "../toolbox/hub";
 import {
   type AgentMode,
   createThoughtFrame,
@@ -291,10 +292,12 @@ export async function buildTurn(input: {
     if (activeAgent) agentBlock = agentSystemPrompt(activeAgent);
   }
 
+  const toolboxBlock = await buildToolboxPromptBlock();
+
   let systemPrompt = `You are a local-first coding agent running inside a terminal switchbay.
 Current Mode: ${mode}
 Current Profile: ${input.profile}
-Current Workspace: ${cwd}${oriMdBlock}${memoryBlock}${pinsBlock}${agentBlock}
+Current Workspace: ${cwd}${oriMdBlock}${memoryBlock}${pinsBlock}${agentBlock}${toolboxBlock}
 
 GROUNDING RULES:
 1. You are running inside a local development tool.

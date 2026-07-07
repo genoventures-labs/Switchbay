@@ -10,8 +10,10 @@ export type CliOptions = {
   resume: string | boolean; // string (id/index) or true (latest)
   newSession: boolean;
   purge: string | null;
-  subcommand: "run" | "update" | "version" | "help" | "engines";
+  subcommand: "run" | "update" | "version" | "help" | "engines" | "toolbox";
   engineAction: "status" | "sync" | "list" | "templates";
+  toolboxAction: "status" | "sync" | "list" | "templates" | "read";
+  toolboxSkill: string | null;
 };
 
 export function parseCliArgs(argv: string[]): CliOptions {
@@ -67,6 +69,28 @@ export function parseCliArgs(argv: string[]): CliOptions {
         purge,
         subcommand: "engines",
         engineAction,
+        toolboxAction: "status",
+        toolboxSkill: null,
+      };
+    } else if (arg === "toolbox") {
+      const action = args[i + 1];
+      const toolboxAction = action === "sync" || action === "list" || action === "templates" || action === "read" || action === "status"
+        ? action
+        : "status";
+      return {
+        surface,
+        profile,
+        mode,
+        lane,
+        initialQuery: "",
+        hop,
+        resume,
+        newSession,
+        purge,
+        subcommand: "toolbox",
+        engineAction: "status",
+        toolboxAction,
+        toolboxSkill: toolboxAction === "read" ? args[i + 2] ?? null : null,
       };
     } else if (arg === "update") {
       console.log("Run this to update Switchbay from source:\n");
@@ -78,7 +102,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
       console.log("switchbay 0.9.47");
       process.exit(0);
     } else if (arg === undefined || arg === "help" || arg === "--help" || arg === "-h") {
-      return { surface, profile, mode, lane, initialQuery: "", hop: null, resume: false, newSession: false, purge: null, subcommand: "help", engineAction: "status" };
+      return { surface, profile, mode, lane, initialQuery: "", hop: null, resume: false, newSession: false, purge: null, subcommand: "help", engineAction: "status", toolboxAction: "status", toolboxSkill: null };
     } else if (!arg.startsWith("-")) {
       positional.push(arg);
     }
@@ -96,5 +120,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
     purge,
     subcommand: "run",
     engineAction: "status",
+    toolboxAction: "status",
+    toolboxSkill: null,
   };
 }

@@ -19,6 +19,7 @@ import { findAgent, loadAllAgents } from "./agents";
 import { extractAssistantText } from "./loop";
 import { describeEngines, loadEngineRegistry } from "../engines/registry";
 import { describeEngineBay, loadEngineBayInventory } from "../engines/hub";
+import { describeToolbox, loadToolboxInventory, readToolboxSkill } from "../toolbox/hub";
 
 export type LocalCommandResult = {
   handled: boolean;
@@ -119,6 +120,10 @@ export async function tryLocalCommand(
 
   if (trimmed === "/engine-bay" || trimmed.startsWith("/engine-bay ")) {
     return handleEngineBayCommand(trimmed);
+  }
+
+  if (trimmed === "/toolbox" || trimmed.startsWith("/toolbox ")) {
+    return handleToolboxCommand(trimmed);
   }
 
   if (trimmed === "/creative") {
@@ -395,6 +400,53 @@ async function handleEngineBayCommand(trimmed: string): Promise<LocalCommandResu
     return { handled: true, assistantMessage: await describeEngineBay(false) };
   } catch (e: any) {
     return { handled: true, assistantMessage: `Engine Bay failed: ${e.message}` };
+  }
+}
+
+async function handleToolboxCommand(trimmed: string): Promise<LocalCommandResult> {
+  const parts = trimmed.slice("/toolbox".length).trim().split(/\s+/).filter(Boolean);
+  const action = parts[0] ?? "status";
+  try {
+    if (action === "sync") {
+      return { handled: true, assistantMessage: await describeToolbox(true) };
+    }
+
+    const inventory = await loadToolboxInventory();
+    if (action === "templates") {
+      return {
+        handled: true,
+        assistantMessage: inventory.templates.length
+          ? inventory.templates.map((item) => `- \`${item}\``).join("\n")
+          : "No Toolbox templates found. Run `/toolbox sync`.",
+      };
+    }
+
+    if (action === "list") {
+      return {
+        handled: true,
+        assistantMessage: inventory.skills.length
+          ? inventory.skills.map((skill) => `- \`${skill.id}\` - **${skill.name}**: ${skill.description}`).join("\n")
+          : "No Toolbox skills found.",
+      };
+    }
+
+    if (action === "read") {
+      const skillId = parts[1];
+      if (!skillId) return { handled: true, assistantMessage: "Usage: `/toolbox read <skill-id>`" };
+      const skill = await readToolboxSkill(skillId);
+      return {
+        handled: true,
+        assistantMessage: skill ? skill.body : `Toolbox skill not found: \`${skillId}\``,
+      };
+    }
+
+    if (action && action !== "status") {
+      return { handled: true, assistantMessage: "Usage: `/toolbox [status|sync|list|templates|read <skill-id>]`" };
+    }
+
+    return { handled: true, assistantMessage: await describeToolbox(false) };
+  } catch (e: any) {
+    return { handled: true, assistantMessage: `Toolbox failed: ${e.message}` };
   }
 }
 

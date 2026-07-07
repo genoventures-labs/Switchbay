@@ -98,3 +98,15 @@ test("sends the LM Studio API key when configured", async () => {
 
   expect(authHeaders).toEqual(["Bearer lmstudio-test-key"]);
 });
+
+test("lists LM Studio models for the MCP lane", async () => {
+  Bun.env.SWITCHBAY_LANE = "local-mcp";
+  Bun.env.SWITCHBAY_LMSTUDIO_MODEL = "mcp-default";
+
+  const result = await listLmStudioModels(async () =>
+    Response.json({ data: [{ id: "tool-ready-local" }] }),
+  "local-mcp");
+
+  expect(result.models.map((model) => model.lane)).toEqual(["local-mcp", "local-mcp"]);
+  expect(result.models.map((model) => model.provider)).toEqual(["lmstudio-mcp", "lmstudio-mcp"]);
+});

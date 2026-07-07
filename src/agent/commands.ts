@@ -20,6 +20,7 @@ import { extractAssistantText } from "./loop";
 import { describeEngines, loadEngineRegistry } from "../engines/registry";
 import { describeEngineBay, loadEngineBayInventory } from "../engines/hub";
 import { describeToolbox, loadToolboxInventory, readToolboxSkill } from "../toolbox/hub";
+import { createDefaultLmStudioMcpConfig, describeLmStudioMcpConfig, loadLmStudioMcpConfig, saveLmStudioMcpConfig } from "../runtime/lmstudio-mcp-config";
 import {
   addMemoryNote,
   describeMemory,
@@ -41,6 +42,7 @@ export type LocalCommandResult = {
   openAgentPicker?: boolean;
   openCreateAgent?: boolean;
   openCreateEngine?: boolean;
+  openCreateMcp?: boolean;
   openCreateSkill?: boolean;
   openEnginePicker?: boolean;
   openSkillPicker?: boolean;
@@ -79,6 +81,7 @@ export async function tryLocalCommand(
     const creationIntent = parseConversationalCreationIntent(trimmed);
     if (creationIntent === "agent") return { handled: true, openCreateAgent: true };
     if (creationIntent === "engine") return { handled: true, openCreateEngine: true };
+    if (creationIntent === "mcp") return { handled: true, openCreateMcp: true };
     if (creationIntent === "skill") return { handled: true, openCreateSkill: true };
     return { handled: false };
   }
@@ -136,8 +139,16 @@ export async function tryLocalCommand(
     return { handled: true, openCreateEngine: true };
   }
 
+  if (trimmed === "/create-mcp") {
+    return { handled: true, openCreateMcp: true };
+  }
+
   if (trimmed === "/create-skill") {
     return { handled: true, openCreateSkill: true };
+  }
+
+  if (trimmed === "/mcp" || trimmed.startsWith("/mcp ")) {
+    return handleMcpCommand(trimmed, options);
   }
 
   if (trimmed === "/engines") {
@@ -271,7 +282,7 @@ export async function tryLocalCommand(
   return { handled: false };
 }
 
-function parseConversationalCreationIntent(input: string): "agent" | "engine" | "skill" | null {
+function parseConversationalCreationIntent(input: string): "agent" | "engine" | "mcp" | "skill" | null {
   const normalized = input
     .toLowerCase()
     .replace(/^[,\s]*(hey|yo|ok|okay)?\s*(bay|switchbay)[,\s:;-]*/i, "")
@@ -282,9 +293,39 @@ function parseConversationalCreationIntent(input: string): "agent" | "engine" | 
   if (!wantsCreate) return null;
 
   if (/\b(agent|specialist|persona)\b/.test(normalized)) return "agent";
+  if (/\b(mcp|mcp config|mcp lane|lm studio mcp|lmstudio mcp|tool server|tool servers)\b/.test(normalized)) return "mcp";
   if (/\b(engine|engine builder|engine manifest|tool engine)\b/.test(normalized)) return "engine";
   if (/\b(skill|toolbox skill|workflow|checklist)\b/.test(normalized)) return "skill";
   return null;
+}
+
+async function handleMcpCommand(
+  trimmed: string,
+  options: LocalCommandOptions,
+): Promise<LocalCommandResult> {
+  const cwd = options.workspace?.cwd ?? process.cwd();
+  const action = trimmed.slice("/mcp".length).trim().toLowerCase();
+  try {
+    if (action === "init") {
+      const path = await saveLmStudioMcpConfig(createDefaultLmStudioMcpConfig(), cwd);
+      return {
+        handled: true,
+        assistantMessage: `Created LM Studio MCP config at \`${path}\`.\n\nEdit it to match the MCP servers installed in LM Studio, then switch with \`/lane mcp\`.`,
+      };
+    }
+
+    if (action === "create") {
+      return { handled: true, openCreateMcp: true };
+    }
+
+    if (action && action !== "status") {
+      return { handled: true, assistantMessage: "Usage: `/mcp [status|init|create]`" };
+    }
+
+    return { handled: true, assistantMessage: describeLmStudioMcpConfig(await loadLmStudioMcpConfig(cwd)) };
+  } catch (e: any) {
+    return { handled: true, assistantMessage: `LM Studio MCP config failed: ${e.message}` };
+  }
 }
 
 async function handleInitCommand(

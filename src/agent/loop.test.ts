@@ -10,6 +10,7 @@ import {
   executeTurn,
   extractAssistantText,
   generateEngineManifest,
+  generateLmStudioMcpConfig,
   generateSkillDefinition,
   synthesizeAssistantFallback,
 } from "./loop";
@@ -145,6 +146,34 @@ triggers: [launch, release]
   expect(draft.id).toBe("launch-check");
   expect(draft.savePath).toContain(".switchbay/toolbox/skills/launch-check.skill.md");
   expect(draft.content).toContain("id: launch-check");
+});
+
+test("generateLmStudioMcpConfig produces a workspace MCP config draft", async () => {
+  const { client } = createMockClient([
+    createResponse(`{
+  "enabled": true,
+  "nativeBase": "http://192.168.1.50:1234/api/v1",
+  "model": "qwen-local",
+  "integrations": ["mcp/playwright"],
+  "mcpServers": {
+    "playwright": { "note": "Already installed in LM Studio." }
+  }
+}`),
+  ]);
+
+  const draft = await generateLmStudioMcpConfig(client, "dev", {
+    name: "Browser MCP",
+    purpose: "Let local models use browser tools.",
+    servers: "playwright",
+    integrations: "mcp/playwright",
+    notes: "Use my LAN host.",
+  });
+
+  expect(draft.id).toBe("lmstudio-mcp");
+  expect(draft.savePath).toContain(".switchbay/lmstudio.mcp.json");
+  const parsed = JSON.parse(draft.content);
+  expect(parsed.integrations).toEqual(["mcp/playwright"]);
+  expect(parsed.nativeBase).toBe("http://192.168.1.50:1234/api/v1");
 });
 
 test("tool fallback returns the first useful tool body", () => {
@@ -718,6 +747,10 @@ test("conversational creation requests open builders", async () => {
   const engine = await tryLocalCommand("let's build a custom engine for reports", baseOptions);
   expect(engine.handled).toBe(true);
   expect(engine.openCreateEngine).toBe(true);
+
+  const mcp = await tryLocalCommand("Bay, make an LM Studio MCP config for browser tools", baseOptions);
+  expect(mcp.handled).toBe(true);
+  expect(mcp.openCreateMcp).toBe(true);
 
   const skill = await tryLocalCommand("create a release checklist skill", baseOptions);
   expect(skill.handled).toBe(true);

@@ -68,6 +68,12 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     category: "runtime",
+    command: "/lane mcp",
+    description: "Switch this TUI session to the LM Studio MCP lane.",
+    example: "/lane mcp",
+  },
+  {
+    category: "runtime",
     command: "/model",
     description: "Open the model picker for the active runtime lane.",
     example: "/model",
@@ -83,6 +89,18 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     command: "/collapse",
     description: "Hide or show the read-only right-side telemetry panels.",
     example: "/collapse",
+  },
+  {
+    category: "runtime",
+    command: "/mcp",
+    description: "Show or initialize the workspace LM Studio MCP lane config.",
+    example: "/mcp init",
+  },
+  {
+    category: "runtime",
+    command: "/create-mcp",
+    description: "Open the guided LM Studio MCP config wizard.",
+    example: "/create-mcp",
   },
   {
     category: "context",

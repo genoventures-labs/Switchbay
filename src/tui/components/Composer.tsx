@@ -124,6 +124,8 @@ export function Composer({
             <Text><Text color={grayColor}>1</Text> discard · <Text color={brandColor}>2</Text> save</Text>
           ) : pendingApprovalKind === "engine_draft" ? (
             <Text><Text color={grayColor}>1</Text> discard · <Text color={brandColor}>2</Text> save engine</Text>
+          ) : pendingApprovalKind === "mcp_draft" ? (
+            <Text><Text color={grayColor}>1</Text> discard · <Text color={brandColor}>2</Text> save MCP config</Text>
           ) : pendingApprovalKind === "skill_draft" ? (
             <Text><Text color={grayColor}>1</Text> discard · <Text color={brandColor}>2</Text> save skill</Text>
           ) : pendingApprovalKind === "plan_approval" ? (

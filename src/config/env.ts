@@ -14,11 +14,14 @@ function readFirstEnv(...keys: string[]): string | undefined {
   return undefined;
 }
 
-export type RuntimeLane = "cloud" | "local";
+export type RuntimeLane = "cloud" | "local" | "local-mcp";
 export type CloudProvider = "auto" | "openai" | "anthropic";
 
 export function normalizeRuntimeLane(value?: string | null): RuntimeLane {
   const lane = (value ?? DEFAULTS.lane).toLowerCase();
+  if (lane === "mcp" || lane === "local-mcp" || lane === "lm-mcp" || lane === "lmstudio-mcp") {
+    return "local-mcp";
+  }
   if (lane === "local" || lane === "lm" || lane === "lmstudio") {
     return "local";
   }
@@ -30,7 +33,8 @@ export function getRuntimeLane(): RuntimeLane {
 }
 
 export function getDefaultModel(): string {
-  if (getRuntimeLane() === "local") {
+  const lane = getRuntimeLane();
+  if (lane === "local" || lane === "local-mcp") {
     return (
       readEnv("SWITCHBAY_LMSTUDIO_MODEL") ??
       readEnv("LMSTUDIO_DEFAULT_MODEL") ??
@@ -88,6 +92,15 @@ export function getLmStudioBase(): string {
     readEnv("LMSTUDIO_API_URL") ??
     DEFAULTS.lmStudioBase;
   return base.endsWith("/v1") ? base : `${base.replace(/\/$/, "")}/v1`;
+}
+
+export function getLmStudioNativeBase(): string {
+  const nativeBase = readFirstEnv("SWITCHBAY_LMSTUDIO_NATIVE_BASE", "LMSTUDIO_NATIVE_API_BASE");
+  if (nativeBase) {
+    return nativeBase.endsWith("/api/v1") ? nativeBase : `${nativeBase.replace(/\/$/, "")}/api/v1`;
+  }
+
+  return getLmStudioBase().replace(/\/v1$/, "/api/v1");
 }
 
 export function getLmStudioApiKey(): string | undefined {

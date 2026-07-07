@@ -8,7 +8,7 @@ import {
   type RuntimeLane,
 } from "../config/env";
 
-export type RuntimeModelProvider = Exclude<CloudProvider, "auto"> | "lmstudio";
+export type RuntimeModelProvider = Exclude<CloudProvider, "auto"> | "lmstudio" | "lmstudio-mcp";
 
 export type RuntimeModelOption = {
   id: string;
@@ -59,11 +59,16 @@ export async function listRuntimeModels(lane: RuntimeLane): Promise<RuntimeModel
     return { models: getCloudModelPresets() };
   }
 
-  return listLmStudioModels();
+  return listLmStudioModels(undefined, lane);
 }
 
-export async function listLmStudioModels(fetchImpl: FetchLike = fetch): Promise<RuntimeModelList> {
-  const fallback = envModelOption(getDefaultModel(), "LM Studio env default", "local", "lmstudio");
+export async function listLmStudioModels(
+  fetchImpl: FetchLike = fetch,
+  lane: Extract<RuntimeLane, "local" | "local-mcp"> = "local",
+): Promise<RuntimeModelList> {
+  const provider: RuntimeModelProvider = lane === "local-mcp" ? "lmstudio-mcp" : "lmstudio";
+  const label = lane === "local-mcp" ? "LM Studio MCP env default" : "LM Studio env default";
+  const fallback = envModelOption(getDefaultModel(), label, lane, provider);
   const apiBase = getLmStudioBase();
   const headers: Record<string, string> = {};
   const apiKey = getLmStudioApiKey();
@@ -95,8 +100,8 @@ export async function listLmStudioModels(fetchImpl: FetchLike = fetch): Promise<
       .map((id) => ({
         id,
         label: id,
-        lane: "local" as const,
-        provider: "lmstudio" as const,
+        lane,
+        provider,
         source: "lmstudio" as const,
       }));
 

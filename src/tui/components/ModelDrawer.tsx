@@ -79,7 +79,11 @@ export function ModelDrawer({
               {selected ? (
                 <Box paddingLeft={2}>
                   <Text color={TUI_COLORS.muted}>
-                    {item.lane === "local" ? "LM Studio local lane" : "Cloud lane"} · {item.source}
+                    {item.lane === "local"
+                      ? "LM Studio local lane"
+                      : item.lane === "local-mcp"
+                        ? "LM Studio MCP lane"
+                        : "Cloud lane"} · {item.source}
                   </Text>
                 </Box>
               ) : null}

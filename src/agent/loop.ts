@@ -37,6 +37,7 @@ import {
 import { loadWorkspaceSnapshot, type WorkspaceSnapshot } from "../session/workspace";
 import { listProjectFiles } from "../tools/files";
 import { runCommand } from "../tools/shell";
+import { createDefaultLmStudioMcpConfig, lmStudioMcpConfigPath } from "../runtime/lmstudio-mcp-config";
 
 export async function generatePlan(
   client: ChatRuntimeClient,
@@ -95,6 +96,13 @@ export type PendingEngineDraft = {
 };
 
 export type PendingSkillDraft = {
+  id: string;
+  name: string;
+  content: string;
+  savePath: string;
+};
+
+export type PendingMcpDraft = {
   id: string;
   name: string;
   content: string;
@@ -295,6 +303,72 @@ Brief:
   const content = `${JSON.stringify(normalized, null, 2)}\n`;
   const savePath = join(workspaceStorageDir(process.cwd()), "engines", `${normalized.id}.engine.json`);
   return { id: normalized.id, name: normalized.name, content, savePath };
+}
+
+export async function generateLmStudioMcpConfig(
+  client: ChatRuntimeClient,
+  surface: string,
+  answers: { name: string; purpose: string; servers: string; integrations: string; notes: string },
+): Promise<PendingMcpDraft> {
+  const prompt = `Create a Switchbay LM Studio MCP lane JSON config.
+
+Output ONLY valid JSON. No markdown fences.
+
+Shape:
+{
+  "enabled": true,
+  "nativeBase": "http://YOUR-LM-STUDIO-HOST:1234/api/v1",
+  "model": "local-model-id",
+  "integrations": ["mcp/server-name"],
+  "mcpServers": {
+    "server-name": {
+      "command": "optional command if this mirrors LM Studio mcp.json",
+      "args": ["optional", "args"],
+      "note": "short setup note"
+    }
+  }
+}
+
+Rules:
+- Keep it compatible with LM Studio's mcp.json naming style.
+- If the user lists already-installed LM Studio MCP servers, put their API ids in "integrations" as "mcp/<server-name>".
+- If details are incomplete, create useful placeholders and concise notes.
+- Do not invent API keys or secrets.
+- Prefer the host placeholder from the required shape unless the user supplied a host.
+
+Brief:
+- Name: ${answers.name}
+- Purpose: ${answers.purpose}
+- MCP servers to expose: ${answers.servers}
+- Exact integrations if known: ${answers.integrations || "Infer from server names"}
+- Notes/limits: ${answers.notes || "Keep it safe and practical"}`;
+
+  const resp = await client.createChatCompletion(surface, {
+    model: undefined,
+    messages: [
+      {
+        role: "system",
+        content: "You write strict JSON config files for local AI tooling. Output valid JSON only.",
+      },
+      { role: "user", content: prompt },
+    ],
+  });
+
+  const raw = extractAssistantText(resp).trim();
+  if (!raw) throw new Error("The model returned no MCP config.");
+  const parsed = JSON.parse(stripJsonFence(raw));
+  const normalized = {
+    ...createDefaultLmStudioMcpConfig(),
+    ...parsed,
+    enabled: parsed.enabled ?? true,
+  };
+  const content = `${JSON.stringify(normalized, null, 2)}\n`;
+  return {
+    id: "lmstudio-mcp",
+    name: answers.name || "LM Studio MCP",
+    content,
+    savePath: lmStudioMcpConfigPath(process.cwd()),
+  };
 }
 
 function stripJsonFence(value: string): string {

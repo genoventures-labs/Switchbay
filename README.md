@@ -83,13 +83,38 @@ export SWITCHBAY_LMSTUDIO_API_KEY=... # generate in LM Studio when MCP/tool acce
 export SWITCHBAY_LMSTUDIO_MODEL=qwen2.5-7b-instruct
 ```
 
-Inside the TUI, use `/lane` to toggle Cloud/LM Studio and `/model` to open the model drawer. Cloud models use built-in OpenAI/Anthropic presets; LM Studio models are fetched from `SWITCHBAY_LMSTUDIO_BASE`. If your LM Studio app requires auth for MCP/tool-enabled local APIs, generate a key in LM Studio and set `SWITCHBAY_LMSTUDIO_API_KEY`.
+Local LM Studio MCP lane:
+
+```bash
+export SWITCHBAY_LANE=local-mcp
+export SWITCHBAY_LMSTUDIO_BASE=http://192.168.1.50:1234/v1
+export SWITCHBAY_LMSTUDIO_API_KEY=... # create in LM Studio if auth is enabled
+```
+
+Then create or tune `.switchbay/lmstudio.mcp.json`:
+
+```json
+{
+  "enabled": true,
+  "nativeBase": "http://192.168.1.50:1234/api/v1",
+  "model": "qwen2.5-7b-instruct",
+  "integrations": ["mcp/playwright"],
+  "mcpServers": {
+    "playwright": {
+      "note": "Install/configure this server inside LM Studio's mcp.json first."
+    }
+  }
+}
+```
+
+Inside the TUI, use `/lane` to cycle Cloud/LM Studio/LM Studio MCP, `/lane mcp` to jump straight to the MCP lane, and `/model` to open the model drawer. Cloud models use built-in OpenAI/Anthropic presets; LM Studio models are fetched from `SWITCHBAY_LMSTUDIO_BASE`. Use `/mcp init` for a starter config or `/create-mcp` for the conversational MCP config builder. LM Studio still needs the MCP servers installed/enabled in its own app settings; Switchbay requests those servers through the native LM Studio API.
 
 Per command:
 
 ```bash
 switchbay --lane cloud "review the auth flow"
 switchbay --lane local "summarize the changed files"
+switchbay --lane mcp "use my local MCP browser tools"
 ```
 
 ## Usage
@@ -159,12 +184,14 @@ Inside the TUI:
 /agents            Browse available agents
 /create-agent      Create a custom local agent
 /create-skill      Create a custom Toolbox skill
+/create-mcp        Create a custom LM Studio MCP lane config
 /edit              Open the file edit picker
 /engines           List registered engines
 /create-engine     Create a custom workspace engine manifest
 /engine-bay        Show or sync the GitHub engine hub
 /creative          Show the built-in Creative Engine lane
 /toolbox           Show or sync reusable agent skills
+/mcp               Show or initialize LM Studio MCP config
 ```
 
 ## Workspace Files
@@ -177,6 +204,7 @@ Switchbay looks for:
 - `.switchbay/pins.json`: pinned files and repo notes.
 - `.switchbay/agents/*.md`: custom local specialist agents.
 - `.switchbay/engines/*.engine.json`: workspace engine manifests.
+- `.switchbay/lmstudio.mcp.json`: workspace LM Studio MCP lane config.
 
 Switchbay reads and writes the Switchbay names directly. Old project aliases are no longer part of the active workflow.
 

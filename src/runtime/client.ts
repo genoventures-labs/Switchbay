@@ -2,6 +2,7 @@ import { getRuntimeLane, type CloudProvider, type RuntimeLane } from "../config/
 import { AnthropicClient } from "./anthropic-client";
 import { CloudRouterClient } from "./cloud-router-client";
 import { LmStudioClient } from "./lmstudio-client";
+import { LmStudioMcpClient } from "./lmstudio-mcp-client";
 import { OpenAiClient } from "./openai-client";
 import type { ChatCompletionRequest, ChatCompletionResponse, WorkspaceFocus } from "./types";
 
@@ -32,6 +33,8 @@ export function createRuntimeClient(
   let client: ChatRuntimeClient;
   if (lane === "local") {
     client = new LmStudioClient();
+  } else if (lane === "local-mcp") {
+    client = new LmStudioMcpClient();
   } else if (options.provider === "openai") {
     client = new OpenAiClient();
   } else if (options.provider === "anthropic") {
@@ -44,7 +47,9 @@ export function createRuntimeClient(
 }
 
 export function getRuntimeLaneLabel(lane: RuntimeLane = getRuntimeLane()): string {
-  return lane === "local" ? "LM Studio" : "Cloud";
+  if (lane === "local") return "LM Studio";
+  if (lane === "local-mcp") return "LM Studio MCP";
+  return "Cloud";
 }
 
 class ModelOverrideClient implements ChatRuntimeClient {

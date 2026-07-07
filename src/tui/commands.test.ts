@@ -13,6 +13,7 @@ test("command palette lists only implemented command families", () => {
   expect(commands).toContain("/engine-bay");
   expect(commands).toContain("/creative");
   expect(commands).toContain("/create-engine");
+  expect(commands).toContain("/create-mcp");
   expect(commands).toContain("/toolbox");
   expect(commands).toContain("/skills");
   expect(commands).toContain("/create-skill");

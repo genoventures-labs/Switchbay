@@ -71,15 +71,24 @@ export async function listLmStudioModels(fetchImpl: FetchLike = fetch): Promise<
 
   try {
     const response = await fetchImpl(`${apiBase}/models`, { headers });
+    const body = await response.text().catch(() => "");
     if (!response.ok) {
-      const body = await response.text().catch(() => "");
       return {
         models: [fallback],
-        notice: `LM Studio model fetch failed: ${response.status}${body ? ` - ${body.slice(0, 120)}` : ""}`,
+        notice: formatLmStudioModelFetchError(apiBase, response.status, body, Boolean(apiKey)),
       };
     }
 
-    const parsed = await response.json() as LmStudioModelsResponse;
+    let parsed: LmStudioModelsResponse;
+    try {
+      parsed = JSON.parse(body) as LmStudioModelsResponse;
+    } catch {
+      return {
+        models: [fallback],
+        notice: formatLmStudioModelFetchError(apiBase, response.status, body, Boolean(apiKey)),
+      };
+    }
+
     const models = (parsed.data ?? [])
       .map((model) => model.id?.trim())
       .filter((id): id is string => Boolean(id))
@@ -101,6 +110,36 @@ export async function listLmStudioModels(fetchImpl: FetchLike = fetch): Promise<
       notice: `Could not reach LM Studio at ${apiBase}: ${error.message}`,
     };
   }
+}
+
+function formatLmStudioModelFetchError(
+  apiBase: string,
+  status: number,
+  body: string,
+  hasApiKey: boolean,
+): string {
+  const trimmed = body.trim();
+  const lower = trimmed.toLowerCase();
+  const authLike =
+    status === 401 ||
+    status === 403 ||
+    lower.includes("api key") ||
+    lower.includes("unauthorized") ||
+    lower.includes("forbidden") ||
+    lower.includes("bearer");
+
+  if (authLike || !hasApiKey) {
+    return [
+      `LM Studio needs an API key for ${apiBase}/models.`,
+      "Generate one in LM Studio and set SWITCHBAY_LMSTUDIO_API_KEY.",
+      trimmed ? `Server said: ${trimmed.slice(0, 120)}` : "",
+    ].filter(Boolean).join(" ");
+  }
+
+  return [
+    `LM Studio model fetch returned ${status}, but not JSON.`,
+    trimmed ? `Server said: ${trimmed.slice(0, 120)}` : "",
+  ].filter(Boolean).join(" ");
 }
 
 function envModelOption(

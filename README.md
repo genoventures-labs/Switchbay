@@ -77,10 +77,11 @@ Local LM Studio lane:
 ```bash
 export SWITCHBAY_LANE=local
 export SWITCHBAY_LMSTUDIO_BASE=http://192.168.1.50:1234/v1 # use your LM Studio host
+export SWITCHBAY_LMSTUDIO_API_KEY=... # generate in LM Studio when MCP/tool access is gated
 export SWITCHBAY_LMSTUDIO_MODEL=qwen2.5-7b-instruct
 ```
 
-Inside the TUI, use `/lane` to toggle Cloud/LM Studio and `/model` to open the model drawer. Cloud models use built-in OpenAI/Anthropic presets; LM Studio models are fetched from `SWITCHBAY_LMSTUDIO_BASE`.
+Inside the TUI, use `/lane` to toggle Cloud/LM Studio and `/model` to open the model drawer. Cloud models use built-in OpenAI/Anthropic presets; LM Studio models are fetched from `SWITCHBAY_LMSTUDIO_BASE`. If your LM Studio app requires auth for MCP/tool-enabled local APIs, generate a key in LM Studio and set `SWITCHBAY_LMSTUDIO_API_KEY`.
 
 Per command:
 

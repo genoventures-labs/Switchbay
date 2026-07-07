@@ -13,12 +13,13 @@ type HeaderProps = {
   mode: string;
   profile: string;
   status: SessionStatus;
+  terminalWidth?: number;
   workspace: WorkspaceSnapshot | null;
   activeAgentId?: string | null;
   availableAgents?: Agent[];
 };
 
-export function Header({ lane = "Cloud", mode, status, workspace, activeAgentId, availableAgents = [] }: HeaderProps) {
+export function Header({ lane = "Cloud", mode, status, terminalWidth = 120, workspace, activeAgentId, availableAgents = [] }: HeaderProps) {
   const cwd = workspace?.cwd ?? process.cwd();
   const project = path.basename(cwd);
   const branch = workspace?.branch ?? null;
@@ -36,71 +37,58 @@ export function Header({ lane = "Cloud", mode, status, workspace, activeAgentId,
     } catch { return 0; }
   })();
   const activeAgent = activeAgentId ? availableAgents.find(a => a.id === activeAgentId) : null;
+  const maxCwdLength = Math.max(28, Math.min(terminalWidth - 44, 92));
+  const displayCwd = cwd.length > maxCwdLength
+    ? `...${cwd.slice(-(maxCwdLength - 3))}`
+    : cwd;
 
   return (
     <Box
-      paddingX={2}
-      paddingY={1}
+      paddingX={1}
+      paddingY={0}
       flexDirection="column"
       borderStyle="round"
       borderColor={TUI_COLORS.surfaceRaised}
       backgroundColor={TUI_COLORS.baseDeep}
-      marginBottom={1}
     >
       <Box justifyContent="space-between">
-        <Box flexDirection="column">
-          <Box gap={1}>
-            <Text color={TUI_COLORS.accentBright} bold>Switchbay</Text>
-            <Text color={TUI_COLORS.muted}>in</Text>
-            <Text color={TUI_COLORS.text}>{project}</Text>
-            {branch ? (
-              <>
-                <Text color={TUI_COLORS.muted}>·</Text>
-                <Text color={branchColor}>{branch}</Text>
-                {dirty > 0 ? <Text color={TUI_COLORS.accentBright} dimColor>{dirty} dirty</Text> : null}
-              </>
-            ) : null}
-            {hasProjectContext ? (
-              <>
-                <Text color={TUI_COLORS.muted}>·</Text>
-                <Text color={TUI_COLORS.accent} dimColor>context</Text>
-              </>
-            ) : null}
-            {hasMemory ? (
-              <>
-                <Text color={TUI_COLORS.muted}>·</Text>
-                <Text color={TUI_COLORS.accent} dimColor>mem</Text>
-              </>
-            ) : null}
-            {pinCount > 0 ? (
-              <>
-                <Text color={TUI_COLORS.muted}>·</Text>
-                <Text color={TUI_COLORS.accent} dimColor>{pinCount} pinned</Text>
-              </>
-            ) : null}
-            {activeAgent ? (
-              <>
-                <Text color={TUI_COLORS.muted}>·</Text>
-                <Text color={TUI_COLORS.accentBright}>{activeAgent.emoji} {activeAgent.name}</Text>
-              </>
-            ) : null}
-          </Box>
-          <Text color={TUI_COLORS.muted}>{cwd}</Text>
+        <Box gap={1} flexShrink={1}>
+          <Text color={TUI_COLORS.accentBright} bold>Switchbay</Text>
+          <Text color={TUI_COLORS.muted}>in</Text>
+          <Text color={TUI_COLORS.text}>{project}</Text>
+          {branch ? (
+            <>
+              <Text color={TUI_COLORS.muted}>·</Text>
+              <Text color={branchColor}>{branch}</Text>
+              {dirty > 0 ? <Text color={TUI_COLORS.accentBright} dimColor>{dirty} dirty</Text> : null}
+            </>
+          ) : null}
+          {hasProjectContext ? <Text color={TUI_COLORS.accent} dimColor>context</Text> : null}
+          {hasMemory ? <Text color={TUI_COLORS.accent} dimColor>mem</Text> : null}
+          {pinCount > 0 ? <Text color={TUI_COLORS.accent} dimColor>{pinCount} pinned</Text> : null}
+          {activeAgent ? <Text color={TUI_COLORS.accentBright}>{activeAgent.emoji} {activeAgent.name}</Text> : null}
         </Box>
-        <Box flexDirection="column" alignItems="flex-end">
+        <Box gap={1} flexShrink={0}>
           <Text color={TUI_COLORS.muted}>{lane}</Text>
+          <Text color={TUI_COLORS.muted}>·</Text>
           <Text color={TUI_COLORS.muted}>{mode}</Text>
+          <Text color={TUI_COLORS.muted}>·</Text>
           <Text color={isThinking ? TUI_COLORS.accentBright : TUI_COLORS.accent} bold>
             {isThinking ? "thinking" : statusLabel}
           </Text>
         </Box>
       </Box>
-      <Box marginTop={1} justifyContent="space-between">
+      <Box justifyContent="space-between">
+        <Text color={TUI_COLORS.muted}>{displayCwd}</Text>
+        <Box gap={1} flexShrink={0}>
+          <Text color={TUI_COLORS.muted}>/ commands</Text>
+          <Text color={TUI_COLORS.muted}>·</Text>
+          <Text color={TUI_COLORS.muted}>@ files</Text>
+        </Box>
+      </Box>
+      <Box>
         <Text color={TUI_COLORS.muted}>
           Route a task, inspect the repo, or call a Switchbay lane.
-        </Text>
-        <Text color={TUI_COLORS.muted}>
-          / for commands · @ for files
         </Text>
       </Box>
     </Box>

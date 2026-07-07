@@ -136,18 +136,6 @@ export function SwitchbayApp({
   const resumeDrawerVisible = composerMode === "resume_picker";
   const shortcutDrawerVisible = composerMode === "shortcut_picker";
 
-  const transcriptWindowSize = Math.max(5, stdoutHeight - 15);
-  const totalTranscriptEntries = state.transcript.length;
-  const clampedScrollOffset = Math.min(
-    transcriptScrollOffset,
-    Math.max(0, totalTranscriptEntries - transcriptWindowSize),
-  );
-  const transcriptEndIndex = Math.max(0, totalTranscriptEntries - clampedScrollOffset);
-  const transcriptStartIndex = Math.max(0, transcriptEndIndex - transcriptWindowSize);
-  const visibleTranscriptEntries = state.transcript.slice(
-    transcriptStartIndex,
-    transcriptEndIndex,
-  );
   const editPickerState = useMemo(() => {
     if (composerMode !== "edit_file_picker") {
       return { visible: false, files: [] as string[] };
@@ -162,8 +150,30 @@ export function SwitchbayApp({
       visible: true,
       files: files.slice(0, 8),
     };
-  }, [query, state.workspace?.recentFiles]);
+  }, [composerMode, query, state.workspace?.recentFiles]);
 
+  const headerRows = state.transcript.length > 0 ? 5 : 0;
+  const composerRows = initialQuery ? 3 : state.status === "THINKING" ? Math.min(7, 4 + turnThoughts.length) : 4;
+  const drawerRows =
+    commandDrawerVisible || mentionPickerVisible || resumeDrawerVisible || shortcutDrawerVisible ||
+    editPickerState.visible || composerMode === "agent_picker" || composerMode === "create_agent"
+      ? 10
+      : composerMode === "edit_intent"
+        ? 5
+        : 0;
+  const transcriptAreaHeight = Math.max(5, stdoutHeight - headerRows - composerRows - drawerRows);
+  const totalTranscriptEntries = state.transcript.length;
+  const transcriptScrollPage = Math.max(3, Math.floor(transcriptAreaHeight / 2));
+  const maxTranscriptScrollOffset = Math.max(0, totalTranscriptEntries - 1);
+  const clampedScrollOffset = Math.min(
+    transcriptScrollOffset,
+    maxTranscriptScrollOffset,
+  );
+  const transcriptEndIndex = Math.max(0, totalTranscriptEntries - clampedScrollOffset);
+  const { entries: visibleTranscriptEntries, startIndex: transcriptStartIndex } = useMemo(
+    () => sliceTranscriptForRows(state.transcript, transcriptEndIndex, transcriptAreaHeight, stdoutWidth),
+    [state.transcript, transcriptEndIndex, transcriptAreaHeight, stdoutWidth],
+  );
   function acceptMention(candidate: MentionCandidate) {
     const next = queryRef.current.replace(/@([\w./\-]*)$/, `@${candidate.value}${candidate.isDir ? "/" : ""} `);
     queryRef.current = next;
@@ -362,15 +372,15 @@ export function SwitchbayApp({
     if (key.ctrl && input === "u") {
       setTranscriptScrollOffset((previous) =>
         Math.min(
-          previous + Math.max(3, Math.floor(transcriptWindowSize / 2)),
-          Math.max(0, totalTranscriptEntries - transcriptWindowSize),
+          previous + transcriptScrollPage,
+          maxTranscriptScrollOffset,
         ),
       );
       return;
     }
     if (key.ctrl && input === "d") {
       setTranscriptScrollOffset((previous) =>
-        Math.max(0, previous - Math.max(3, Math.floor(transcriptWindowSize / 2))),
+        Math.max(0, previous - transcriptScrollPage),
       );
       return;
     }
@@ -450,9 +460,9 @@ export function SwitchbayApp({
 
   useEffect(() => {
     setTranscriptScrollOffset((previous) =>
-      Math.min(previous, Math.max(0, state.transcript.length - transcriptWindowSize)),
+      Math.min(previous, maxTranscriptScrollOffset),
     );
-  }, [state.transcript.length, transcriptWindowSize]);
+  }, [maxTranscriptScrollOffset]);
 
   useEffect(() => {
     if (resumeId) {
@@ -1138,12 +1148,13 @@ export function SwitchbayApp({
           mode={mode}
           profile={state.resolvedProfile}
           status={state.status}
+          terminalWidth={stdoutWidth}
           workspace={state.workspace}
           activeAgentId={state.activeAgentId}
           availableAgents={availableAgents}
         />
       )}
-      <Box flexGrow={1} flexDirection="column">
+      <Box height={transcriptAreaHeight} flexDirection="column" overflowY="hidden">
         <Transcript
           lane={getRuntimeLaneLabel(lane)}
           entries={visibleTranscriptEntries}
@@ -1220,4 +1231,46 @@ export function SwitchbayApp({
 
 function isSwitchbayCheckpointLine(line: string): boolean {
   return /\bswitchbay:\s*/.test(line);
+}
+
+function sliceTranscriptForRows(
+  entries: ReturnType<typeof createTranscriptEntry>[],
+  endIndex: number,
+  maxRows: number,
+  terminalWidth: number,
+) {
+  const safeEnd = Math.max(0, Math.min(endIndex, entries.length));
+  const visible: ReturnType<typeof createTranscriptEntry>[] = [];
+  let usedRows = 0;
+
+  for (let index = safeEnd - 1; index >= 0; index -= 1) {
+    const entry = entries[index];
+    if (!entry) continue;
+    const rows = estimateTranscriptRows(entry, terminalWidth);
+    if (visible.length > 0 && usedRows + rows > maxRows) {
+      break;
+    }
+    visible.unshift(entry);
+    usedRows += rows;
+  }
+
+  return {
+    entries: visible,
+    startIndex: Math.max(0, safeEnd - visible.length),
+  };
+}
+
+function estimateTranscriptRows(
+  entry: ReturnType<typeof createTranscriptEntry>,
+  terminalWidth: number,
+) {
+  const contentWidth = Math.max(36, terminalWidth - 8);
+  const rawLines = String(entry.body || entry.title || "").split("\n");
+  const wrappedLines = rawLines.reduce((sum, line) => (
+    sum + Math.max(1, Math.ceil(line.length / contentWidth))
+  ), 0);
+
+  if (entry.kind === "assistant") return Math.max(2, wrappedLines + 1);
+  if (entry.kind === "user") return Math.max(1, wrappedLines + 1);
+  return Math.max(1, wrappedLines);
 }

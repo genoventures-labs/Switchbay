@@ -41,6 +41,7 @@ export type LocalCommandResult = {
   openAgentPicker?: boolean;
   openCreateAgent?: boolean;
   openEnginePicker?: boolean;
+  openSkillPicker?: boolean;
   planGoal?: string;
   checkpointOp?: { op: "create"; name: string } | { op: "list" } | { op: "restore"; index: number };
   travel?: { toPath: string; label: string; workspace: WorkspaceSnapshot };
@@ -138,6 +139,14 @@ export async function tryLocalCommand(
 
   if (trimmed === "/toolbox" || trimmed.startsWith("/toolbox ")) {
     return handleToolboxCommand(trimmed);
+  }
+
+  if (trimmed === "/skills") {
+    return { handled: true, openSkillPicker: true };
+  }
+
+  if (trimmed.startsWith("/skills ")) {
+    return handleToolboxCommand(`/toolbox${trimmed.slice("/skills".length)}`);
   }
 
   if (trimmed === "/creative") {

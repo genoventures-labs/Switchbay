@@ -330,6 +330,8 @@ TUI:
 /toolbox list
 /toolbox templates
 /toolbox read release-readiness
+/skills
+/skills sync
 ```
 
 By default, Toolbox syncs from:

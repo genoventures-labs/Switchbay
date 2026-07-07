@@ -1,5 +1,5 @@
 export type SlashCommand = {
-  category: "session" | "context" | "safety" | "planning" | "agents" | "engines" | "toolbox" | "runtime";
+  category: "session" | "context" | "safety" | "planning" | "agents" | "engines" | "skills" | "toolbox" | "runtime";
   command: string;
   description: string;
   example: string;
@@ -209,6 +209,18 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     command: "/toolbox",
     description: "Show or sync agent skills and reusable working methods.",
     example: "/toolbox list",
+  },
+  {
+    category: "skills",
+    command: "/skills",
+    description: "Open the Toolbox skills drawer.",
+    example: "/skills",
+  },
+  {
+    category: "skills",
+    command: "/skills sync",
+    description: "Sync the GitHub-backed Toolbox skills repo.",
+    example: "/skills sync",
   },
   {
     category: "agents",

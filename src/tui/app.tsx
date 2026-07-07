@@ -41,6 +41,8 @@ import { runCommand, runShellString } from "../tools/shell";
 import { loadEngineRegistry, type EngineManifest } from "../engines/registry";
 import { ModelDrawer } from "./components/ModelDrawer";
 import { listRuntimeModels, type RuntimeModelOption } from "../runtime/models";
+import { SkillDrawer } from "./components/SkillDrawer";
+import { loadToolboxInventory, type ToolboxSkill } from "../toolbox/hub";
 
 export type SwitchbayAppProps = {
   client: ChatRuntimeClient;
@@ -53,7 +55,7 @@ export type SwitchbayAppProps = {
   resumeId?: string | null;
 };
 
-type ComposerMode = "default" | "edit_file_picker" | "edit_intent" | "resume_picker" | "agent_picker" | "engine_picker" | "model_picker" | "create_agent" | "shortcut_picker";
+type ComposerMode = "default" | "edit_file_picker" | "edit_intent" | "resume_picker" | "agent_picker" | "engine_picker" | "model_picker" | "skill_picker" | "create_agent" | "shortcut_picker";
 
 export function SwitchbayApp({
   client,
@@ -114,6 +116,9 @@ export function SwitchbayApp({
   const [selectedModelIndex, setSelectedModelIndex] = useState(0);
   const [activeRuntimeModel, setActiveRuntimeModel] = useState<RuntimeModelOption | null>(null);
   const [modelDrawerNotice, setModelDrawerNotice] = useState<string | null>(null);
+  const [availableSkills, setAvailableSkills] = useState<ToolboxSkill[]>([]);
+  const [selectedSkillIndex, setSelectedSkillIndex] = useState(0);
+  const [skillDrawerNotice, setSkillDrawerNotice] = useState<string | null>(null);
   const [createAgentGenerating, setCreateAgentGenerating] = useState(false);
   const [pendingAgentDraft, setPendingAgentDraft] = useState<PendingAgentDraft | null>(null);
   const [turnThoughts, setTurnThoughts] = useState<string[]>([]);
@@ -151,6 +156,7 @@ export function SwitchbayApp({
   const shortcutDrawerVisible = composerMode === "shortcut_picker";
   const engineDrawerVisible = composerMode === "engine_picker";
   const modelDrawerVisible = composerMode === "model_picker";
+  const skillDrawerVisible = composerMode === "skill_picker";
   const engineDrawerItems = useMemo(() => flattenEngineDrawerItems(availableEngines), [availableEngines]);
   const runtimeBadge = activeRuntimeModel
     ? `${getRuntimeLaneLabel(runtimeLane)} · ${activeRuntimeModel.id}`
@@ -176,7 +182,7 @@ export function SwitchbayApp({
   const composerRows = initialQuery ? 3 : state.status === "THINKING" ? Math.min(7, 4 + turnThoughts.length) : 4;
   const drawerRows =
     commandDrawerVisible || mentionPickerVisible || resumeDrawerVisible || shortcutDrawerVisible ||
-    editPickerState.visible || composerMode === "agent_picker" || engineDrawerVisible || modelDrawerVisible || composerMode === "create_agent"
+    editPickerState.visible || composerMode === "agent_picker" || engineDrawerVisible || modelDrawerVisible || skillDrawerVisible || composerMode === "create_agent"
       ? 10
       : composerMode === "edit_intent"
         ? 5
@@ -247,6 +253,26 @@ export function SwitchbayApp({
     });
   }
 
+  async function openSkillDrawer() {
+    setComposerMode("skill_picker");
+    setSelectedSkillIndex(0);
+    setAvailableSkills([]);
+    setSkillDrawerNotice("Loading Toolbox skills...");
+    try {
+      const inventory = await loadToolboxInventory();
+      setAvailableSkills(inventory.skills);
+      setSkillDrawerNotice(inventory.exists ? null : "Toolbox repo is not synced; showing built-in skills.");
+    } catch (error: any) {
+      setSkillDrawerNotice(`Skill list failed: ${error.message}`);
+    }
+  }
+
+  function selectSkill(skill: ToolboxSkill) {
+    setQuerySync(`Use Toolbox skill ${skill.id} (${skill.name}) to `);
+    setComposerMode("default");
+    setSelectedSkillIndex(0);
+  }
+
   useInput((input, key) => {
     if (composerMode === "edit_intent") {
       if (key.escape) {
@@ -273,6 +299,7 @@ export function SwitchbayApp({
     const agentPickerVisible = composerMode === "agent_picker";
     const enginePickerVisible = composerMode === "engine_picker";
     const modelPickerVisible = composerMode === "model_picker";
+    const skillPickerVisible = composerMode === "skill_picker";
     if (modelPickerVisible) {
       if (key.upArrow) {
         setSelectedModelIndex((prev) => prev <= 0 ? Math.max(0, availableModels.length - 1) : prev - 1);
@@ -292,6 +319,30 @@ export function SwitchbayApp({
       if (key.escape) {
         setComposerMode("default");
         setQuerySync("");
+        return;
+      }
+    }
+
+    if (skillPickerVisible) {
+      if (key.upArrow) {
+        setSelectedSkillIndex((prev) => prev <= 0 ? Math.max(0, availableSkills.length - 1) : prev - 1);
+        return;
+      }
+      if (key.downArrow) {
+        setSelectedSkillIndex((prev) => prev >= availableSkills.length - 1 ? 0 : prev + 1);
+        return;
+      }
+      if (key.return || key.tab) {
+        const selected = availableSkills[selectedSkillIndex];
+        if (selected) {
+          selectSkill(selected);
+        }
+        return;
+      }
+      if (key.escape) {
+        setComposerMode("default");
+        setQuerySync("");
+        setSelectedSkillIndex(0);
         return;
       }
     }
@@ -1096,6 +1147,12 @@ export function SwitchbayApp({
         return;
       }
 
+      if (localCommand.openSkillPicker) {
+        await openSkillDrawer();
+        setQuerySync("");
+        return;
+      }
+
       if ("activateAgent" in localCommand) {
         dispatch({ type: "agent/activated", agentId: localCommand.activateAgent ?? null });
         dispatch({
@@ -1337,7 +1394,7 @@ export function SwitchbayApp({
   useEffect(() => {
     const trimmed = query.trim();
 
-    if (composerMode === "edit_intent" || composerMode === "resume_picker" || composerMode === "agent_picker" || composerMode === "model_picker" || composerMode === "create_agent" || composerMode === "shortcut_picker") {
+    if (composerMode === "edit_intent" || composerMode === "resume_picker" || composerMode === "agent_picker" || composerMode === "model_picker" || composerMode === "skill_picker" || composerMode === "create_agent" || composerMode === "shortcut_picker") {
       return;
     }
 
@@ -1426,6 +1483,12 @@ export function SwitchbayApp({
         notice={modelDrawerNotice}
         selectedIndex={selectedModelIndex}
         visible={modelDrawerVisible}
+      />
+      <SkillDrawer
+        items={availableSkills}
+        notice={skillDrawerNotice}
+        selectedIndex={selectedSkillIndex}
+        visible={skillDrawerVisible}
       />
       <CreateAgentDrawer
         visible={composerMode === "create_agent" || createAgentGenerating}

@@ -291,7 +291,7 @@ export async function buildTurn(input: {
 Current Mode: ${mode}
 Current Profile: ${input.profile}
 Current Workspace: ${cwd}
-Assistant Callsign: Sway${oriMdBlock}${memoryBlock}${pinsBlock}${agentBlock}${toolboxBlock}
+Assistant Callsign: Bay${oriMdBlock}${memoryBlock}${pinsBlock}${agentBlock}${toolboxBlock}
 
 GROUNDING RULES:
 1. You are running inside a local development tool.
@@ -301,7 +301,7 @@ GROUNDING RULES:
 5. Your primary mission is to understand, plan, and execute changes within the current workspace path: ${cwd}.
 6. Treat sibling repos and shared host state as out of scope unless the user explicitly asks to cross that boundary.
 7. Be extremely concise and direct.
-8. If the user addresses Sway, they are addressing this assistant inside Switchbay.
+8. If the user addresses Bay, they are addressing this assistant inside Switchbay.
 9. DO NOT NARRATE your tool usage or internal reasoning steps in your final response to the user. (e.g. avoid "I have checked the files and found..."). Just state the findings or provide the answer directly.
 `;
   // Proactively embed live workspace context so the model can answer questions about

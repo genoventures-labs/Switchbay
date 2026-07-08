@@ -1,8 +1,8 @@
 import {
   getAnthropicModel,
-  getDefaultModel,
   getLmStudioApiKey,
   getLmStudioBase,
+  getLmStudioNativeBase,
   getOpenAiModel,
   type CloudProvider,
   type RuntimeLane,
@@ -43,6 +43,14 @@ type LmStudioModelsResponse = {
   }>;
 };
 
+type LmStudioNativeModelsResponse = {
+  models?: Array<{
+    key?: string;
+    display_name?: string;
+    loaded_instances?: unknown[];
+  }>;
+};
+
 type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 
 export function getCloudModelPresets(): RuntimeModelOption[] {
@@ -67,19 +75,23 @@ export async function listLmStudioModels(
   lane: Extract<RuntimeLane, "local" | "local-mcp"> = "local",
 ): Promise<RuntimeModelList> {
   const provider: RuntimeModelProvider = lane === "local-mcp" ? "lmstudio-mcp" : "lmstudio";
-  const label = lane === "local-mcp" ? "LM Studio MCP env default" : "LM Studio env default";
-  const fallback = envModelOption(getDefaultModel(), label, lane, provider);
   const apiBase = getLmStudioBase();
+  const nativeBase = getLmStudioNativeBase();
   const headers: Record<string, string> = {};
   const apiKey = getLmStudioApiKey();
   if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
 
   try {
+    const nativeResult = await listLmStudioNativeModels(nativeBase, lane, provider, headers, fetchImpl);
+    if (nativeResult.models.length > 0 || nativeResult.notice) {
+      return nativeResult;
+    }
+
     const response = await fetchImpl(`${apiBase}/models`, { headers });
     const body = await response.text().catch(() => "");
     if (!response.ok) {
       return {
-        models: [fallback],
+        models: [],
         notice: formatLmStudioModelFetchError(apiBase, response.status, body, Boolean(apiKey)),
       };
     }
@@ -89,7 +101,7 @@ export async function listLmStudioModels(
       parsed = JSON.parse(body) as LmStudioModelsResponse;
     } catch {
       return {
-        models: [fallback],
+        models: [],
         notice: formatLmStudioModelFetchError(apiBase, response.status, body, Boolean(apiKey)),
       };
     }
@@ -106,14 +118,57 @@ export async function listLmStudioModels(
       }));
 
     return {
-      models: uniqueModels([fallback, ...models]),
-      notice: models.length === 0 ? "LM Studio returned no models; showing your configured default." : undefined,
+      models: uniqueModels(models),
+      notice: models.length === 0
+        ? `LM Studio returned no models from ${nativeBase}/models or ${apiBase}/models. Load a model in LM Studio, then reopen /model.`
+        : undefined,
     };
   } catch (error: any) {
     return {
-      models: [fallback],
+      models: [],
       notice: `Could not reach LM Studio at ${apiBase}: ${error.message}`,
     };
+  }
+}
+
+async function listLmStudioNativeModels(
+  nativeBase: string,
+  lane: Extract<RuntimeLane, "local" | "local-mcp">,
+  provider: RuntimeModelProvider,
+  headers: Record<string, string>,
+  fetchImpl: FetchLike,
+): Promise<RuntimeModelList> {
+  try {
+    const response = await fetchImpl(`${nativeBase}/models`, { headers });
+    const body = await response.text().catch(() => "");
+    if (!response.ok) {
+      return { models: [], notice: formatLmStudioModelFetchError(nativeBase, response.status, body, Boolean(headers.Authorization)) };
+    }
+
+    let parsed: LmStudioNativeModelsResponse;
+    try {
+      parsed = JSON.parse(body) as LmStudioNativeModelsResponse;
+    } catch {
+      return { models: [], notice: undefined };
+    }
+
+    const models = (parsed.models ?? [])
+      .map((model) => ({
+        id: model.key?.trim() ?? "",
+        label: model.display_name?.trim() || model.key?.trim() || "",
+      }))
+      .filter((model): model is { id: string; label: string } => Boolean(model.id))
+      .map((model) => ({
+        id: model.id,
+        label: model.label,
+        lane,
+        provider,
+        source: "lmstudio" as const,
+      }));
+
+    return { models: uniqueModels(models) };
+  } catch {
+    return { models: [] };
   }
 }
 

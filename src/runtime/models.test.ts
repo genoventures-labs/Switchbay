@@ -49,16 +49,18 @@ test("lists LM Studio models from the configured host", async () => {
     });
   });
 
-  expect(urls).toEqual(["http://192.168.1.50:1234/v1/models"]);
+  expect(urls).toEqual([
+    "http://192.168.1.50:1234/api/v1/models",
+    "http://192.168.1.50:1234/v1/models",
+  ]);
   expect(result.notice).toBeUndefined();
   expect(result.models.map((model) => model.id)).toEqual([
-    "configured-local",
     "qwen-local",
     "deepseek-local",
   ]);
 });
 
-test("falls back to configured LM Studio model when fetch fails", async () => {
+test("does not invent an LM Studio model when fetch fails", async () => {
   Bun.env.SWITCHBAY_LANE = "local";
   Bun.env.SWITCHBAY_LMSTUDIO_MODEL = "fallback-local";
 
@@ -66,7 +68,7 @@ test("falls back to configured LM Studio model when fetch fails", async () => {
     throw new Error("connection refused");
   });
 
-  expect(result.models.map((model) => model.id)).toEqual(["fallback-local"]);
+  expect(result.models.map((model) => model.id)).toEqual([]);
   expect(result.notice).toContain("connection refused");
 });
 
@@ -80,7 +82,7 @@ test("explains LM Studio API key setup when model list response is not JSON", as
     new Response("API key required", { status: 200 }),
   );
 
-  expect(result.models.map((model) => model.id)).toEqual(["fallback-local"]);
+  expect(result.models.map((model) => model.id)).toEqual([]);
   expect(result.notice).toContain("SWITCHBAY_LMSTUDIO_API_KEY");
   expect(result.notice).toContain("Generate one in LM Studio");
 });
@@ -96,7 +98,7 @@ test("sends the LM Studio API key when configured", async () => {
     return Response.json({ data: [] });
   });
 
-  expect(authHeaders).toEqual(["Bearer lmstudio-test-key"]);
+  expect(authHeaders).toEqual(["Bearer lmstudio-test-key", "Bearer lmstudio-test-key"]);
 });
 
 test("lists LM Studio models for the MCP lane", async () => {
@@ -107,6 +109,25 @@ test("lists LM Studio models for the MCP lane", async () => {
     Response.json({ data: [{ id: "tool-ready-local" }] }),
   "local-mcp");
 
-  expect(result.models.map((model) => model.lane)).toEqual(["local-mcp", "local-mcp"]);
-  expect(result.models.map((model) => model.provider)).toEqual(["lmstudio-mcp", "lmstudio-mcp"]);
+  expect(result.models.map((model) => model.lane)).toEqual(["local-mcp"]);
+  expect(result.models.map((model) => model.provider)).toEqual(["lmstudio-mcp"]);
+});
+
+test("prefers native LM Studio model keys when available", async () => {
+  Bun.env.SWITCHBAY_LANE = "local-mcp";
+  Bun.env.SWITCHBAY_LMSTUDIO_BASE = "http://192.168.1.50:1234/v1";
+  const urls: string[] = [];
+
+  const result = await listLmStudioModels(async (url) => {
+    urls.push(String(url));
+    return Response.json({
+      models: [
+        { key: "qwen/qwen3-4b-2507", display_name: "Qwen3 4B MLX" },
+      ],
+    });
+  }, "local-mcp");
+
+  expect(urls).toEqual(["http://192.168.1.50:1234/api/v1/models"]);
+  expect(result.models.map((model) => model.id)).toEqual(["qwen/qwen3-4b-2507"]);
+  expect(result.models[0]?.label).toBe("Qwen3 4B MLX");
 });

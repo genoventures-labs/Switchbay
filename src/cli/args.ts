@@ -149,7 +149,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
       console.log("  brew upgrade switchbay\n");
       process.exit(0);
     } else if (arg === "version" || arg === "--version" || arg === "-v") {
-      console.log("switchbay 0.9.70");
+      console.log("switchbay 0.9.71");
       process.exit(0);
     } else if (arg === undefined || arg === "help" || arg === "--help" || arg === "-h") {
       return { surface, profile, mode, lane, initialQuery: "", hop: null, resume: false, newSession: false, purge: null, subcommand: "help", engineAction: "status", toolboxAction: "status", toolboxSkill: null, memoryAction: "status", mcpAction: "status" };

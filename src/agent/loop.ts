@@ -180,7 +180,7 @@ export async function generateSkillDefinition(
     .replace(/^-|-$/g, "")
     .slice(0, 40);
 
-  const prompt = `Create a Switchbay Toolbox skill markdown file.
+  const prompt = `Create a Switchbay skill markdown file.
 
 Output ONLY markdown with YAML frontmatter. No preamble.
 
@@ -228,7 +228,7 @@ Brief:
     messages: [
       {
         role: "system",
-        content: "You write concise reusable Toolbox skills for local coding agents. Output only the markdown file content.",
+        content: "You write concise reusable Skills for local coding agents. Output only the markdown file content.",
       },
       { role: "user", content: prompt },
     ],

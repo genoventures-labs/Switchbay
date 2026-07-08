@@ -10,7 +10,7 @@ export type CliOptions = {
   resume: string | boolean; // string (id/index) or true (latest)
   newSession: boolean;
   purge: string | null;
-  subcommand: "run" | "update" | "version" | "help" | "engines" | "toolbox" | "memory" | "knowledge" | "trace" | "mcp";
+  subcommand: "run" | "update" | "version" | "help" | "engines" | "skills" | "toolbox" | "memory" | "knowledge" | "trace" | "mcp";
   engineAction: "status" | "sync" | "list" | "templates";
   toolboxAction: "status" | "sync" | "list" | "templates" | "read";
   toolboxSkill: string | null;
@@ -82,7 +82,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
         traceAction: "last",
         mcpAction: "status",
       };
-    } else if (arg === "toolbox") {
+    } else if (arg === "skills" || arg === "toolbox") {
       const action = args[i + 1];
       const toolboxAction = action === "sync" || action === "list" || action === "templates" || action === "read" || action === "status"
         ? action
@@ -97,7 +97,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
         resume,
         newSession,
         purge,
-        subcommand: "toolbox",
+        subcommand: arg === "skills" ? "skills" : "toolbox",
         engineAction: "status",
         toolboxAction,
         toolboxSkill: toolboxAction === "read" ? args[i + 2] ?? null : null,

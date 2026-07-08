@@ -321,25 +321,25 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   {
     category: "toolbox",
     command: "/toolbox",
-    description: "Show or sync agent skills and reusable working methods.",
+    description: "Compatibility alias for the underlying skills/toolbox cache.",
     example: "/toolbox list",
   },
   {
     category: "skills",
     command: "/skills",
-    description: "Open the Toolbox skills drawer.",
+    description: "Open the Bay skills drawer.",
     example: "/skills",
   },
   {
     category: "skills",
     command: "/skills sync",
-    description: "Sync the GitHub-backed Toolbox skills repo.",
+    description: "Sync the GitHub-backed skills repo.",
     example: "/skills sync",
   },
   {
     category: "skills",
     command: "/create-skill",
-    description: "Open the guided Toolbox skill markdown wizard.",
+    description: "Open the guided skill markdown wizard.",
     example: "/create-skill",
   },
   {

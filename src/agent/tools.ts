@@ -391,7 +391,7 @@ export const AGENT_TOOLS: ToolDefinition[] = [
     type: "function",
     function: {
       name: "list_toolbox_skills",
-      description: "List reusable Toolbox skills available to Switchbay agents.",
+      description: "List reusable Skills available to Switchbay agents.",
       parameters: { type: "object", properties: {} },
     },
   },
@@ -399,11 +399,11 @@ export const AGENT_TOOLS: ToolDefinition[] = [
     type: "function",
     function: {
       name: "read_toolbox_skill",
-      description: "Read a Toolbox skill by id.",
+      description: "Read a Skill by id.",
       parameters: {
         type: "object",
         properties: {
-          skill_id: { type: "string", description: "Toolbox skill id, such as code-review-pass." },
+          skill_id: { type: "string", description: "Skill id, such as code-review-pass." },
         },
         required: ["skill_id"],
       },
@@ -413,7 +413,7 @@ export const AGENT_TOOLS: ToolDefinition[] = [
     type: "function",
     function: {
       name: "sync_toolbox",
-      description: "Pull the GitHub-backed Engine-Toolboxes repo into the local Toolbox cache.",
+      description: "Pull the GitHub-backed skills repo into the local skills cache.",
       parameters: { type: "object", properties: {} },
     },
   },
@@ -1244,7 +1244,7 @@ export async function executeToolCall(
         return {
           tool: name,
           ok: true,
-          summary: "Listed Toolbox skills",
+          summary: "Listed skills",
           body: await describeToolbox(false),
         };
       }
@@ -1256,8 +1256,8 @@ export async function executeToolCall(
         return {
           tool: name,
           ok: Boolean(skill),
-          summary: skill ? `Read Toolbox skill ${skill.id}` : `Toolbox skill not found: ${skillId}`,
-          body: skill?.body ?? `Toolbox skill not found: ${skillId}`,
+          summary: skill ? `Read skill ${skill.id}` : `Skill not found: ${skillId}`,
+          body: skill?.body ?? `Skill not found: ${skillId}`,
         };
       }
 
@@ -1265,7 +1265,7 @@ export async function executeToolCall(
         return {
           tool: name,
           ok: true,
-          summary: "Synced Toolbox",
+          summary: "Synced skills",
           body: await describeToolbox(true),
         };
       }

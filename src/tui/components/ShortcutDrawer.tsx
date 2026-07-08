@@ -11,7 +11,7 @@ const SHORTCUTS = [
   { key: "@", label: "File mentions", description: "Add file/directory context to your query" },
   { key: "Ctrl+L", label: "Toggle lane", description: "Cycle Cloud and LM Studio model lanes" },
   { key: "/collapse", label: "Toggle panels", description: "Hide or show right-side telemetry" },
-  { key: "/skills", label: "Skills drawer", description: "Browse reusable Toolbox skills" },
+  { key: "/skills", label: "Skills drawer", description: "Browse reusable Bay skills" },
   { key: "/model", label: "Model drawer", description: "Pick a cloud preset or LM Studio model" },
   { key: "/mcp", label: "MCP bridge", description: "Show config or toggle Switchbay's MCP bridge" },
   { key: "?", label: "Help", description: "Show this shortcuts drawer" },

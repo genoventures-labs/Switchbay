@@ -79,7 +79,7 @@ export function SkillDrawer({ items, notice, selectedIndex, visible }: SkillDraw
           );
         })
       ) : (
-        <Text color={TUI_COLORS.muted}>No Toolbox skills found. Run /skills sync.</Text>
+        <Text color={TUI_COLORS.muted}>No skills found. Run /skills sync.</Text>
       )}
 
       {items.length > visibleCount ? (

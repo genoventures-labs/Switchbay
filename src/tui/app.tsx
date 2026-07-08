@@ -309,18 +309,18 @@ export function SwitchbayApp({
     setComposerMode("skill_picker");
     setSelectedSkillIndex(0);
     setAvailableSkills([]);
-    setSkillDrawerNotice("Loading Toolbox skills...");
+    setSkillDrawerNotice("Loading skills...");
     try {
       const inventory = await loadToolboxInventory();
       setAvailableSkills(inventory.skills);
-      setSkillDrawerNotice(inventory.exists ? null : "Toolbox repo is not synced; showing built-in skills.");
+      setSkillDrawerNotice(inventory.exists ? null : "Skills repo is not synced; showing built-in skills.");
     } catch (error: any) {
       setSkillDrawerNotice(`Skill list failed: ${error.message}`);
     }
   }
 
   function selectSkill(skill: ToolboxSkill) {
-    setQuerySync(`Use Toolbox skill ${skill.id} (${skill.name}) to `);
+    setQuerySync(`Use skill ${skill.id} (${skill.name}) to `);
     setComposerMode("default");
     setSelectedSkillIndex(0);
   }

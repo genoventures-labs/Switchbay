@@ -90,7 +90,7 @@ export async function describeToolbox(sync = false): Promise<string> {
 
   const inventory = await loadToolboxInventory();
   const lines = [
-    "Toolbox",
+    "Skills",
     `Repo: ${inventory.repo}`,
     `Cache: ${inventory.path}`,
     `Status: ${inventory.exists ? "ready" : "not synced"}`,
@@ -104,7 +104,7 @@ export async function describeToolbox(sync = false): Promise<string> {
   lines.push(...formatList(inventory.templates));
 
   if (!inventory.exists) {
-    lines.push("", "Run `/toolbox sync` or `switchbay toolbox sync` to clone the Toolbox repo.");
+    lines.push("", "Run `/skills sync` or `switchbay skills sync` to clone the skills repo.");
   }
 
   return lines.join("\n");

@@ -203,7 +203,7 @@ export async function tryLocalCommand(
   }
 
   if (trimmed === "/toolbox" || trimmed.startsWith("/toolbox ")) {
-    return handleToolboxCommand(trimmed);
+    return handleToolboxCommand(trimmed, "/toolbox");
   }
 
   if (trimmed === "/skills") {
@@ -211,7 +211,7 @@ export async function tryLocalCommand(
   }
 
   if (trimmed.startsWith("/skills ")) {
-    return handleToolboxCommand(`/toolbox${trimmed.slice("/skills".length)}`);
+    return handleToolboxCommand(`/toolbox${trimmed.slice("/skills".length)}`, "/skills");
   }
 
   if (trimmed === "/creative") {
@@ -620,7 +620,7 @@ async function handleWebCommand(options: LocalCommandOptions): Promise<LocalComm
       "- localhost, LAN, link-local, and private IP hosts are blocked by default",
       "- fetched text is size-limited; Bay should cite URLs used for factual claims",
       "",
-      "Use the `web-research` Toolbox skill for source-backed current-info work.",
+      "Use the `web-research` Skill for source-backed current-info work.",
     ].join("\n"),
   };
 }
@@ -662,7 +662,7 @@ async function handleEngineBayCommand(trimmed: string): Promise<LocalCommandResu
   }
 }
 
-async function handleToolboxCommand(trimmed: string): Promise<LocalCommandResult> {
+async function handleToolboxCommand(trimmed: string, displayCommand = "/skills"): Promise<LocalCommandResult> {
   const parts = trimmed.slice("/toolbox".length).trim().split(/\s+/).filter(Boolean);
   const action = parts[0] ?? "status";
   try {
@@ -676,7 +676,7 @@ async function handleToolboxCommand(trimmed: string): Promise<LocalCommandResult
         handled: true,
         assistantMessage: inventory.templates.length
           ? inventory.templates.map((item) => `- \`${item}\``).join("\n")
-          : "No Toolbox templates found. Run `/toolbox sync`.",
+          : `No skill templates found. Run \`${displayCommand} sync\`.`,
       };
     }
 
@@ -685,27 +685,27 @@ async function handleToolboxCommand(trimmed: string): Promise<LocalCommandResult
         handled: true,
         assistantMessage: inventory.skills.length
           ? inventory.skills.map((skill) => `- \`${skill.id}\` - **${skill.name}**: ${skill.description}`).join("\n")
-          : "No Toolbox skills found.",
+          : "No skills found.",
       };
     }
 
     if (action === "read") {
       const skillId = parts[1];
-      if (!skillId) return { handled: true, assistantMessage: "Usage: `/toolbox read <skill-id>`" };
+      if (!skillId) return { handled: true, assistantMessage: `Usage: \`${displayCommand} read <skill-id>\`` };
       const skill = await readToolboxSkill(skillId);
       return {
         handled: true,
-        assistantMessage: skill ? skill.body : `Toolbox skill not found: \`${skillId}\``,
+        assistantMessage: skill ? skill.body : `Skill not found: \`${skillId}\``,
       };
     }
 
     if (action && action !== "status") {
-      return { handled: true, assistantMessage: "Usage: `/toolbox [status|sync|list|templates|read <skill-id>]`" };
+      return { handled: true, assistantMessage: `Usage: \`${displayCommand} [status|sync|list|templates|read <skill-id>]\`` };
     }
 
     return { handled: true, assistantMessage: await describeToolbox(false) };
   } catch (e: any) {
-    return { handled: true, assistantMessage: `Toolbox failed: ${e.message}` };
+    return { handled: true, assistantMessage: `Skills failed: ${e.message}` };
   }
 }
 

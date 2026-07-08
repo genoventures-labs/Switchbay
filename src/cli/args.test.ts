@@ -38,6 +38,17 @@ test("parses Workspace Knowledge helper commands", () => {
   expect(search.knowledgeQuery).toBe("approval gates");
 });
 
+test("parses Skills helper commands and keeps toolbox alias", () => {
+  const skills = parseCliArgs(["bun", "index.tsx", "skills", "read", "debugging-triage"]);
+  expect(skills.subcommand).toBe("skills");
+  expect(skills.toolboxAction).toBe("read");
+  expect(skills.toolboxSkill).toBe("debugging-triage");
+
+  const toolbox = parseCliArgs(["bun", "index.tsx", "toolbox", "list"]);
+  expect(toolbox.subcommand).toBe("toolbox");
+  expect(toolbox.toolboxAction).toBe("list");
+});
+
 test("parses Trace helper commands", () => {
   const last = parseCliArgs(["bun", "index.tsx", "trace"]);
   expect(last.subcommand).toBe("trace");

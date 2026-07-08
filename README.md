@@ -144,6 +144,8 @@ Interactive terminal UI:
 switchbay
 ```
 
+For the release-readiness pass, use [docs/1.0_SMOKE_CHECKLIST.md](docs/1.0_SMOKE_CHECKLIST.md).
+
 One-shot request:
 
 ```bash

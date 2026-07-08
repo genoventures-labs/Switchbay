@@ -27,6 +27,7 @@ import {
 } from "./agents";
 import { buildToolboxPromptBlock } from "../toolbox/hub";
 import { buildMemoryPromptBlock } from "../memory/store";
+import { buildKnowledgePromptBlock } from "../knowledge/store";
 import { buildGuidesPromptBlock, generateRuleDraft, type RuleDraftAnswers, type PendingRuleDraft } from "../context/guides";
 import type { RuntimeLane, ToolMode } from "../config/env";
 import { buildSwitchbayMcpPromptBlock, loadLmStudioMcpConfig } from "../runtime/lmstudio-mcp-config";
@@ -543,6 +544,7 @@ export async function buildTurn(input: {
   }
 
   const memoryBlock = await buildMemoryPromptBlock(cwd);
+  const knowledgeBlock = await buildKnowledgePromptBlock(input.input, cwd);
 
   // Inject pinned files
   let pinsBlock = "";
@@ -586,7 +588,7 @@ Current Profile: ${input.profile}
 Current Workspace: ${cwd}
 Runtime Lane: ${input.runtimeLane ?? "cloud"}
 Tool Mode: ${effectiveToolMode}
-Assistant Callsign: Bay${oriMdBlock}${memoryBlock}${pinsBlock}${agentBlock}${toolboxBlock}${guidesBlock}${switchbayMcpBlock}
+Assistant Callsign: Bay${oriMdBlock}${memoryBlock}${knowledgeBlock}${pinsBlock}${agentBlock}${toolboxBlock}${guidesBlock}${switchbayMcpBlock}
 
 GROUNDING RULES:
 1. You are running inside a local development tool.

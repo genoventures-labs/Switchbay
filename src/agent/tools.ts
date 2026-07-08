@@ -13,6 +13,7 @@ import {
 } from "../engines/registry";
 import { describeToolbox, readToolboxSkill } from "../toolbox/hub";
 import { addMemoryNote, describeMemory, refreshMemory, readMemoryFacts } from "../memory/store";
+import { formatKnowledgeSearchResults, searchKnowledgeIndex } from "../knowledge/store";
 
 // Commands that still require approval in the private-tool lane because they
 // are destructive, privileged, publishing, or have broad external impact.
@@ -176,6 +177,21 @@ export const AGENT_TOOLS: ToolDefinition[] = [
         properties: {
           query: { type: "string", description: "The search string or regex." },
           include: { type: "string", description: "Glob pattern for files to include (optional)." },
+        },
+        required: ["query"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "knowledge_search",
+      description: "Search the local Workspace Knowledge index for sourced snippets with file and line spans. Use this for broad project-memory or docs questions before answering.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "The workspace knowledge query." },
+          limit: { type: "number", description: "Maximum number of source chunks to return (default: 6)." },
         },
         required: ["query"],
       },
@@ -980,6 +996,19 @@ export async function executeToolCall(
               summary: `Searched for "${query}"`,
               body: stdout || "No matches found.",
           };
+      }
+
+      case "knowledge_search": {
+        const query = String(args.query || "").trim();
+        const limit = Math.max(1, Math.min(12, Number(args.limit) || 6));
+        if (!query) throw new Error("knowledge_search requires query.");
+        const hits = await searchKnowledgeIndex(query, cwd, limit);
+        return {
+          tool: name,
+          ok: true,
+          summary: `Searched workspace knowledge: ${query.slice(0, 50)}`,
+          body: formatKnowledgeSearchResults(hits),
+        };
       }
 
       case "git_status": {

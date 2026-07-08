@@ -188,6 +188,18 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     category: "context",
+    command: "/index",
+    description: "Show or refresh the local Workspace Knowledge map.",
+    example: "/index refresh",
+  },
+  {
+    category: "context",
+    command: "/search",
+    description: "Search sourced snippets from Workspace Knowledge.",
+    example: "/search approval gates",
+  },
+  {
+    category: "context",
     command: "/quickstarts",
     description: "List quick-start guides Bay reads before matching tool/lane work.",
     example: "/quickstarts",

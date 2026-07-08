@@ -11,6 +11,7 @@ import { buildTurn, executeTurn, extractAssistantText, refreshWorkspace, synthes
 import { describeEngineBay, loadEngineBayInventory, syncEngineBayRepo } from "./src/engines/hub";
 import { describeToolbox, loadToolboxInventory, readToolboxSkill } from "./src/toolbox/hub";
 import { describeMemory, listMemoryNotes, readMemoryFacts, refreshMemory } from "./src/memory/store";
+import { describeKnowledgeIndex, formatKnowledgeSearchResults, refreshKnowledgeIndex, searchKnowledgeIndex } from "./src/knowledge/store";
 import { createDefaultLmStudioMcpConfig, describeLmStudioMcpConfig, loadLmStudioMcpConfig, saveLmStudioMcpConfig } from "./src/runtime/lmstudio-mcp-config";
 import { describeTrustedMcpCatalog } from "./src/runtime/mcp-catalog";
 import { ANSI_COLORS as CLR } from "./src/tui/theme";
@@ -48,8 +49,11 @@ Usage:
   switchbay memory refresh           Refresh operational memory
   switchbay memory list              List memory notes
   switchbay memory facts             List structured memory facts
-  switchbay mcp                      Show LM Studio MCP lane config
-  switchbay mcp init                 Create .switchbay/lmstudio.mcp.json
+  switchbay knowledge                Show workspace knowledge index status
+  switchbay knowledge refresh        Build/rebuild the local workspace knowledge map
+  switchbay knowledge search <query> Search sourced workspace snippets
+  switchbay mcp                      Show Switchbay MCP bridge config
+  switchbay mcp init                 Create ~/.switchbay/lmstudio.mcp.json
   switchbay mcp catalog              List trusted MCP config options
 
 Options:
@@ -77,6 +81,11 @@ Options:
 
   if (options.subcommand === "memory") {
     await runMemoryCommand(options.memoryAction);
+    return;
+  }
+
+  if (options.subcommand === "knowledge") {
+    await runKnowledgeCommand(options.knowledgeAction, options.knowledgeQuery);
     return;
   }
 
@@ -236,6 +245,30 @@ async function runMemoryCommand(action: "status" | "refresh" | "list" | "facts")
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`switchbay memory: ${msg}`);
+    process.exit(1);
+  }
+}
+
+async function runKnowledgeCommand(action: "status" | "refresh" | "search", query: string | null) {
+  try {
+    const cwd = process.cwd();
+    if (action === "refresh") {
+      const index = await refreshKnowledgeIndex(cwd);
+      console.log(`Workspace knowledge refreshed.\nFiles: ${index.fileCount}\nChunks: ${index.chunkCount}`);
+      return;
+    }
+    if (action === "search") {
+      if (!query) {
+        console.error("switchbay knowledge: search requires a query.");
+        process.exit(1);
+      }
+      console.log(formatKnowledgeSearchResults(await searchKnowledgeIndex(query, cwd, 10)));
+      return;
+    }
+    console.log(await describeKnowledgeIndex(cwd));
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`switchbay knowledge: ${msg}`);
     process.exit(1);
   }
 }

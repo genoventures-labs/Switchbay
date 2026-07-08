@@ -23,6 +23,7 @@ Switchbay gives you one fast shell for everyday agentic development:
 - Load repo context and persistent workspace memory.
 - Talk through plans, architecture, debugging, reviews, and implementation.
 - Inspect files, read ranges, summarize code, search the tree, and check git state.
+- Build a local Workspace Knowledge map so Bay can pull sourced snippets from code, docs, memory, rules, engines, and Toolbox files.
 - Create files, edit files, run commands, execute tests, and build locally.
 - Move between specialist agents for backend, UI, security, debugging, architecture, docs, and review.
 - Resume sessions, pin context, save local memories, and keep work visible in the terminal.
@@ -173,6 +174,8 @@ switchbay update
 switchbay engines sync
 switchbay toolbox list
 switchbay memory refresh
+switchbay knowledge refresh
+switchbay knowledge search "approval gates"
 switchbay mcp status
 switchbay mcp init
 switchbay mcp catalog
@@ -197,6 +200,8 @@ Inside the TUI:
 /remember          Save a workspace memory note
 /memories          List workspace memory notes
 /memory            Show or refresh operational memory
+/index             Show or refresh Workspace Knowledge
+/search            Search sourced Workspace Knowledge snippets
 /quickstarts       List quick-start guides Bay reads before matching tool work
 /rules             List built-in, user, and workspace operating rules
 /create-rule       Create a conversational rule for Bay and agents
@@ -230,6 +235,7 @@ Switchbay looks for:
 - `SWITCHBAY.md`: persistent project context injected into coding sessions.
 - `.switchbay/memory.md`: workspace memory.
 - `.switchbay/memory/`: operational memory files.
+- `.switchbay/knowledge/index.json`: local Workspace Knowledge source map.
 - `.switchbay/pins.json`: pinned files and repo notes.
 - `.switchbay/agents/*.md`: custom local specialist agents.
 - `.switchbay/engines/*.engine.json`: workspace engine manifests.
@@ -281,6 +287,26 @@ Model tools:
 - `memory_facts`
 
 Memory is injected into sessions as a compact operational block. Opening a session does not create memory files; `/remember`, `/memory refresh`, or `switchbay memory` initializes the store.
+
+## Workspace Knowledge
+
+Workspace Knowledge is Switchbay's local RAG layer. It builds a readable source map at `.switchbay/knowledge/index.json`, then automatically injects relevant snippets into Bay's turn context with file and line spans.
+
+```bash
+switchbay knowledge
+switchbay knowledge refresh
+switchbay knowledge search "approval gates"
+```
+
+Inside the TUI:
+
+```text
+/index
+/index refresh
+/search approval gates
+```
+
+The first backend is intentionally simple: line-based chunks, local lexical scoring, and normal path citations such as `README.md:120-160`. It indexes code, markdown/docs, config, memory, rules, engines, and Toolbox material. Embeddings or SQLite FTS can be added later without changing the way Bay consumes retrieved context.
 
 ## Quick Starts And Rules
 

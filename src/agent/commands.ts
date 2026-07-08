@@ -31,6 +31,12 @@ import {
   refreshMemory,
 } from "../memory/store";
 import { describeGuides } from "../context/guides";
+import {
+  describeKnowledgeIndex,
+  formatKnowledgeSearchResults,
+  refreshKnowledgeIndex,
+  searchKnowledgeIndex,
+} from "../knowledge/store";
 
 export type LocalCommandResult = {
   handled: boolean;
@@ -158,6 +164,14 @@ export async function tryLocalCommand(
   if (trimmed === "/quickstarts" || trimmed === "/quickstart") {
     const cwd = options.workspace?.cwd ?? process.cwd();
     return { handled: true, assistantMessage: await describeGuides(cwd, "quickstart") };
+  }
+
+  if (trimmed === "/index" || trimmed.startsWith("/index ")) {
+    return handleKnowledgeCommand(trimmed, options);
+  }
+
+  if (trimmed === "/search" || trimmed.startsWith("/search ")) {
+    return handleKnowledgeSearchCommand(trimmed, options);
   }
 
   if (trimmed === "/rules" || trimmed.startsWith("/rules ")) {
@@ -307,6 +321,53 @@ export async function tryLocalCommand(
   }
 
   return { handled: false };
+}
+
+async function handleKnowledgeCommand(
+  trimmed: string,
+  options: LocalCommandOptions,
+): Promise<LocalCommandResult> {
+  const cwd = options.workspace?.cwd ?? process.cwd();
+  const action = trimmed.slice("/index".length).trim().toLowerCase();
+
+  try {
+    if (action === "refresh" || action === "rebuild") {
+      const index = await refreshKnowledgeIndex(cwd);
+      return {
+        handled: true,
+        assistantMessage: `Workspace knowledge refreshed.\n\nFiles: \`${index.fileCount}\`\nChunks: \`${index.chunkCount}\``,
+      };
+    }
+
+    if (action && action !== "status") {
+      return { handled: true, assistantMessage: "Usage: `/index [status|refresh]`" };
+    }
+
+    return { handled: true, assistantMessage: await describeKnowledgeIndex(cwd) };
+  } catch (e: any) {
+    return { handled: true, assistantMessage: `Workspace knowledge failed: ${e.message}` };
+  }
+}
+
+async function handleKnowledgeSearchCommand(
+  trimmed: string,
+  options: LocalCommandOptions,
+): Promise<LocalCommandResult> {
+  const cwd = options.workspace?.cwd ?? process.cwd();
+  const query = trimmed.slice("/search".length).trim();
+  if (!query) {
+    return { handled: true, assistantMessage: "Usage: `/search <workspace knowledge query>`" };
+  }
+
+  try {
+    const hits = await searchKnowledgeIndex(query, cwd, 8);
+    return {
+      handled: true,
+      assistantMessage: `**Workspace Knowledge Search**\n\n${formatKnowledgeSearchResults(hits)}`,
+    };
+  } catch (e: any) {
+    return { handled: true, assistantMessage: `Workspace search failed: ${e.message}` };
+  }
 }
 
 function parseConversationalCreationIntent(input: string): "agent" | "engine" | "mcp" | "rule" | "skill" | null {

@@ -19,6 +19,8 @@ test("command palette lists only implemented command families", () => {
   expect(commands).toContain("/checkpoint");
   expect(commands).toContain("/edit");
   expect(commands).toContain("/memory");
+  expect(commands).toContain("/index");
+  expect(commands).toContain("/search");
   expect(commands).toContain("/quickstarts");
   expect(commands).toContain("/rules");
   expect(commands).toContain("/create-rule");
@@ -45,6 +47,8 @@ test("command palette searches commands, examples, descriptions, and categories"
   expect(getCommandMatches("/stash").map((item) => item.command)).toContain("/checkpoint");
   expect(getCommandMatches("/session").map((item) => item.command)).toContain("/sessions");
   expect(getCommandMatches("/memory").map((item) => item.command)).toContain("/memory");
+  expect(getCommandMatches("/knowledge").map((item) => item.command)).toContain("/index");
+  expect(getCommandMatches("/snippet").map((item) => item.command)).toContain("/search");
   expect(getCommandMatches("/rule").map((item) => item.command)).toContain("/rules");
   expect(getCommandMatches("/rule").map((item) => item.command)).toContain("/create-rule");
   expect(getCommandMatches("/quick").map((item) => item.command)).toContain("/quickstarts");

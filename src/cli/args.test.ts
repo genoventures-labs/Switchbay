@@ -23,6 +23,21 @@ test("parses MCP runtime lane aliases", () => {
   expect(parsed.initialQuery).toBe("hello");
 });
 
+test("parses Workspace Knowledge helper commands", () => {
+  const status = parseCliArgs(["bun", "index.tsx", "knowledge"]);
+  expect(status.subcommand).toBe("knowledge");
+  expect(status.knowledgeAction).toBe("status");
+
+  const refresh = parseCliArgs(["bun", "index.tsx", "index", "refresh"]);
+  expect(refresh.subcommand).toBe("knowledge");
+  expect(refresh.knowledgeAction).toBe("refresh");
+
+  const search = parseCliArgs(["bun", "index.tsx", "knowledge", "search", "approval", "gates"]);
+  expect(search.subcommand).toBe("knowledge");
+  expect(search.knowledgeAction).toBe("search");
+  expect(search.knowledgeQuery).toBe("approval gates");
+});
+
 test("normalizes cloud MCP runtime lane aliases", () => {
   expect(normalizeRuntimeLane("mcp")).toBe("cloud-mcp");
   expect(normalizeRuntimeLane("cloud-mcp")).toBe("cloud-mcp");

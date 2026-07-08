@@ -5,6 +5,7 @@ import { expect, test } from "bun:test";
 import type { ChatRuntimeClient } from "../runtime/client";
 import type { ChatCompletionRequest, ChatCompletionResponse, ToolCall } from "../runtime/types";
 import { executeToolCall } from "./tools";
+import { refreshKnowledgeIndex } from "../knowledge/store";
 import {
   buildTurn,
   executeTurn,
@@ -276,6 +277,37 @@ test("buildTurn injects Toolbox skills into system context", async () => {
   expect(system).toContain("code-review-pass");
   expect(system).toContain("QUICK STARTS AND RULES");
   expect(system).toContain("tool-use-quick-start");
+});
+
+test("buildTurn injects Workspace Knowledge hits into system context", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "switchbay-knowledge-context-"));
+  await writeFile(
+    join(cwd, "architecture.md"),
+    "# Architecture\n\nApproval gates live in the terminal control layer and protect risky shell actions.\n",
+    "utf-8",
+  );
+  await refreshKnowledgeIndex(cwd);
+
+  const turn = await buildTurn({
+    input: "where are approval gates described?",
+    mode: "build",
+    previousObjective: null,
+    profile: "switchbay",
+    transcript: [],
+    workspace: {
+      cwd,
+      repoRoot: cwd,
+      branch: null,
+      dirtyFiles: [],
+      recentFiles: [],
+      diff: { hasChanges: false, stat: "" },
+    },
+  });
+
+  const system = turn.request.messages.find((message) => message.role === "system")?.content ?? "";
+  expect(system).toContain("WORKSPACE KNOWLEDGE MAP");
+  expect(system).toContain("architecture.md:1-");
+  expect(system).toContain("Approval gates live");
 });
 
 test("buildTurn injects Switchbay MCP guidance for cloud-mcp lane", async () => {

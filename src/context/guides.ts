@@ -2,9 +2,10 @@ import path from "node:path";
 import fs from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { userConfigDir, workspaceStorageDir } from "../config/paths";
+import { pluginAssetPaths } from "../plugins/registry";
 
 export type GuideKind = "quickstart" | "rule";
-export type GuideSource = "builtin" | "user" | "workspace";
+export type GuideSource = "builtin" | "user" | "workspace" | "plugin";
 
 export type Guide = {
   id: string;
@@ -157,11 +158,12 @@ export function generateRuleDraft(answers: RuleDraftAnswers, cwd = process.cwd()
 export async function loadGuides(cwd = process.cwd()): Promise<Guide[]> {
   const userRoot = userConfigDir();
   const workspaceRoot = workspaceStorageDir(cwd);
-  const [userQuickstarts, userRules, workspaceQuickstarts, workspaceRules] = await Promise.all([
+  const [userQuickstarts, userRules, workspaceQuickstarts, workspaceRules, pluginGuides] = await Promise.all([
     loadGuidesFromDir(path.join(userRoot, "quickstarts"), "quickstart", "user"),
     loadGuidesFromDir(path.join(userRoot, "rules"), "rule", "user"),
     loadGuidesFromDir(path.join(workspaceRoot, "quickstarts"), "quickstart", "workspace"),
     loadGuidesFromDir(path.join(workspaceRoot, "rules"), "rule", "workspace"),
+    loadPluginGuides(cwd),
   ]);
 
   return mergeGuides([
@@ -170,6 +172,7 @@ export async function loadGuides(cwd = process.cwd()): Promise<Guide[]> {
     ...userRules,
     ...workspaceQuickstarts,
     ...workspaceRules,
+    ...pluginGuides,
   ]);
 }
 
@@ -182,6 +185,7 @@ export async function describeGuides(cwd = process.cwd(), kind?: GuideKind): Pro
     `User quick starts: ${path.join(userConfigDir(), "quickstarts")}`,
     `Workspace rules: ${path.join(workspaceStorageDir(cwd), "rules")}`,
     `Workspace quick starts: ${path.join(workspaceStorageDir(cwd), "quickstarts")}`,
+    `Plugin guides: ${path.join(workspaceStorageDir(cwd), "plugins", "<id>", "guides")}`,
     "",
     ...guides.map((guide) => `- \`${guide.id}\` [${guide.source}/${guide.kind}] ${guide.title}: ${guide.description}`),
   ];
@@ -214,6 +218,20 @@ async function loadGuidesFromDir(dir: string, kind: GuideKind, source: GuideSour
       guides.push(parseGuideMarkdown(content, absolute, kind, source));
     } catch {
       // Ignore malformed local guide files.
+    }
+  }
+  return guides;
+}
+
+async function loadPluginGuides(cwd: string): Promise<Guide[]> {
+  const files = await pluginAssetPaths("guides", cwd);
+  const guides: Guide[] = [];
+  for (const file of files) {
+    try {
+      const content = await fs.readFile(file, "utf-8");
+      guides.push(parseGuideMarkdown(content, file, "quickstart", "plugin"));
+    } catch {
+      // Ignore malformed plugin guide files.
     }
   }
   return guides;
@@ -266,8 +284,9 @@ function mergeGuides(guides: Guide[]): Guide[] {
 
 function sourceWeight(source: GuideSource): number {
   if (source === "workspace") return 0;
-  if (source === "user") return 1;
-  return 2;
+  if (source === "plugin") return 1;
+  if (source === "user") return 2;
+  return 3;
 }
 
 function stringMeta(value: string | undefined, fallback: string): string {

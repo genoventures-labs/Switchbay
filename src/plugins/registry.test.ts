@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { loadAllAgents } from "../agent/agents";
+import { buildGuidesPromptBlock, loadGuides } from "../context/guides";
 import { loadEngineRegistry } from "../engines/registry";
 import { loadToolboxInventory } from "../toolbox/hub";
 import { loadPluginInventory, normalizePluginManifest } from "./registry";
@@ -14,6 +15,7 @@ test("loads workspace plugin manifests and exposes plugin assets", async () => {
   await mkdir(join(pluginRoot, "agents"), { recursive: true });
   await mkdir(join(pluginRoot, "skills"), { recursive: true });
   await mkdir(join(pluginRoot, "engines"), { recursive: true });
+  await mkdir(join(pluginRoot, "guides"), { recursive: true });
 
   await writeFile(
     join(pluginRoot, "agents", "repo-steward.md"),
@@ -36,6 +38,11 @@ test("loads workspace plugin manifests and exposes plugin assets", async () => {
     "utf-8",
   );
   await writeFile(
+    join(pluginRoot, "guides", "repo-domain.md"),
+    "---\nid: repo-domain\ntitle: Repo Domain Guide\nkind: quickstart\ndescription: Stay inside repo hygiene work.\ntriggers: [repo, plugin]\n---\n\n# Repo Domain Guide\n\n- Only operate on repo hygiene tasks.",
+    "utf-8",
+  );
+  await writeFile(
     join(pluginRoot, "plugin.json"),
     JSON.stringify({
       id: "repo-ops",
@@ -46,6 +53,7 @@ test("loads workspace plugin manifests and exposes plugin assets", async () => {
       agents: ["agents/repo-steward.md"],
       skills: ["skills/repo-check.skill.md"],
       engines: ["engines/repo-tools.engine.json"],
+      guides: ["guides/repo-domain.md"],
       knowledge: [],
       mcp: [],
     }, null, 2),
@@ -70,6 +78,12 @@ test("loads workspace plugin manifests and exposes plugin assets", async () => {
 
   const engines = await loadEngineRegistry(cwd);
   expect(engines.engines.some((engine) => engine.id === "repo-tools")).toBe(true);
+
+  const guides = await loadGuides(cwd);
+  expect(guides.some((guide) => guide.id === "repo-domain" && guide.source === "plugin")).toBe(true);
+
+  const guideBlock = await buildGuidesPromptBlock(cwd);
+  expect(guideBlock).toContain("Repo Domain Guide");
 });
 
 test("rejects plugin assets outside known relative folders", () => {

@@ -168,6 +168,7 @@ test("generatePluginDefinition produces a bounded workspace plugin manifest", as
   expect(manifest.agents).toEqual([]);
   expect(manifest.skills).toEqual([]);
   expect(manifest.engines).toEqual([]);
+  expect(manifest.guides).toEqual([]);
 });
 
 test("generateRuleDefinition produces a user rule draft", async () => {

@@ -32,7 +32,7 @@ Switchbay gives you one fast shell for everyday agentic development:
 - Enable Switchbay's MCP bridge for cloud or local models that should use configured tool workflows.
 - Add swappable engines from local manifests or the GitHub-backed Engine Bay.
 - Give agents reusable skills for review, debugging, planning, testing, API checks, UI polish, and releases.
-- Bundle related agents, skills, engines, knowledge notes, and MCP configs as local workspace plugins.
+- Bundle related agents, skills, engines, guides, knowledge notes, and MCP configs as local workspace plugins.
 
 Switchbay is built for solo builders, senior developers, technical founders, and internal-tool people who live in the terminal and want the useful parts of AI coding close to the repo.
 
@@ -251,7 +251,7 @@ Switchbay looks for:
 - `.switchbay/pins.json`: pinned files and repo notes.
 - `.switchbay/agents/*.md`: custom local specialist agents.
 - `.switchbay/engines/*.engine.json`: workspace engine manifests.
-- `.switchbay/plugins/*/plugin.json`: local plugin manifests that can bundle agents, skills, engines, knowledge, and MCP configs.
+- `.switchbay/plugins/*/plugin.json`: local plugin manifests that can bundle agents, skills, engines, guides, knowledge, and MCP configs.
 - `.switchbay/rules/*.rule.md`: workspace-specific operating rules.
 - `.switchbay/quickstarts/*.md`: workspace-specific quick-start guides.
 - `~/.switchbay/rules/*.rule.md`: user operating rules shared across repos.
@@ -351,6 +351,7 @@ Built-in guides cover local tool use, Web Engine use, Switchbay MCP setup, Engin
 ~/.switchbay/quickstarts/*.md
 .switchbay/rules/*.rule.md
 .switchbay/quickstarts/*.md
+.switchbay/plugins/<id>/guides/*.md
 ```
 
 TUI:
@@ -542,6 +543,7 @@ Plugins can include:
 - `agents/*.md`
 - `skills/*.skill.md`
 - `engines/*.engine.json`
+- `guides/*.md`
 - `knowledge/*.md`, `knowledge/*.json`, or `knowledge/*.txt`
 - `mcp/*.json`
 
@@ -575,12 +577,15 @@ Plugin manifest:
   "agents": ["agents/repo-steward.md"],
   "skills": ["skills/repo-check.skill.md"],
   "engines": ["engines/repo-tools.engine.json"],
+  "guides": ["guides/repo-domain.md"],
   "knowledge": ["knowledge/quickstart.md"],
   "mcp": ["mcp/browser-tools.json"]
 }
 ```
 
-Switchbay validates plugin paths before loading them. Assets must be relative paths inside known plugin folders; absolute paths and `..` traversal are rejected. Plugin agents, skills, and engines are merged into the normal drawers and tool inventories when the plugin is enabled.
+Switchbay validates plugin paths before loading them. Assets must be relative paths inside known plugin folders; absolute paths and `..` traversal are rejected. Plugin agents, skills, engines, and guides are merged into the normal drawers, tool inventories, and Quick Starts/Rules prompt block when the plugin is enabled.
+
+Use plugin guides for domain-specific behavior. For example, a Gumroad plugin can include `guides/gumroad-domain.md` with `kind: quickstart` or `kind: rule` frontmatter so Bay knows to operate inside Gumroad-specific workflows, approval rules, terminology, and safety boundaries whenever that plugin's context is available.
 
 ## Web Engine
 

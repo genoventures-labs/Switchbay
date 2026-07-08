@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { workspaceStorageDir } from "../config/paths";
 
-export type PluginAssetKind = "agents" | "skills" | "engines" | "knowledge" | "mcp";
+export type PluginAssetKind = "agents" | "skills" | "engines" | "guides" | "knowledge" | "mcp";
 
 export type SwitchbayPluginManifest = {
   id: string;
@@ -14,6 +14,7 @@ export type SwitchbayPluginManifest = {
   agents: string[];
   skills: string[];
   engines: string[];
+  guides: string[];
   knowledge: string[];
   mcp: string[];
 };
@@ -31,7 +32,7 @@ export type PluginInventory = {
   warnings: string[];
 };
 
-const ASSET_KINDS: PluginAssetKind[] = ["agents", "skills", "engines", "knowledge", "mcp"];
+const ASSET_KINDS: PluginAssetKind[] = ["agents", "skills", "engines", "guides", "knowledge", "mcp"];
 
 export function pluginsRoot(cwd = process.cwd()): string {
   return path.join(workspaceStorageDir(cwd), "plugins");
@@ -159,6 +160,7 @@ export function normalizePluginManifest(raw: unknown): SwitchbayPluginManifest {
     agents: normalizeAssetList(manifest.agents, "agents", isAgentAsset),
     skills: normalizeAssetList(manifest.skills, "skills", isSkillAsset),
     engines: normalizeAssetList(manifest.engines, "engines", isEngineAsset),
+    guides: normalizeAssetList(manifest.guides, "guides", isGuideAsset),
     knowledge: normalizeAssetList(manifest.knowledge, "knowledge", isKnowledgeAsset),
     mcp: normalizeAssetList(manifest.mcp, "mcp", isMcpAsset),
   };
@@ -176,6 +178,7 @@ export function pluginManifestTemplate(id: string, name: string, description: st
     agents: [],
     skills: [],
     engines: [],
+    guides: [],
     knowledge: [],
     mcp: [],
   };
@@ -189,6 +192,7 @@ async function collectMissingAssets(
     agents: [],
     skills: [],
     engines: [],
+    guides: [],
     knowledge: [],
     mcp: [],
   };
@@ -240,6 +244,10 @@ function isSkillAsset(value: string): boolean {
 
 function isEngineAsset(value: string): boolean {
   return value.startsWith("engines/") && value.endsWith(".engine.json");
+}
+
+function isGuideAsset(value: string): boolean {
+  return value.startsWith("guides/") && value.endsWith(".md");
 }
 
 function isKnowledgeAsset(value: string): boolean {

@@ -176,6 +176,8 @@ switchbay toolbox list
 switchbay memory refresh
 switchbay knowledge refresh
 switchbay knowledge search "approval gates"
+switchbay trace
+switchbay trace export
 switchbay mcp status
 switchbay mcp init
 switchbay mcp catalog
@@ -202,6 +204,7 @@ Inside the TUI:
 /memory            Show or refresh operational memory
 /index             Show or refresh Workspace Knowledge
 /search            Search sourced Workspace Knowledge snippets
+/trace             Show the latest durable turn receipt
 /quickstarts       List quick-start guides Bay reads before matching tool work
 /rules             List built-in, user, and workspace operating rules
 /create-rule       Create a conversational rule for Bay and agents
@@ -236,6 +239,7 @@ Switchbay looks for:
 - `.switchbay/memory.md`: workspace memory.
 - `.switchbay/memory/`: operational memory files.
 - `.switchbay/knowledge/index.json`: local Workspace Knowledge source map.
+- `.switchbay/traces/`: durable turn receipts and latest trace pointer.
 - `.switchbay/pins.json`: pinned files and repo notes.
 - `.switchbay/agents/*.md`: custom local specialist agents.
 - `.switchbay/engines/*.engine.json`: workspace engine manifests.
@@ -307,6 +311,25 @@ Inside the TUI:
 ```
 
 The first backend is intentionally simple: line-based chunks, local lexical scoring, and normal path citations such as `README.md:120-160`. It indexes code, markdown/docs, config, memory, rules, engines, and Toolbox material. Embeddings or SQLite FTS can be added later without changing the way Bay consumes retrieved context.
+
+## Trace Ledger
+
+Trace Ledger is Switchbay's local flight recorder. Completed model turns write JSON receipts under `.switchbay/traces/` so Bay can show what it knew, what it touched, what tools ran, which approvals were staged, and what answer came back.
+
+```bash
+switchbay trace
+switchbay trace export
+```
+
+Inside the TUI:
+
+```text
+/trace
+/trace last
+/trace export
+```
+
+Trace v1 records the user prompt, runtime lane/tool mode, workspace branch, injected Workspace Knowledge sources, tool executions, changed files, pending shell approvals, rough prompt/answer token estimates, finish reason, and final answer.
 
 ## Quick Starts And Rules
 

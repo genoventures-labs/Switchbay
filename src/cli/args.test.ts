@@ -38,6 +38,16 @@ test("parses Workspace Knowledge helper commands", () => {
   expect(search.knowledgeQuery).toBe("approval gates");
 });
 
+test("parses Trace helper commands", () => {
+  const last = parseCliArgs(["bun", "index.tsx", "trace"]);
+  expect(last.subcommand).toBe("trace");
+  expect(last.traceAction).toBe("last");
+
+  const exportTrace = parseCliArgs(["bun", "index.tsx", "trace", "export"]);
+  expect(exportTrace.subcommand).toBe("trace");
+  expect(exportTrace.traceAction).toBe("export");
+});
+
 test("normalizes cloud MCP runtime lane aliases", () => {
   expect(normalizeRuntimeLane("mcp")).toBe("cloud-mcp");
   expect(normalizeRuntimeLane("cloud-mcp")).toBe("cloud-mcp");

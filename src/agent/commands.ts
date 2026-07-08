@@ -37,6 +37,7 @@ import {
   refreshKnowledgeIndex,
   searchKnowledgeIndex,
 } from "../knowledge/store";
+import { describeLatestTrace, latestTraceExportPath } from "../trace/store";
 
 export type LocalCommandResult = {
   handled: boolean;
@@ -287,6 +288,10 @@ export async function tryLocalCommand(
     return handleMemoryCommand(trimmed, options);
   }
 
+  if (trimmed === "/trace" || trimmed.startsWith("/trace ")) {
+    return handleTraceCommand(trimmed, options);
+  }
+
   if (trimmed.startsWith("/forget ") || trimmed === "/forget") {
     return handleForgetCommand(trimmed, options);
   }
@@ -321,6 +326,34 @@ export async function tryLocalCommand(
   }
 
   return { handled: false };
+}
+
+async function handleTraceCommand(
+  trimmed: string,
+  options: LocalCommandOptions,
+): Promise<LocalCommandResult> {
+  const cwd = options.workspace?.cwd ?? process.cwd();
+  const action = trimmed.slice("/trace".length).trim().toLowerCase();
+
+  try {
+    if (!action || action === "last") {
+      return { handled: true, assistantMessage: await describeLatestTrace(cwd) };
+    }
+
+    if (action === "export") {
+      const tracePath = await latestTraceExportPath(cwd);
+      return {
+        handled: true,
+        assistantMessage: tracePath
+          ? `Latest trace is already exported at \`${tracePath}\`.`
+          : "No trace exists yet. Complete a model turn first.",
+      };
+    }
+
+    return { handled: true, assistantMessage: "Usage: `/trace [last|export]`" };
+  } catch (e: any) {
+    return { handled: true, assistantMessage: `Trace failed: ${e.message}` };
+  }
 }
 
 async function handleKnowledgeCommand(

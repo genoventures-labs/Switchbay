@@ -200,6 +200,18 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     category: "context",
+    command: "/trace",
+    description: "Show the latest durable turn receipt.",
+    example: "/trace last",
+  },
+  {
+    category: "context",
+    command: "/trace export",
+    description: "Show the latest trace JSON file path.",
+    example: "/trace export",
+  },
+  {
+    category: "context",
     command: "/quickstarts",
     description: "List quick-start guides Bay reads before matching tool/lane work.",
     example: "/quickstarts",

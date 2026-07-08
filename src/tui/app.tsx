@@ -48,6 +48,7 @@ import { listRuntimeModels, type RuntimeModelOption } from "../runtime/models";
 import { SkillDrawer } from "./components/SkillDrawer";
 import { loadToolboxInventory, type ToolboxSkill } from "../toolbox/hub";
 import { RightRail } from "./components/RightRail";
+import { saveTraceRecord } from "../trace/store";
 
 export type SwitchbayAppProps = {
   client: ChatRuntimeClient;
@@ -1575,6 +1576,17 @@ export function SwitchbayApp({
       // When streaming fired, streamingText already has the content — pass undefined
       // so turn/completed falls back to state.streamingText in the reducer.
       dispatch({ type: "turn/completed", content: didStream ? undefined : assistantContent });
+      void saveTraceRecord({
+        assistantContent,
+        cwd: workspace?.cwd ?? process.cwd(),
+        executedTurn,
+        runtimeLane,
+        toolMode,
+        sessionId: state.sessionId,
+        turn,
+        userPrompt: value,
+        workspace,
+      }).catch(() => {});
       setTurnThoughts([]);
 
       // If a plan is running, advance it after the turn completes

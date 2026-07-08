@@ -10,13 +10,14 @@ export type CliOptions = {
   resume: string | boolean; // string (id/index) or true (latest)
   newSession: boolean;
   purge: string | null;
-  subcommand: "run" | "update" | "version" | "help" | "engines" | "toolbox" | "memory" | "knowledge" | "mcp";
+  subcommand: "run" | "update" | "version" | "help" | "engines" | "toolbox" | "memory" | "knowledge" | "trace" | "mcp";
   engineAction: "status" | "sync" | "list" | "templates";
   toolboxAction: "status" | "sync" | "list" | "templates" | "read";
   toolboxSkill: string | null;
   memoryAction: "status" | "refresh" | "list" | "facts";
   knowledgeAction: "status" | "refresh" | "search";
   knowledgeQuery: string | null;
+  traceAction: "last" | "export";
   mcpAction: "status" | "init" | "catalog";
 };
 
@@ -78,6 +79,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
         memoryAction: "status",
         knowledgeAction: "status",
         knowledgeQuery: null,
+        traceAction: "last",
         mcpAction: "status",
       };
     } else if (arg === "toolbox") {
@@ -102,6 +104,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
         memoryAction: "status",
         knowledgeAction: "status",
         knowledgeQuery: null,
+        traceAction: "last",
         mcpAction: "status",
       };
     } else if (arg === "memory") {
@@ -126,6 +129,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
         memoryAction,
         knowledgeAction: "status",
         knowledgeQuery: null,
+        traceAction: "last",
         mcpAction: "status",
       };
     } else if (arg === "knowledge" || arg === "index") {
@@ -150,6 +154,30 @@ export function parseCliArgs(argv: string[]): CliOptions {
         memoryAction: "status",
         knowledgeAction,
         knowledgeQuery: knowledgeAction === "search" ? args.slice(i + 2).join(" ") || null : null,
+        traceAction: "last",
+        mcpAction: "status",
+      };
+    } else if (arg === "trace") {
+      const action = args[i + 1];
+      const traceAction = action === "export" ? "export" : "last";
+      return {
+        surface,
+        profile,
+        mode,
+        lane,
+        initialQuery: "",
+        hop,
+        resume,
+        newSession,
+        purge,
+        subcommand: "trace",
+        engineAction: "status",
+        toolboxAction: "status",
+        toolboxSkill: null,
+        memoryAction: "status",
+        knowledgeAction: "status",
+        knowledgeQuery: null,
+        traceAction,
         mcpAction: "status",
       };
     } else if (arg === "mcp") {
@@ -174,6 +202,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
         memoryAction: "status",
         knowledgeAction: "status",
         knowledgeQuery: null,
+        traceAction: "last",
         mcpAction,
       };
     } else if (arg === "update") {
@@ -186,7 +215,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
       console.log("switchbay 0.9.79");
       process.exit(0);
     } else if (arg === undefined || arg === "help" || arg === "--help" || arg === "-h") {
-      return { surface, profile, mode, lane, initialQuery: "", hop: null, resume: false, newSession: false, purge: null, subcommand: "help", engineAction: "status", toolboxAction: "status", toolboxSkill: null, memoryAction: "status", knowledgeAction: "status", knowledgeQuery: null, mcpAction: "status" };
+      return { surface, profile, mode, lane, initialQuery: "", hop: null, resume: false, newSession: false, purge: null, subcommand: "help", engineAction: "status", toolboxAction: "status", toolboxSkill: null, memoryAction: "status", knowledgeAction: "status", knowledgeQuery: null, traceAction: "last", mcpAction: "status" };
     } else if (!arg.startsWith("-")) {
       positional.push(arg);
     }
@@ -209,6 +238,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
     memoryAction: "status",
     knowledgeAction: "status",
     knowledgeQuery: null,
+    traceAction: "last",
     mcpAction: "status",
   };
 }

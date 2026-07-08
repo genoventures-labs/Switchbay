@@ -12,6 +12,7 @@ import { describeEngineBay, loadEngineBayInventory, syncEngineBayRepo } from "./
 import { describeToolbox, loadToolboxInventory, readToolboxSkill } from "./src/toolbox/hub";
 import { describeMemory, listMemoryNotes, readMemoryFacts, refreshMemory } from "./src/memory/store";
 import { describeKnowledgeIndex, formatKnowledgeSearchResults, refreshKnowledgeIndex, searchKnowledgeIndex } from "./src/knowledge/store";
+import { describeLatestTrace, latestTraceExportPath, saveTraceRecord } from "./src/trace/store";
 import { createDefaultLmStudioMcpConfig, describeLmStudioMcpConfig, loadLmStudioMcpConfig, saveLmStudioMcpConfig } from "./src/runtime/lmstudio-mcp-config";
 import { describeTrustedMcpCatalog } from "./src/runtime/mcp-catalog";
 import { ANSI_COLORS as CLR } from "./src/tui/theme";
@@ -52,6 +53,8 @@ Usage:
   switchbay knowledge                Show workspace knowledge index status
   switchbay knowledge refresh        Build/rebuild the local workspace knowledge map
   switchbay knowledge search <query> Search sourced workspace snippets
+  switchbay trace                    Show latest turn trace
+  switchbay trace export             Print latest trace file path
   switchbay mcp                      Show Switchbay MCP bridge config
   switchbay mcp init                 Create ~/.switchbay/lmstudio.mcp.json
   switchbay mcp catalog              List trusted MCP config options
@@ -86,6 +89,11 @@ Options:
 
   if (options.subcommand === "knowledge") {
     await runKnowledgeCommand(options.knowledgeAction, options.knowledgeQuery);
+    return;
+  }
+
+  if (options.subcommand === "trace") {
+    await runTraceCommand(options.traceAction);
     return;
   }
 
@@ -273,6 +281,22 @@ async function runKnowledgeCommand(action: "status" | "refresh" | "search", quer
   }
 }
 
+async function runTraceCommand(action: "last" | "export") {
+  try {
+    const cwd = process.cwd();
+    if (action === "export") {
+      const tracePath = await latestTraceExportPath(cwd);
+      console.log(tracePath ?? "No trace exists yet. Complete a model turn first.");
+      return;
+    }
+    console.log(await describeLatestTrace(cwd));
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`switchbay trace: ${msg}`);
+    process.exit(1);
+  }
+}
+
 async function runMcpCommand(action: "status" | "init" | "catalog") {
   try {
     const cwd = process.cwd();
@@ -347,6 +371,17 @@ async function runCliMode(options: any, resumeId: string | null) {
     if (content) {
       process.stdout.write(`\n${CLR.accent}⏺${CLR.reset} ${CLR.text}${CLR.bold}Switchbay${CLR.reset}\n`);
       process.stdout.write(`  ${CLR.muted}└ ${CLR.reset}${content}\n\n`);
+      await saveTraceRecord({
+        assistantContent: content,
+        cwd: workspace?.cwd ?? process.cwd(),
+        executedTurn,
+        runtimeLane,
+        toolMode,
+        sessionId: state.sessionId,
+        turn,
+        userPrompt: options.initialQuery,
+        workspace,
+      });
       
       state.conversation.push({ role: "user", content: options.initialQuery });
       state.conversation.push({ role: "assistant", content });

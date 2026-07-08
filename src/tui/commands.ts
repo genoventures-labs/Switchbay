@@ -98,6 +98,12 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     category: "runtime",
+    command: "/mcp catalog",
+    description: "List trusted MCP servers Bay can configure without guessing.",
+    example: "/mcp catalog",
+  },
+  {
+    category: "runtime",
     command: "/create-mcp",
     description: "Open the guided LM Studio MCP config wizard.",
     example: "/create-mcp",

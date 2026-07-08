@@ -38,6 +38,7 @@ import { loadWorkspaceSnapshot, type WorkspaceSnapshot } from "../session/worksp
 import { listProjectFiles } from "../tools/files";
 import { runCommand } from "../tools/shell";
 import { createDefaultLmStudioMcpConfig, lmStudioMcpConfigPath } from "../runtime/lmstudio-mcp-config";
+import { describeTrustedMcpCatalog, matchTrustedMcpCatalog, TRUSTED_MCP_CATALOG } from "../runtime/mcp-catalog";
 
 export async function generatePlan(
   client: ChatRuntimeClient,
@@ -306,61 +307,60 @@ Brief:
 }
 
 export async function generateLmStudioMcpConfig(
-  client: ChatRuntimeClient,
-  surface: string,
+  _client: ChatRuntimeClient,
+  _surface: string,
   answers: { name: string; purpose: string; servers: string; integrations: string; notes: string },
 ): Promise<PendingMcpDraft> {
-  const prompt = `Create a Switchbay LM Studio MCP lane JSON config.
+  const requestedForCatalog = [
+    answers.name,
+    answers.purpose,
+    answers.servers,
+    answers.integrations,
+  ].join(" ");
+  const requested = [
+    requestedForCatalog,
+    answers.notes,
+  ].join(" ");
+  const matched = uniqueTrustedMcpMatches([
+    ...matchTrustedMcpCatalog(requestedForCatalog),
+    ...parseIntegrationHints(answers.integrations).flatMap((hint) =>
+      TRUSTED_MCP_CATALOG.filter((entry) => entry.integration === hint || entry.id === hint.replace(/^mcp\//, "")),
+    ),
+  ]);
 
-Output ONLY valid JSON. No markdown fences.
-
-Shape:
-{
-  "enabled": true,
-  "nativeBase": "http://YOUR-LM-STUDIO-HOST:1234/api/v1",
-  "model": "local-model-id",
-  "integrations": ["mcp/server-name"],
-  "mcpServers": {
-    "server-name": {
-      "command": "optional command if this mirrors LM Studio mcp.json",
-      "args": ["optional", "args"],
-      "note": "short setup note"
-    }
+  if (matched.length === 0) {
+    throw new Error([
+      "No trusted MCP catalog match found for that request.",
+      "Switchbay will not invent MCP server ids.",
+      "",
+      "Trusted options:",
+      describeTrustedMcpCatalog(),
+      "",
+      "Best next step: install/enable the desired MCP server in LM Studio, give it a stable server label in LM Studio's mcp.json, then ask Bay for one of the trusted options or add the exact integration id manually to `.switchbay/lmstudio.mcp.json`.",
+    ].join("\n"));
   }
-}
 
-Rules:
-- Keep it compatible with LM Studio's mcp.json naming style.
-- If the user lists already-installed LM Studio MCP servers, put their API ids in "integrations" as "mcp/<server-name>".
-- If details are incomplete, create useful placeholders and concise notes.
-- Do not invent API keys or secrets.
-- Prefer the host placeholder from the required shape unless the user supplied a host.
-
-Brief:
-- Name: ${answers.name}
-- Purpose: ${answers.purpose}
-- MCP servers to expose: ${answers.servers}
-- Exact integrations if known: ${answers.integrations || "Infer from server names"}
-- Notes/limits: ${answers.notes || "Keep it safe and practical"}`;
-
-  const resp = await client.createChatCompletion(surface, {
-    model: undefined,
-    messages: [
+  const parsed = {
+    ...(extractLmStudioNativeBase(requested) ? { nativeBase: extractLmStudioNativeBase(requested) } : {}),
+    integrations: matched.map((entry) => entry.integration),
+    mcpServers: Object.fromEntries(matched.map((entry) => [
+      entry.id,
       {
-        role: "system",
-        content: "You write strict JSON config files for local AI tooling. Output valid JSON only.",
+        name: entry.name,
+        description: entry.description,
+        note: entry.installHint,
       },
-      { role: "user", content: prompt },
-    ],
-  });
-
-  const raw = extractAssistantText(resp).trim();
-  if (!raw) throw new Error("The model returned no MCP config.");
-  const parsed = JSON.parse(stripJsonFence(raw));
+    ])),
+    systemPrompt: [
+      "Use only the configured LM Studio MCP integrations.",
+      "If an integration is not installed or enabled in LM Studio, say which integration is missing.",
+      answers.notes ? `User notes: ${answers.notes}` : "",
+    ].filter(Boolean).join("\n"),
+  };
   const normalized = {
     ...createDefaultLmStudioMcpConfig(),
     ...parsed,
-    enabled: parsed.enabled ?? true,
+    enabled: true,
   };
   const content = `${JSON.stringify(normalized, null, 2)}\n`;
   return {
@@ -369,6 +369,31 @@ Brief:
     content,
     savePath: lmStudioMcpConfigPath(process.cwd()),
   };
+}
+
+function extractLmStudioNativeBase(value: string): string | null {
+  const match = value.match(/https?:\/\/[^\s,]+/i);
+  const raw = match?.[0]?.replace(/[).]+$/, "");
+  if (!raw) return null;
+  if (raw.endsWith("/api/v1")) return raw;
+  if (raw.endsWith("/v1")) return raw.replace(/\/v1$/, "/api/v1");
+  return `${raw.replace(/\/$/, "")}/api/v1`;
+}
+
+function parseIntegrationHints(value: string): string[] {
+  return value
+    .split(/[,\s]+/)
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function uniqueTrustedMcpMatches(entries: typeof TRUSTED_MCP_CATALOG): typeof TRUSTED_MCP_CATALOG {
+  const seen = new Set<string>();
+  return entries.filter((entry) => {
+    if (seen.has(entry.id)) return false;
+    seen.add(entry.id);
+    return true;
+  });
 }
 
 function stripJsonFence(value: string): string {

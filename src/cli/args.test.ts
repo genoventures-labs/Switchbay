@@ -9,6 +9,10 @@ test("parses MCP CLI helper commands", () => {
   const init = parseCliArgs(["bun", "index.tsx", "mcp", "init"]);
   expect(init.subcommand).toBe("mcp");
   expect(init.mcpAction).toBe("init");
+
+  const catalog = parseCliArgs(["bun", "index.tsx", "mcp", "catalog"]);
+  expect(catalog.subcommand).toBe("mcp");
+  expect(catalog.mcpAction).toBe("catalog");
 });
 
 test("parses MCP runtime lane aliases", () => {

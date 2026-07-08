@@ -21,6 +21,7 @@ import { describeEngines, loadEngineRegistry } from "../engines/registry";
 import { describeEngineBay, loadEngineBayInventory } from "../engines/hub";
 import { describeToolbox, loadToolboxInventory, readToolboxSkill } from "../toolbox/hub";
 import { createDefaultLmStudioMcpConfig, describeLmStudioMcpConfig, loadLmStudioMcpConfig, saveLmStudioMcpConfig } from "../runtime/lmstudio-mcp-config";
+import { describeTrustedMcpCatalog } from "../runtime/mcp-catalog";
 import {
   addMemoryNote,
   describeMemory,
@@ -318,8 +319,15 @@ async function handleMcpCommand(
       return { handled: true, openCreateMcp: true };
     }
 
+    if (action === "catalog") {
+      return {
+        handled: true,
+        assistantMessage: `**Trusted MCP Catalog**\n\n${describeTrustedMcpCatalog()}\n\nBay will only create MCP configs from this catalog. For anything else, install and verify the MCP server in LM Studio first, then add the exact id manually.`,
+      };
+    }
+
     if (action && action !== "status") {
-      return { handled: true, assistantMessage: "Usage: `/mcp [status|init|create]`" };
+      return { handled: true, assistantMessage: "Usage: `/mcp [status|init|create|catalog]`" };
     }
 
     return { handled: true, assistantMessage: describeLmStudioMcpConfig(await loadLmStudioMcpConfig(cwd)) };

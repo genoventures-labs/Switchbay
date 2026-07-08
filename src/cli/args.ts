@@ -15,7 +15,7 @@ export type CliOptions = {
   toolboxAction: "status" | "sync" | "list" | "templates" | "read";
   toolboxSkill: string | null;
   memoryAction: "status" | "refresh" | "list" | "facts";
-  mcpAction: "status" | "init";
+  mcpAction: "status" | "init" | "catalog";
 };
 
 export function parseCliArgs(argv: string[]): CliOptions {
@@ -122,7 +122,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
       };
     } else if (arg === "mcp") {
       const action = args[i + 1];
-      const mcpAction = action === "init" || action === "status"
+      const mcpAction = action === "init" || action === "status" || action === "catalog"
         ? action
         : "status";
       return {

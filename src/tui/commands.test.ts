@@ -9,6 +9,7 @@ test("command palette lists only implemented command families", () => {
   expect(commands).toContain("/lane mcp");
   expect(commands).toContain("/model");
   expect(commands).toContain("/mcp");
+  expect(commands).toContain("/mcp catalog");
   expect(commands).toContain("/review");
   expect(commands).toContain("/checkpoint");
   expect(commands).toContain("/edit");

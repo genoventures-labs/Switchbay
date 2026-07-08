@@ -12,6 +12,7 @@ import { describeEngineBay, loadEngineBayInventory, syncEngineBayRepo } from "./
 import { describeToolbox, loadToolboxInventory, readToolboxSkill } from "./src/toolbox/hub";
 import { describeMemory, listMemoryNotes, readMemoryFacts, refreshMemory } from "./src/memory/store";
 import { createDefaultLmStudioMcpConfig, describeLmStudioMcpConfig, loadLmStudioMcpConfig, saveLmStudioMcpConfig } from "./src/runtime/lmstudio-mcp-config";
+import { describeTrustedMcpCatalog } from "./src/runtime/mcp-catalog";
 import { ANSI_COLORS as CLR } from "./src/tui/theme";
 
 // Ensure config is initialized on first boot
@@ -49,6 +50,7 @@ Usage:
   switchbay memory facts             List structured memory facts
   switchbay mcp                      Show LM Studio MCP lane config
   switchbay mcp init                 Create .switchbay/lmstudio.mcp.json
+  switchbay mcp catalog              List trusted MCP config options
 
 Options:
   -s, --surface <type>   Surface context (default: dev)
@@ -238,13 +240,17 @@ async function runMemoryCommand(action: "status" | "refresh" | "list" | "facts")
   }
 }
 
-async function runMcpCommand(action: "status" | "init") {
+async function runMcpCommand(action: "status" | "init" | "catalog") {
   try {
     const cwd = process.cwd();
     if (action === "init") {
       const path = await saveLmStudioMcpConfig(createDefaultLmStudioMcpConfig(), cwd);
       console.log(`Created LM Studio MCP config at ${path}`);
       console.log("Edit it to match the MCP servers installed in LM Studio, then run `switchbay --lane mcp` or `/lane mcp`.");
+      return;
+    }
+    if (action === "catalog") {
+      console.log(`Trusted MCP Catalog\n\n${describeTrustedMcpCatalog()}`);
       return;
     }
 

@@ -166,7 +166,7 @@ test("generateLmStudioMcpConfig produces a workspace MCP config draft", async ()
     purpose: "Let local models use browser tools.",
     servers: "playwright",
     integrations: "mcp/playwright",
-    notes: "Use my LAN host.",
+    notes: "Use http://192.168.1.50:1234.",
   });
 
   expect(draft.id).toBe("lmstudio-mcp");
@@ -174,6 +174,18 @@ test("generateLmStudioMcpConfig produces a workspace MCP config draft", async ()
   const parsed = JSON.parse(draft.content);
   expect(parsed.integrations).toEqual(["mcp/playwright"]);
   expect(parsed.nativeBase).toBe("http://192.168.1.50:1234/api/v1");
+});
+
+test("generateLmStudioMcpConfig refuses unknown MCP servers", async () => {
+  const { client } = createMockClient([]);
+
+  await expect(generateLmStudioMcpConfig(client, "dev", {
+    name: "Mystery MCP",
+    purpose: "Use a custom imaginary accounting server.",
+    servers: "dragon-saddle",
+    integrations: "mcp/dragon-saddle",
+    notes: "",
+  })).rejects.toThrow("Switchbay will not invent MCP server ids");
 });
 
 test("tool fallback returns the first useful tool body", () => {

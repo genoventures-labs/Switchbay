@@ -107,7 +107,9 @@ Then create or tune `.switchbay/lmstudio.mcp.json`:
 
 Add only MCP ids that actually exist in LM Studio, such as `"mcp/playwright"` after Playwright is installed/enabled in LM Studio's `mcp.json`.
 
-Inside the TUI, use `/lane` to cycle Cloud/LM Studio/LM Studio MCP, `/lane mcp` to jump straight to the MCP lane, and `/model` to open the model drawer. Cloud models use built-in OpenAI/Anthropic presets; LM Studio models are fetched from `SWITCHBAY_LMSTUDIO_BASE`. Use `/mcp init` for an empty starter config or `/create-mcp` for the conversational MCP config builder. LM Studio still needs the MCP servers installed/enabled in its own app settings; Switchbay requests those servers through the native LM Studio API.
+Inside the TUI, use `/lane` to cycle Cloud/LM Studio/LM Studio MCP, `/lane mcp` to jump straight to the MCP lane, and `/model` to open the model drawer. Cloud models use built-in OpenAI/Anthropic presets; LM Studio models are fetched from `SWITCHBAY_LMSTUDIO_BASE`. Use `/mcp init` for an empty starter config, `/mcp catalog` to list trusted MCP options, or `/create-mcp` for the conversational MCP config builder. LM Studio still needs the MCP servers installed/enabled in its own app settings; Switchbay requests those servers through the native LM Studio API.
+
+Bay only creates MCP configs from Switchbay's trusted catalog: Playwright, filesystem, GitHub, memory, fetch, sequential-thinking, and Postgres. If a request is not in that catalog, Bay refuses to invent a server id and tells you how to proceed manually.
 
 Per command:
 
@@ -157,6 +159,7 @@ switchbay toolbox list
 switchbay memory refresh
 switchbay mcp status
 switchbay mcp init
+switchbay mcp catalog
 ```
 
 ## Slash Commands
@@ -196,6 +199,7 @@ Inside the TUI:
 /creative          Show the built-in Creative Engine lane
 /toolbox           Show or sync reusable agent skills
 /mcp               Show or initialize LM Studio MCP config
+/mcp catalog       List trusted MCP config options
 ```
 
 ## Workspace Files

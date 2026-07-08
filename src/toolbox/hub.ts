@@ -4,6 +4,7 @@ import fs from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { workspaceStorageDir } from "../config/paths";
 import { runCommand } from "../tools/shell";
+import { pluginAssetPaths } from "../plugins/registry";
 
 export const DEFAULT_TOOLBOX_REPO = "https://github.com/genoventures-labs/Engine-Toolboxes.git";
 
@@ -16,7 +17,7 @@ export type ToolboxSkill = {
   tags: string[];
   triggers: string[];
   path: string;
-  source: "builtin" | "synced" | "workspace" | "global";
+  source: "builtin" | "synced" | "workspace" | "global" | "plugin";
   body: string;
 };
 
@@ -65,15 +66,16 @@ export async function loadToolboxInventory(cwd = process.cwd()): Promise<Toolbox
   const exists = existsSync(cachePath);
   const builtinPath = builtinToolboxPath();
   const workspacePath = path.join(workspaceStorageDir(cwd), "toolbox");
-  const [builtinSkills, syncedSkills, workspaceSkills, templates, head] = await Promise.all([
+  const [builtinSkills, syncedSkills, workspaceSkills, pluginSkills, templates, head] = await Promise.all([
     loadSkillsFromRoot(builtinPath, "builtin"),
     exists ? loadSkillsFromRoot(cachePath, "synced") : Promise.resolve([]),
     loadSkillsFromRoot(workspacePath, "workspace"),
+    loadPluginSkills(cwd),
     exists ? findRelativeFiles(cachePath, isTemplateFile) : Promise.resolve([]),
     exists ? readHead(cachePath) : Promise.resolve(null),
   ]);
 
-  const merged = mergeSkills([...builtinSkills, ...syncedSkills, ...workspaceSkills]);
+  const merged = mergeSkills([...builtinSkills, ...syncedSkills, ...workspaceSkills, ...pluginSkills]);
   return {
     path: cachePath,
     repo: toolboxRepoUrl(),
@@ -141,6 +143,20 @@ async function loadSkillsFromRoot(root: string, source: ToolboxSkill["source"]):
       skills.push(parseSkillMarkdown(content, file, source));
     } catch {
       // Skip malformed or unreadable skill files.
+    }
+  }
+  return skills;
+}
+
+async function loadPluginSkills(cwd: string): Promise<ToolboxSkill[]> {
+  const files = await pluginAssetPaths("skills", cwd);
+  const skills: ToolboxSkill[] = [];
+  for (const file of files) {
+    try {
+      const content = await fs.readFile(file, "utf-8");
+      skills.push(parseSkillMarkdown(content, file, "plugin"));
+    } catch {
+      // Skip malformed or unreadable plugin skills.
     }
   }
   return skills;

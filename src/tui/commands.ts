@@ -1,5 +1,5 @@
 export type SlashCommand = {
-  category: "session" | "context" | "safety" | "planning" | "agents" | "engines" | "skills" | "toolbox" | "runtime";
+  category: "session" | "context" | "safety" | "planning" | "agents" | "engines" | "skills" | "toolbox" | "plugins" | "runtime";
   command: string;
   description: string;
   example: string;
@@ -341,6 +341,24 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     command: "/create-skill",
     description: "Open the guided skill markdown wizard.",
     example: "/create-skill",
+  },
+  {
+    category: "plugins",
+    command: "/plugins",
+    description: "Show installed workspace plugins that bundle agents, skills, engines, knowledge, or MCP configs.",
+    example: "/plugins",
+  },
+  {
+    category: "plugins",
+    command: "/plugins inspect",
+    description: "Inspect a workspace plugin manifest.",
+    example: "/plugins inspect gumroad-ops",
+  },
+  {
+    category: "plugins",
+    command: "/create-plugin",
+    description: "Open the guided Switchbay plugin manifest wizard.",
+    example: "/create-plugin",
   },
   {
     category: "agents",

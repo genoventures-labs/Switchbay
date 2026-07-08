@@ -16,6 +16,7 @@ import { describeLatestTrace, latestTraceExportPath, saveTraceRecord } from "./s
 import { createDefaultLmStudioMcpConfig, describeLmStudioMcpConfig, loadLmStudioMcpConfig, saveLmStudioMcpConfig } from "./src/runtime/lmstudio-mcp-config";
 import { describeTrustedMcpCatalog } from "./src/runtime/mcp-catalog";
 import { ANSI_COLORS as CLR } from "./src/tui/theme";
+import { describePlugins, loadPluginInventory, readPlugin } from "./src/plugins/registry";
 
 // Ensure config is initialized on first boot
 loadSwitchbayConfig();
@@ -46,6 +47,9 @@ Usage:
   switchbay skills list              List available skills
   switchbay skills templates         List cached skill templates
   switchbay skills read <id>         Print a skill
+  switchbay plugins                  Show workspace plugin status
+  switchbay plugins list             List installed workspace plugins
+  switchbay plugins inspect <id>     Print a plugin manifest and assets
   switchbay memory                   Show workspace memory status
   switchbay memory refresh           Refresh operational memory
   switchbay memory list              List memory notes
@@ -79,6 +83,11 @@ Options:
 
   if (options.subcommand === "skills" || options.subcommand === "toolbox") {
     await runToolboxCommand(options.toolboxAction, options.toolboxSkill, options.subcommand);
+    return;
+  }
+
+  if (options.subcommand === "plugins") {
+    await runPluginCommand(options.pluginAction ?? "status", options.pluginId ?? null);
     return;
   }
 
@@ -233,6 +242,38 @@ async function runToolboxCommand(
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`${command}: ${msg}`);
+    process.exit(1);
+  }
+}
+
+async function runPluginCommand(action: "status" | "list" | "inspect", pluginId: string | null) {
+  try {
+    if (action === "list") {
+      const inventory = await loadPluginInventory();
+      console.log(inventory.plugins.length
+        ? inventory.plugins.map((plugin) => `${plugin.manifest.id} - ${plugin.manifest.name}: ${plugin.manifest.description}`).join("\n")
+        : "No plugins installed. Create one with `/create-plugin` in the TUI.");
+      return;
+    }
+
+    if (action === "inspect") {
+      if (!pluginId) {
+        console.error("switchbay plugins: inspect requires a plugin id.");
+        process.exit(1);
+      }
+      const plugin = await readPlugin(pluginId);
+      if (!plugin) {
+        console.error(`switchbay plugins: plugin not found: ${pluginId}`);
+        process.exit(1);
+      }
+      console.log(JSON.stringify(plugin.manifest, null, 2));
+      return;
+    }
+
+    console.log(await describePlugins());
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`switchbay plugins: ${msg}`);
     process.exit(1);
   }
 }

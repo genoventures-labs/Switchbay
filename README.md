@@ -6,6 +6,7 @@
 [![Model lanes](https://img.shields.io/badge/lanes-cloud%20%7C%20local%20%7C%20MCP-16a34a)](#model-lanes)
 [![Engine Bay](https://img.shields.io/badge/Engine%20Bay-GitHub%20sync-7c3aed)](#engine-bay)
 [![Skills](https://img.shields.io/badge/Skills-agent%20methods-0f766e)](#skills)
+[![Plugins](https://img.shields.io/badge/Plugins-local%20bundles-11a79b)](#plugins)
 [![License](https://img.shields.io/badge/license-MIT-0f766e)](#license)
 
 **Switchbay** is a terminal-first AI coding workbench for developers who want cloud intelligence, local control, and provider independence without rebuilding their workflow every time the model stack changes.
@@ -31,6 +32,7 @@ Switchbay gives you one fast shell for everyday agentic development:
 - Enable Switchbay's MCP bridge for cloud or local models that should use configured tool workflows.
 - Add swappable engines from local manifests or the GitHub-backed Engine Bay.
 - Give agents reusable skills for review, debugging, planning, testing, API checks, UI polish, and releases.
+- Bundle related agents, skills, engines, knowledge notes, and MCP configs as local workspace plugins.
 
 Switchbay is built for solo builders, senior developers, technical founders, and internal-tool people who live in the terminal and want the useful parts of AI coding close to the repo.
 
@@ -45,6 +47,7 @@ Most AI coding tools make one model, hosted service, or private backend feel lik
 - Keep the workbench useful even if a provider, hosted API, VPS, or local model setup changes.
 - Keep extensions portable through Engine Bay instead of baking every workflow into the core app.
 - Keep reusable agent methods portable through skills instead of hiding them in one-off prompts.
+- Keep project-specific capability packs simple with plugin manifests instead of a heavyweight plugin runtime.
 
 ## Install
 
@@ -175,6 +178,7 @@ switchbay version
 switchbay update
 switchbay engines sync
 switchbay skills list
+switchbay plugins
 switchbay memory refresh
 switchbay knowledge refresh
 switchbay knowledge search "approval gates"
@@ -220,6 +224,8 @@ Inside the TUI:
 /agents            Browse available agents
 /create-agent      Create a custom local agent
 /create-skill      Create a custom skill
+/plugins           Show installed workspace plugins
+/create-plugin     Create a local plugin manifest
 /create-mcp        Create a custom Switchbay MCP bridge config
 /edit              Open the file edit picker
 /engines           List registered engines
@@ -245,6 +251,7 @@ Switchbay looks for:
 - `.switchbay/pins.json`: pinned files and repo notes.
 - `.switchbay/agents/*.md`: custom local specialist agents.
 - `.switchbay/engines/*.engine.json`: workspace engine manifests.
+- `.switchbay/plugins/*/plugin.json`: local plugin manifests that can bundle agents, skills, engines, knowledge, and MCP configs.
 - `.switchbay/rules/*.rule.md`: workspace-specific operating rules.
 - `.switchbay/quickstarts/*.md`: workspace-specific quick-start guides.
 - `~/.switchbay/rules/*.rule.md`: user operating rules shared across repos.
@@ -525,6 +532,55 @@ Skills tools exposed to the model:
 - `list_toolbox_skills`
 - `read_toolbox_skill`
 - `sync_toolbox`
+
+## Plugins
+
+Plugins are Switchbay's local bundle layer. A plugin is a plain `plugin.json` manifest under `.switchbay/plugins/<id>/` that can point to real assets inside that same plugin folder.
+
+Plugins can include:
+
+- `agents/*.md`
+- `skills/*.skill.md`
+- `engines/*.engine.json`
+- `knowledge/*.md`, `knowledge/*.json`, or `knowledge/*.txt`
+- `mcp/*.json`
+
+CLI:
+
+```bash
+switchbay plugins
+switchbay plugins list
+switchbay plugins inspect repo-ops
+```
+
+TUI:
+
+```text
+/plugins
+/plugins list
+/plugins inspect repo-ops
+/plugins create
+/create-plugin
+```
+
+Plugin manifest:
+
+```json
+{
+  "id": "repo-ops",
+  "name": "Repo Ops",
+  "description": "Repo hygiene agents, skills, and tools.",
+  "version": "0.1.0",
+  "enabled": true,
+  "agents": ["agents/repo-steward.md"],
+  "skills": ["skills/repo-check.skill.md"],
+  "engines": ["engines/repo-tools.engine.json"],
+  "knowledge": ["knowledge/quickstart.md"],
+  "mcp": ["mcp/browser-tools.json"]
+}
+```
+
+Switchbay validates plugin paths before loading them. Assets must be relative paths inside known plugin folders; absolute paths and `..` traversal are rejected. Plugin agents, skills, and engines are merged into the normal drawers and tool inventories when the plugin is enabled.
 
 ## Web Engine
 

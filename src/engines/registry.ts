@@ -2,6 +2,7 @@ import path from "node:path";
 import fs from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { engineBayManifestPaths } from "./hub";
+import { pluginAssetPaths } from "../plugins/registry";
 
 export type EngineToolParam = {
   type: string;
@@ -218,6 +219,7 @@ async function discoverEngineManifestPaths(cwd: string): Promise<string[]> {
     }
   }
   paths.push(...await engineBayManifestPaths());
+  paths.push(...await pluginAssetPaths("engines", cwd));
   return [...new Set(paths)];
 }
 

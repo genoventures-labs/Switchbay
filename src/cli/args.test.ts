@@ -49,6 +49,21 @@ test("parses Skills helper commands and keeps toolbox alias", () => {
   expect(toolbox.toolboxAction).toBe("list");
 });
 
+test("parses Plugins helper commands", () => {
+  const status = parseCliArgs(["bun", "index.tsx", "plugins"]);
+  expect(status.subcommand).toBe("plugins");
+  expect(status.pluginAction).toBe("status");
+
+  const list = parseCliArgs(["bun", "index.tsx", "plugins", "list"]);
+  expect(list.subcommand).toBe("plugins");
+  expect(list.pluginAction).toBe("list");
+
+  const inspect = parseCliArgs(["bun", "index.tsx", "plugins", "inspect", "repo-ops"]);
+  expect(inspect.subcommand).toBe("plugins");
+  expect(inspect.pluginAction).toBe("inspect");
+  expect(inspect.pluginId).toBe("repo-ops");
+});
+
 test("parses Trace helper commands", () => {
   const last = parseCliArgs(["bun", "index.tsx", "trace"]);
   expect(last.subcommand).toBe("trace");

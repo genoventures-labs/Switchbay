@@ -12,6 +12,7 @@ import {
   extractAssistantText,
   generateEngineManifest,
   generateLmStudioMcpConfig,
+  generatePluginDefinition,
   generateRuleDefinition,
   generateSkillDefinition,
   synthesizeAssistantFallback,
@@ -148,6 +149,25 @@ triggers: [launch, release]
   expect(draft.id).toBe("launch-check");
   expect(draft.savePath).toContain(".switchbay/toolbox/skills/launch-check.skill.md");
   expect(draft.content).toContain("id: launch-check");
+});
+
+test("generatePluginDefinition produces a bounded workspace plugin manifest", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "switchbay-plugin-draft-"));
+
+  const draft = await generatePluginDefinition({
+    name: "Repo Ops",
+    purpose: "Bundle repo hygiene agents and skills.",
+    contents: "agents, skills, engines",
+    notes: "Local workspace only.",
+  }, cwd);
+
+  const manifest = JSON.parse(draft.content);
+  expect(draft.id).toBe("repo-ops");
+  expect(draft.savePath).toContain(".switchbay/plugins/repo-ops/plugin.json");
+  expect(manifest.enabled).toBe(true);
+  expect(manifest.agents).toEqual([]);
+  expect(manifest.skills).toEqual([]);
+  expect(manifest.engines).toEqual([]);
 });
 
 test("generateRuleDefinition produces a user rule draft", async () => {
@@ -931,6 +951,10 @@ test("conversational creation requests open builders", async () => {
   const skill = await tryLocalCommand("create a release checklist skill", baseOptions);
   expect(skill.handled).toBe(true);
   expect(skill.openCreateSkill).toBe(true);
+
+  const plugin = await tryLocalCommand("Bay, create a plugin for repo ops", baseOptions);
+  expect(plugin.handled).toBe(true);
+  expect(plugin.openCreatePlugin).toBe(true);
 
   const normalAsk = await tryLocalCommand("explain how this engine works", baseOptions);
   expect(normalAsk.handled).toBe(false);

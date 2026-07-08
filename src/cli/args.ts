@@ -10,10 +10,12 @@ export type CliOptions = {
   resume: string | boolean; // string (id/index) or true (latest)
   newSession: boolean;
   purge: string | null;
-  subcommand: "run" | "update" | "version" | "help" | "engines" | "skills" | "toolbox" | "memory" | "knowledge" | "trace" | "mcp";
+  subcommand: "run" | "update" | "version" | "help" | "engines" | "skills" | "toolbox" | "plugins" | "memory" | "knowledge" | "trace" | "mcp";
   engineAction: "status" | "sync" | "list" | "templates";
   toolboxAction: "status" | "sync" | "list" | "templates" | "read";
   toolboxSkill: string | null;
+  pluginAction?: "status" | "list" | "inspect";
+  pluginId?: string | null;
   memoryAction: "status" | "refresh" | "list" | "facts";
   knowledgeAction: "status" | "refresh" | "search";
   knowledgeQuery: string | null;
@@ -101,6 +103,33 @@ export function parseCliArgs(argv: string[]): CliOptions {
         engineAction: "status",
         toolboxAction,
         toolboxSkill: toolboxAction === "read" ? args[i + 2] ?? null : null,
+        memoryAction: "status",
+        knowledgeAction: "status",
+        knowledgeQuery: null,
+        traceAction: "last",
+        mcpAction: "status",
+      };
+    } else if (arg === "plugins") {
+      const action = args[i + 1];
+      const pluginAction = action === "list" || action === "inspect" || action === "status"
+        ? action
+        : "status";
+      return {
+        surface,
+        profile,
+        mode,
+        lane,
+        initialQuery: "",
+        hop,
+        resume,
+        newSession,
+        purge,
+        subcommand: "plugins",
+        engineAction: "status",
+        toolboxAction: "status",
+        toolboxSkill: null,
+        pluginAction,
+        pluginId: pluginAction === "inspect" ? args[i + 2] ?? null : null,
         memoryAction: "status",
         knowledgeAction: "status",
         knowledgeQuery: null,

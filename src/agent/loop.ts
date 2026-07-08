@@ -43,6 +43,7 @@ import { listProjectFiles } from "../tools/files";
 import { runCommand } from "../tools/shell";
 import { createDefaultLmStudioMcpConfig, lmStudioMcpConfigPath } from "../runtime/lmstudio-mcp-config";
 import { describeTrustedMcpCatalog, matchTrustedMcpCatalog, TRUSTED_MCP_CATALOG } from "../runtime/mcp-catalog";
+import { normalizePluginManifest, pluginManifestTemplate } from "../plugins/registry";
 
 export async function generatePlan(
   client: ChatRuntimeClient,
@@ -101,6 +102,13 @@ export type PendingEngineDraft = {
 };
 
 export type PendingSkillDraft = {
+  id: string;
+  name: string;
+  content: string;
+  savePath: string;
+};
+
+export type PendingPluginDraft = {
   id: string;
   name: string;
   content: string;
@@ -238,6 +246,29 @@ Brief:
   if (!content) throw new Error("The model returned no skill content.");
   const savePath = join(workspaceStorageDir(process.cwd()), "toolbox", "skills", `${id}.skill.md`);
   return { id, name: answers.name, content: `${content}\n`, savePath };
+}
+
+export async function generatePluginDefinition(
+  answers: { name: string; purpose: string; contents: string; notes: string },
+  cwd = process.cwd(),
+): Promise<PendingPluginDraft> {
+  const id = answers.name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 40);
+  if (!id) throw new Error("Plugin name needs at least one letter or number.");
+
+  const description = [
+    answers.purpose.trim(),
+    answers.contents.trim() ? `Intended contents: ${answers.contents.trim()}` : "",
+    answers.notes.trim() ? `Notes: ${answers.notes.trim()}` : "",
+  ].filter(Boolean).join(" ");
+
+  const manifest = normalizePluginManifest(pluginManifestTemplate(id, answers.name.trim(), description));
+  const content = `${JSON.stringify(manifest, null, 2)}\n`;
+  const savePath = join(workspaceStorageDir(cwd), "plugins", manifest.id, "plugin.json");
+  return { id: manifest.id, name: manifest.name, content, savePath };
 }
 
 export async function generateRuleDefinition(

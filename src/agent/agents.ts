@@ -2,6 +2,7 @@ import path from "node:path";
 import fs from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
 import { workspaceStorageDir } from "../config/paths";
+import { pluginAssetPaths } from "../plugins/registry";
 
 export type BuiltinAgent = {
   id: string;
@@ -146,7 +147,33 @@ export async function loadAllAgents(): Promise<Agent[]> {
     } catch { /* dir doesn't exist */ }
   }
 
+  for (const agentPath of await pluginAssetPaths("agents")) {
+    try {
+      const content = await fs.readFile(agentPath, "utf-8");
+      const idFromFile = path.basename(agentPath).replace(/\.md$/, "");
+      if (agents.some(a => a.id === idFromFile)) continue;
+      agents.push(parseCustomAgent(content, idFromFile));
+    } catch {
+      // Skip malformed plugin agents.
+    }
+  }
+
   return agents;
+}
+
+function parseCustomAgent(content: string, idFromFile: string): Agent {
+  const lines = content.split("\n");
+  const nameLine = lines[0]?.startsWith("#") ? lines[0].replace(/^#+\s*/, "").trim() : idFromFile;
+  const descLine = lines.find(l => l.startsWith("description:"))?.replace("description:", "").trim() ?? "";
+  const prompt = lines.filter(l => !l.startsWith("#") && !l.startsWith("description:")).join("\n").trim();
+  return {
+    id: idFromFile,
+    name: nameLine,
+    emoji: "🤖",
+    description: descLine || `Custom agent: ${nameLine}`,
+    prompt,
+    custom: true,
+  };
 }
 
 export function findAgent(id: string, agents: Agent[]): Agent | undefined {

@@ -38,6 +38,7 @@ import {
   searchKnowledgeIndex,
 } from "../knowledge/store";
 import { describeLatestTrace, latestTraceExportPath } from "../trace/store";
+import { describePlugins, readPlugin } from "../plugins/registry";
 
 export type LocalCommandResult = {
   handled: boolean;
@@ -54,6 +55,7 @@ export type LocalCommandResult = {
   openCreateMcp?: boolean;
   openCreateRule?: boolean;
   openCreateSkill?: boolean;
+  openCreatePlugin?: boolean;
   openEnginePicker?: boolean;
   openSkillPicker?: boolean;
   planGoal?: string;
@@ -94,6 +96,7 @@ export async function tryLocalCommand(
     if (creationIntent === "mcp") return { handled: true, openCreateMcp: true };
     if (creationIntent === "rule") return { handled: true, openCreateRule: true };
     if (creationIntent === "skill") return { handled: true, openCreateSkill: true };
+    if (creationIntent === "plugin") return { handled: true, openCreatePlugin: true };
     return { handled: false };
   }
 
@@ -158,6 +161,10 @@ export async function tryLocalCommand(
     return { handled: true, openCreateSkill: true };
   }
 
+  if (trimmed === "/create-plugin") {
+    return { handled: true, openCreatePlugin: true };
+  }
+
   if (trimmed === "/create-rule") {
     return { handled: true, openCreateRule: true };
   }
@@ -212,6 +219,10 @@ export async function tryLocalCommand(
 
   if (trimmed.startsWith("/skills ")) {
     return handleToolboxCommand(`/toolbox${trimmed.slice("/skills".length)}`, "/skills");
+  }
+
+  if (trimmed === "/plugins" || trimmed.startsWith("/plugins ")) {
+    return handlePluginsCommand(trimmed, options);
   }
 
   if (trimmed === "/creative") {
@@ -403,7 +414,7 @@ async function handleKnowledgeSearchCommand(
   }
 }
 
-function parseConversationalCreationIntent(input: string): "agent" | "engine" | "mcp" | "rule" | "skill" | null {
+function parseConversationalCreationIntent(input: string): "agent" | "engine" | "mcp" | "rule" | "skill" | "plugin" | null {
   const normalized = input
     .toLowerCase()
     .replace(/^[,\s]*(hey|yo|ok|okay)?\s*(bay|switchbay)[,\s:;-]*/i, "")
@@ -417,8 +428,38 @@ function parseConversationalCreationIntent(input: string): "agent" | "engine" | 
   if (/\b(mcp|mcp config|mcp lane|lm studio mcp|lmstudio mcp|tool server|tool servers)\b/.test(normalized)) return "mcp";
   if (/\b(engine|engine builder|engine manifest|tool engine)\b/.test(normalized)) return "engine";
   if (/\b(rule|rules|operating rule|behavior rule|always remember to|never do|must always|must never)\b/.test(normalized)) return "rule";
+  if (/\b(plugin|plugins|bundle|crate|pack)\b/.test(normalized)) return "plugin";
   if (/\b(skill|toolbox skill|workflow|checklist)\b/.test(normalized)) return "skill";
   return null;
+}
+
+async function handlePluginsCommand(
+  trimmed: string,
+  options: LocalCommandOptions,
+): Promise<LocalCommandResult> {
+  const cwd = options.workspace?.cwd ?? process.cwd();
+  const args = trimmed.slice("/plugins".length).trim();
+  const [action, ...rest] = args.split(/\s+/).filter(Boolean);
+
+  try {
+    if (action === "create") return { handled: true, openCreatePlugin: true };
+    if (action === "inspect") {
+      const id = rest.join(" ");
+      if (!id) return { handled: true, assistantMessage: "Usage: `/plugins inspect <id>`" };
+      const plugin = await readPlugin(id, cwd);
+      if (!plugin) return { handled: true, assistantMessage: `No plugin found for \`${id}\`.` };
+      return {
+        handled: true,
+        assistantMessage: `**${plugin.manifest.name}** (${plugin.manifest.id})\n\n\`\`\`json\n${JSON.stringify(plugin.manifest, null, 2)}\n\`\`\``,
+      };
+    }
+    if (action && action !== "list" && action !== "status") {
+      return { handled: true, assistantMessage: "Usage: `/plugins [list|status|inspect <id>|create]`" };
+    }
+    return { handled: true, assistantMessage: await describePlugins(cwd) };
+  } catch (e: any) {
+    return { handled: true, assistantMessage: `Plugins failed: ${e.message}` };
+  }
 }
 
 async function handleMcpCommand(

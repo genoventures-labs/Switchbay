@@ -62,6 +62,11 @@ export async function loadEngineRegistry(cwd = process.cwd()): Promise<EngineReg
     engines.set(creativeEngine.id, creativeEngine);
   }
 
+  const webEngine = createWebEngine(cwd);
+  if (!engines.has(webEngine.id)) {
+    engines.set(webEngine.id, webEngine);
+  }
+
   const gumOpsEngine = await discoverGumOpsEngine(cwd);
   if (gumOpsEngine && !engines.has(gumOpsEngine.id)) {
     engines.set(gumOpsEngine.id, gumOpsEngine);
@@ -334,6 +339,40 @@ function createCreativeEngine(cwd: string): EngineManifest {
         command: command("read-voice", "--voice {{voice}}"),
         required: ["voice"],
         parameters: { voice: { type: "string", description: "Voice file name without .md." } },
+      },
+    ],
+  };
+}
+
+function createWebEngine(cwd: string): EngineManifest {
+  const scriptPath = path.join(import.meta.dir, "web-engine.ts");
+  const command = (tool: string) => `bun ${shellQuote(scriptPath)} ${tool} --url {{url}}`;
+  return {
+    id: "web",
+    name: "Web Engine",
+    description: "Guarded explicit-URL web reads for current docs, release notes, pages, and source links.",
+    cwd,
+    tools: [
+      {
+        name: "web_fetch",
+        description: "Fetch an explicit public HTTP(S) URL and return readable text with response metadata.",
+        command: command("fetch"),
+        required: ["url"],
+        parameters: { url: { type: "string", description: "Public http or https URL to read." } },
+      },
+      {
+        name: "web_headers",
+        description: "Fetch response headers for an explicit public HTTP(S) URL.",
+        command: command("headers"),
+        required: ["url"],
+        parameters: { url: { type: "string", description: "Public http or https URL to inspect." } },
+      },
+      {
+        name: "web_links",
+        description: "Extract normalized links from an explicit public HTTP(S) URL.",
+        command: command("links"),
+        required: ["url"],
+        parameters: { url: { type: "string", description: "Public http or https URL to scan for links." } },
       },
     ],
   };

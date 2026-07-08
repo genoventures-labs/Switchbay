@@ -236,6 +236,12 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     category: "engines",
+    command: "/web",
+    description: "Show guarded Web Engine tools for explicit public URL reads.",
+    example: "/web",
+  },
+  {
+    category: "engines",
     command: "/create-engine",
     description: "Open the guided custom-engine manifest wizard.",
     example: "/create-engine",

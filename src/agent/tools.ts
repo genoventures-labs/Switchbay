@@ -450,6 +450,56 @@ export const AGENT_TOOLS: ToolDefinition[] = [
   {
     type: "function",
     function: {
+      name: "web_tools",
+      description: "List guarded Web Engine tools for reading explicit public URLs.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "web_fetch",
+      description: "Use the guarded Web Engine to fetch an explicit public URL and return readable text with metadata. Cite the URL when using the result.",
+      parameters: {
+        type: "object",
+        properties: {
+          url: { type: "string", description: "Public http or https URL to read." },
+        },
+        required: ["url"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "web_headers",
+      description: "Use the guarded Web Engine to inspect response headers for an explicit public URL.",
+      parameters: {
+        type: "object",
+        properties: {
+          url: { type: "string", description: "Public http or https URL to inspect." },
+        },
+        required: ["url"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "web_links",
+      description: "Use the guarded Web Engine to extract links from an explicit public URL.",
+      parameters: {
+        type: "object",
+        properties: {
+          url: { type: "string", description: "Public http or https URL to scan." },
+        },
+        required: ["url"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "creative_packet",
       description: "Build and save a complete creative packet: brief, positioning, names, hooks, draft copy, and content calendar.",
       parameters: {
@@ -1237,6 +1287,36 @@ export async function executeToolCall(
         if (!engineId) throw new Error("run_engine_tool requires an engine_id.");
         if (!toolName) throw new Error("run_engine_tool requires a tool_name.");
         return executeEngineTool(name, engineId, toolName, parseEngineArgs(args.args_json), cwd);
+      }
+
+      case "web_tools": {
+        const registry = await loadEngineRegistry(cwd);
+        const web = registry.engines.find((entry) => entry.id === "web");
+        const body = web?.tools.map((tool) => `- ${tool.name}: ${tool.description}`).join("\n") ?? "No web tools found.";
+        return {
+          tool: name,
+          ok: Boolean(web),
+          summary: "Listed Web Engine tools",
+          body,
+        };
+      }
+
+      case "web_fetch": {
+        const url = String(args.url || "").trim();
+        if (!url) throw new Error("web_fetch requires a url.");
+        return executeEngineTool(name, "web", "web_fetch", { url }, cwd);
+      }
+
+      case "web_headers": {
+        const url = String(args.url || "").trim();
+        if (!url) throw new Error("web_headers requires a url.");
+        return executeEngineTool(name, "web", "web_headers", { url }, cwd);
+      }
+
+      case "web_links": {
+        const url = String(args.url || "").trim();
+        if (!url) throw new Error("web_links requires a url.");
+        return executeEngineTool(name, "web", "web_links", { url }, cwd);
       }
 
       case "creative_tools": {

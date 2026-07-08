@@ -181,6 +181,10 @@ export async function tryLocalCommand(
     return handleCreativeCommand(options);
   }
 
+  if (trimmed === "/web") {
+    return handleWebCommand(options);
+  }
+
   if (trimmed === "/agents" || trimmed === "/agent") {
     return { handled: true, openAgentPicker: true };
   }
@@ -470,6 +474,36 @@ async function handleCreativeCommand(options: LocalCommandOptions): Promise<Loca
       "- `.switchbay/creative/voices/`",
       "",
       "Ask for a creative packet when you want the full brief, positioning, names, hooks, draft, and calendar bundle.",
+    ].join("\n"),
+  };
+}
+
+async function handleWebCommand(options: LocalCommandOptions): Promise<LocalCommandResult> {
+  const cwd = options.workspace?.cwd ?? process.cwd();
+  const registry = await loadEngineRegistry(cwd);
+  const web = registry.engines.find((engine) => engine.id === "web");
+  if (!web) {
+    return { handled: true, assistantMessage: "Web Engine is not available in this workspace." };
+  }
+
+  const tools = web.tools
+    .map((tool) => `- \`${tool.name}\` - ${tool.description}`)
+    .join("\n");
+  return {
+    handled: true,
+    assistantMessage: [
+      "**Web Engine**",
+      "",
+      web.description,
+      "",
+      tools,
+      "",
+      "Guardrails:",
+      "- explicit public `http`/`https` URLs only",
+      "- localhost, LAN, link-local, and private IP hosts are blocked by default",
+      "- fetched text is size-limited; Bay should cite URLs used for factual claims",
+      "",
+      "Use the `web-research` Toolbox skill for source-backed current-info work.",
     ].join("\n"),
   };
 }

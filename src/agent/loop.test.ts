@@ -652,6 +652,19 @@ test("creative packet alias writes a complete packet", async () => {
   expect(result.body).toContain("Saved: .switchbay/creative/packets/");
 });
 
+test("web engine is built in and blocks private hosts by default", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "switchbay-web-engine-"));
+
+  const listed = await executeToolCall("web_tools", {}, { cwd });
+  expect(listed.ok).toBe(true);
+  expect(listed.body).toContain("web_fetch");
+  expect(listed.body).toContain("web_headers");
+
+  const blocked = await executeToolCall("web_fetch", { url: "http://127.0.0.1" }, { cwd });
+  expect(blocked.ok).toBe(false);
+  expect(blocked.body).toContain("Blocked private or local host");
+});
+
 test("Thinkapse auto-discovery exposes local harness tools", async () => {
   const thinkapsePath = await mkdtemp(join(tmpdir(), "switchbay-thinkapse-"));
   const previous = Bun.env.SWITCHBAY_THINKAPSE_PATH;
@@ -801,6 +814,11 @@ test("engine slash commands describe registered engines and creative tools", asy
   expect(creative.handled).toBe(true);
   expect(creative.assistantMessage).toContain("**Creative Engine**");
   expect(creative.assistantMessage).toContain("creative_packet");
+
+  const web = await tryLocalCommand("/web", baseOptions);
+  expect(web.handled).toBe(true);
+  expect(web.assistantMessage).toContain("**Web Engine**");
+  expect(web.assistantMessage).toContain("web_fetch");
 });
 
 test("toolbox tools and slash command expose built-in skills", async () => {
@@ -808,6 +826,7 @@ test("toolbox tools and slash command expose built-in skills", async () => {
   expect(listed.ok).toBe(true);
   expect(listed.body).toContain("code-review-pass");
   expect(listed.body).toContain("release-readiness");
+  expect(listed.body).toContain("web-research");
 
   const read = await executeToolCall("read_toolbox_skill", { skill_id: "debugging-triage" }, { cwd: process.cwd() });
   expect(read.ok).toBe(true);

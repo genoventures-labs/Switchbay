@@ -353,6 +353,7 @@ Built-in skills include:
 - `release-readiness`
 - `test-strategy`
 - `ui-polish-pass`
+- `web-research`
 
 CLI:
 
@@ -424,6 +425,32 @@ Toolbox tools exposed to the model:
 - `list_toolbox_skills`
 - `read_toolbox_skill`
 - `sync_toolbox`
+
+## Web Engine
+
+Switchbay includes a built-in guarded `web` engine for narrow, explicit-URL reads when Bay needs current docs, release notes, source pages, or public references. It is intentionally smaller than a browser lane: it does not invent searches, automate websites, or read private/internal addresses by default.
+
+Web Engine tools:
+
+- `web_tools`
+- `web_fetch`
+- `web_headers`
+- `web_links`
+
+TUI:
+
+```text
+/web
+```
+
+Guardrails:
+
+- Only `http` and `https` URLs are allowed.
+- Localhost, LAN, link-local, and private IP hosts are blocked by default.
+- Responses are size-limited and converted to readable text where possible.
+- Bay should cite the URL when web-fetched facts affect an answer.
+
+For intentional internal testing, set `SWITCHBAY_WEB_ALLOW_PRIVATE=1` before launching Switchbay.
 
 ## Creative Engine
 

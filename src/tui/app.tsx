@@ -300,6 +300,14 @@ export function SwitchbayApp({
       return;
     }
 
+    if (composerMode === "create_agent" || composerMode === "create_engine" || composerMode === "create_mcp" || composerMode === "create_skill") {
+      if (key.escape) {
+        setComposerMode("default");
+        setQuerySync("");
+      }
+      return;
+    }
+
     if (shortcutDrawerVisible) {
         if (key.escape || key.return) {
             setComposerMode("default");
@@ -1724,7 +1732,7 @@ export function SwitchbayApp({
           visible={mentionPickerVisible}
         />
         <Composer
-          disabled={composerMode === "edit_intent" || composerMode === "create_engine" || composerMode === "create_mcp" || composerMode === "create_skill"}
+          disabled={composerMode === "edit_intent" || composerMode === "create_agent" || composerMode === "create_engine" || composerMode === "create_mcp" || composerMode === "create_skill"}
           initialQuery={initialQuery}
           pendingApprovalKind={
             pendingEngineDraft ? "engine_draft" :

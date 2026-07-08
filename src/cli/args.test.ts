@@ -23,6 +23,19 @@ test("parses MCP runtime lane aliases", () => {
   expect(parsed.initialQuery).toBe("hello");
 });
 
+test("parses one-shot query after lane option", () => {
+  const parsed = parseCliArgs([
+    "bun",
+    "index.tsx",
+    "--lane",
+    "cloud",
+    "Reply with one short sentence saying the cloud lane works.",
+  ]);
+  expect(parsed.subcommand).toBe("run");
+  expect(parsed.lane).toBe("cloud");
+  expect(parsed.initialQuery).toBe("Reply with one short sentence saying the cloud lane works.");
+});
+
 test("parses Workspace Knowledge helper commands", () => {
   const status = parseCliArgs(["bun", "index.tsx", "knowledge"]);
   expect(status.subcommand).toBe("knowledge");

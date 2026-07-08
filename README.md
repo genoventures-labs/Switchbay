@@ -203,6 +203,11 @@ Inside the TUI:
 /lane              Cycle Cloud and LM Studio model lanes
 /model             Pick a cloud preset or LM Studio model
 /init              Generate SWITCHBAY.md for this repo
+/workspace         Show the active workspace snapshot
+/workspace list    List known workspaces
+/workspace add     Whitelist a workspace path
+/workspace hop     Switch to a known workspace
+/hop               Alias for workspace switching
 /pin               Pin a file into future turn context
 /pins              List pinned files
 /remember          Save a workspace memory note

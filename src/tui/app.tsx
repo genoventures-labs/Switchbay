@@ -1301,6 +1301,9 @@ export function SwitchbayApp({
           label: localCommand.travel.label,
           workspace: localCommand.travel.workspace,
         });
+        void loadAllAgents().then((agents) => {
+          setAvailableAgents(agents);
+        });
       }
 
       // ── /plan ────────────────────────────────────────────────────────────
@@ -1521,7 +1524,7 @@ export function SwitchbayApp({
     try {
       const executedTurn = await executeTurn({
         client: runtimeClient,
-        cwd: process.cwd(),
+        cwd: workspace?.cwd ?? process.cwd(),
         sessionId: state.sessionId,
         surface,
         turn,
@@ -1556,6 +1559,9 @@ export function SwitchbayApp({
             toPath: toolExecution.travel.toPath,
             label: toolExecution.travel.label,
             workspace: toolExecution.travel.workspace,
+          });
+          void loadAllAgents().then((agents) => {
+            setAvailableAgents(agents);
           });
         }
 

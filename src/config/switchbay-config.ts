@@ -1,8 +1,11 @@
 import path from "node:path";
 import fs from "node:fs";
 import os from "node:os";
+import { userConfigPath } from "./paths";
 
-const CONFIG_PATH = path.join(os.homedir(), ".switchbay", "config.json");
+function configPath(): string {
+  return userConfigPath("config.json");
+}
 
 export type SwitchbayConfig = {
   /** Explicit list of whitelisted locations the switchbay can travel to. */
@@ -36,8 +39,9 @@ export function loadSwitchbayConfig(): SwitchbayConfig {
   if (_cached) return _cached;
 
   try {
-    if (fs.existsSync(CONFIG_PATH)) {
-      const raw = fs.readFileSync(CONFIG_PATH, "utf-8");
+    const target = configPath();
+    if (fs.existsSync(target)) {
+      const raw = fs.readFileSync(target, "utf-8");
       const parsed = JSON.parse(raw) as Partial<SwitchbayConfig>;
       _cached = {
         locations: Array.isArray(parsed.locations)
@@ -59,9 +63,10 @@ export function loadSwitchbayConfig(): SwitchbayConfig {
 }
 
 export function saveSwitchbayConfig(config: SwitchbayConfig): void {
-  const dir = path.dirname(CONFIG_PATH);
+  const target = configPath();
+  const dir = path.dirname(target);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), "utf-8");
+  fs.writeFileSync(target, JSON.stringify(config, null, 2), "utf-8");
   _cached = config;
 }
 

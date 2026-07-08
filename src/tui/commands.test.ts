@@ -26,6 +26,11 @@ test("command palette lists only implemented command families", () => {
   expect(commands).toContain("/quickstarts");
   expect(commands).toContain("/rules");
   expect(commands).toContain("/create-rule");
+  expect(commands).toContain("/workspace");
+  expect(commands).toContain("/workspace list");
+  expect(commands).toContain("/workspace add");
+  expect(commands).toContain("/workspace hop");
+  expect(commands).toContain("/hop");
   expect(commands).toContain("/engines");
   expect(commands).toContain("/engine-bay");
   expect(commands).toContain("/creative");
@@ -42,7 +47,6 @@ test("command palette lists only implemented command families", () => {
 
   expect(commands).not.toContain("/backend");
   expect(commands).not.toContain("/git-status");
-  expect(commands).not.toContain("/workspace");
   expect(commands).not.toContain("/repo-report");
 });
 
@@ -58,6 +62,10 @@ test("command palette searches commands, examples, descriptions, and categories"
   expect(getCommandMatches("/rule").map((item) => item.command)).toContain("/rules");
   expect(getCommandMatches("/rule").map((item) => item.command)).toContain("/create-rule");
   expect(getCommandMatches("/quick").map((item) => item.command)).toContain("/quickstarts");
+  expect(getCommandMatches("/workspace").map((item) => item.command)).toContain("/workspace");
+  expect(getCommandMatches("/workspace").map((item) => item.command)).toContain("/workspace list");
+  expect(getCommandMatches("/hop").map((item) => item.command)).toContain("/workspace hop");
+  expect(getCommandMatches("/hop").map((item) => item.command)).toContain("/hop");
   expect(getCommandMatches("/mcp").map((item) => item.command)).toContain("/mcp");
   expect(getCommandMatches("/mcp").map((item) => item.command)).toContain("/mcp on");
   expect(getCommandMatches("/cloud-mcp").map((item) => item.command)).toContain("/lane cloud-mcp");

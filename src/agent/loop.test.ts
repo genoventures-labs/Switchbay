@@ -6,6 +6,7 @@ import type { ChatRuntimeClient } from "../runtime/client";
 import type { ChatCompletionRequest, ChatCompletionResponse, ToolCall } from "../runtime/types";
 import { executeToolCall } from "./tools";
 import { refreshKnowledgeIndex } from "../knowledge/store";
+import { invalidateConfigCache } from "../config/switchbay-config";
 import {
   buildTurn,
   executeTurn,
@@ -959,6 +960,53 @@ test("conversational creation requests open builders", async () => {
 
   const normalAsk = await tryLocalCommand("explain how this engine works", baseOptions);
   expect(normalAsk.handled).toBe(false);
+});
+
+test("workspace slash commands show, add, and hop known workspaces", async () => {
+  const originalCwd = process.cwd();
+  const previousConfigDir = Bun.env.SWITCHBAY_CONFIG_DIR;
+  const configDir = await mkdtemp(join(tmpdir(), "switchbay-workspace-config-"));
+  const target = await mkdtemp(join(tmpdir(), "switchbay-workspace-target-"));
+  Bun.env.SWITCHBAY_CONFIG_DIR = configDir;
+  invalidateConfigCache();
+
+  const baseOptions = {
+    client: {} as any,
+    profile: "switchbay",
+    sessionId: "test-session",
+    surface: "dev",
+    workspace: {
+      cwd: originalCwd,
+      repoRoot: originalCwd,
+      branch: "main",
+      dirtyFiles: [],
+      recentFiles: [],
+      diff: { hasChanges: false, stat: "" },
+    },
+  };
+
+  try {
+    const status = await tryLocalCommand("/workspace", baseOptions);
+    expect(status.handled).toBe(true);
+    expect(status.assistantMessage).toContain("Workspace cwd");
+
+    const added = await tryLocalCommand(`/workspace add ${target}`, baseOptions);
+    expect(added.handled).toBe(true);
+    expect(added.assistantMessage).toContain(target);
+
+    const hopped = await tryLocalCommand(`/hop ${target}`, baseOptions);
+    expect(hopped.handled).toBe(true);
+    expect(hopped.travel?.toPath).toBe(target);
+    expect(hopped.travel?.workspace.cwd).toBe(target);
+  } finally {
+    process.chdir(originalCwd);
+    if (previousConfigDir === undefined) {
+      delete Bun.env.SWITCHBAY_CONFIG_DIR;
+    } else {
+      Bun.env.SWITCHBAY_CONFIG_DIR = previousConfigDir;
+    }
+    invalidateConfigCache();
+  }
 });
 
 test("engine slash commands describe registered engines and creative tools", async () => {

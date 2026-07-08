@@ -152,6 +152,36 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     category: "context",
+    command: "/workspace",
+    description: "Show the active workspace snapshot and workspace commands.",
+    example: "/workspace",
+  },
+  {
+    category: "context",
+    command: "/workspace list",
+    description: "List known whitelisted or discovered workspaces.",
+    example: "/workspace list",
+  },
+  {
+    category: "context",
+    command: "/workspace add",
+    description: "Whitelist a workspace path for hopping.",
+    example: "/workspace add ~/Projects/my-app",
+  },
+  {
+    category: "context",
+    command: "/workspace hop",
+    description: "Switch to a known workspace by fuzzy name or path.",
+    example: "/workspace hop my-app",
+  },
+  {
+    category: "context",
+    command: "/hop",
+    description: "Alias for switching to a known workspace.",
+    example: "/hop my-app",
+  },
+  {
+    category: "context",
     command: "/pin",
     description: "Pin a file so it is injected into future turn context.",
     example: "/pin src/agent/loop.ts",

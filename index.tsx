@@ -154,6 +154,10 @@ Options:
     }
   }
 
+  if (options.hop) {
+    await applyInitialHop(options.hop);
+  }
+
   // CLI Mode: One-shot query provided
   if (options.initialQuery) {
     await runCliMode(options, resumeId);
@@ -175,6 +179,21 @@ Options:
       resumeId={resumeId}
     />,
   );
+}
+
+async function applyInitialHop(query: string) {
+  const matches = await fuzzyMatchLocations(query);
+  if (!matches.length) {
+    console.error(`switchbay: no workspace matched "${query}". Use /workspace add <path> or enable auto_discover.`);
+    process.exit(1);
+  }
+
+  const target = matches[0]!;
+  const result = await travelTo(target.absPath);
+  if (!result.ok) {
+    console.error(`switchbay: hop failed: ${result.error}`);
+    process.exit(1);
+  }
 }
 
 async function runEngineCommand(action: "status" | "sync" | "list" | "templates") {

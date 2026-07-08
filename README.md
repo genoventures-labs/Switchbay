@@ -100,16 +100,14 @@ Then create or tune `.switchbay/lmstudio.mcp.json`:
   "enabled": true,
   "nativeBase": "http://192.168.1.50:1234/api/v1",
   "model": "qwen2.5-7b-instruct",
-  "integrations": ["mcp/playwright"],
-  "mcpServers": {
-    "playwright": {
-      "note": "Install/configure this server inside LM Studio's mcp.json first."
-    }
-  }
+  "integrations": [],
+  "mcpServers": {}
 }
 ```
 
-Inside the TUI, use `/lane` to cycle Cloud/LM Studio/LM Studio MCP, `/lane mcp` to jump straight to the MCP lane, and `/model` to open the model drawer. Cloud models use built-in OpenAI/Anthropic presets; LM Studio models are fetched from `SWITCHBAY_LMSTUDIO_BASE`. Use `/mcp init` for a starter config or `/create-mcp` for the conversational MCP config builder. LM Studio still needs the MCP servers installed/enabled in its own app settings; Switchbay requests those servers through the native LM Studio API.
+Add only MCP ids that actually exist in LM Studio, such as `"mcp/playwright"` after Playwright is installed/enabled in LM Studio's `mcp.json`.
+
+Inside the TUI, use `/lane` to cycle Cloud/LM Studio/LM Studio MCP, `/lane mcp` to jump straight to the MCP lane, and `/model` to open the model drawer. Cloud models use built-in OpenAI/Anthropic presets; LM Studio models are fetched from `SWITCHBAY_LMSTUDIO_BASE`. Use `/mcp init` for an empty starter config or `/create-mcp` for the conversational MCP config builder. LM Studio still needs the MCP servers installed/enabled in its own app settings; Switchbay requests those servers through the native LM Studio API.
 
 Per command:
 

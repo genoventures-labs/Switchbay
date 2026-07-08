@@ -6,6 +6,7 @@ import {
 } from "../config/env";
 import {
   loadLmStudioMcpConfig,
+  formatIntegrationLabel,
 } from "./lmstudio-mcp-config";
 import type { ChatCompletionRequest, ChatCompletionResponse, ChatMessage } from "./types";
 
@@ -70,7 +71,11 @@ export class LmStudioMcpClient {
     if (this.apiKey) {
       headers.Authorization = `Bearer ${this.apiKey}`;
     }
-    const nativePayload = messagesToNativePayload(request.messages, config.systemPrompt);
+    const nativePayload = messagesToNativePayload(
+      request.messages,
+      config.systemPrompt,
+      integrations.map(formatIntegrationLabel),
+    );
 
     const response = await this.fetchImpl(`${apiBase}/chat`, {
       method: "POST",
@@ -87,9 +92,7 @@ export class LmStudioMcpClient {
 
     if (!response.ok) {
       const body = await response.text().catch(() => "");
-      throw new Error(
-        `LM Studio MCP API error: ${response.status}${body ? ` - ${body}` : ""}`,
-      );
+      throw new Error(formatLmStudioMcpError(response.status, body));
     }
 
     const rawText = await response.text();
@@ -125,7 +128,11 @@ export class LmStudioMcpClient {
   }
 }
 
-function messagesToNativePayload(messages: ChatMessage[], configSystemPrompt?: string): NativeChatPayload {
+function messagesToNativePayload(
+  messages: ChatMessage[],
+  configSystemPrompt?: string,
+  integrations: string[] = [],
+): NativeChatPayload {
   const systemParts = [
     ...messages
       .filter((message) => message.role === "system")
@@ -135,6 +142,7 @@ function messagesToNativePayload(messages: ChatMessage[], configSystemPrompt?: s
     [
       "LM STUDIO MCP LANE:",
       "Use LM Studio's configured MCP integrations for tool access in this turn.",
+      `Configured integrations: ${integrations.length ? integrations.join(", ") : "none"}.`,
       "Do not attempt Switchbay function-tool calls in this lane; they are not sent through the native LM Studio MCP API.",
       "If the required MCP server or tool is unavailable, say exactly what is missing.",
     ].join("\n"),
@@ -151,6 +159,35 @@ function messagesToNativePayload(messages: ChatMessage[], configSystemPrompt?: s
     input: input || "Continue.",
     systemPrompt: systemParts.join("\n\n"),
   };
+}
+
+function formatLmStudioMcpError(status: number, body: string): string {
+  const raw = body.trim();
+  try {
+    const parsed = JSON.parse(raw) as {
+      error?: {
+        message?: string;
+        type?: string;
+        param?: string;
+      };
+    };
+    const error = parsed.error;
+    const message = error?.message ?? raw;
+    if (error?.type === "plugin_connection_error" || message.includes("Cannot find plugin handle")) {
+      const match = message.match(/'([^']+)'/);
+      const plugin = match?.[1] ?? "the configured MCP integration";
+      return [
+        `LM Studio MCP API error: ${status}.`,
+        `LM Studio could not find MCP plugin \`${plugin}\`.`,
+        "Open LM Studio, confirm that MCP server is installed/enabled in its mcp.json, then set the matching id in `.switchbay/lmstudio.mcp.json` under `integrations`.",
+        "If you do not have that server configured yet, remove it from `integrations` or run `switchbay mcp init` to start from an empty config.",
+      ].join(" ");
+    }
+  } catch {
+    // Fall through to the raw response.
+  }
+
+  return `LM Studio MCP API error: ${status}${raw ? ` - ${raw}` : ""}`;
 }
 
 function stringifyMessageContent(content: unknown): string {

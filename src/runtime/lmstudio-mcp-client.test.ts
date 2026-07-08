@@ -40,7 +40,7 @@ test("loads default MCP config when workspace config is missing", async () => {
 
   expect(status.exists).toBe(false);
   expect(status.config.model).toBe("configured-local");
-  expect(status.integrations).toEqual(["mcp/playwright"]);
+  expect(status.integrations).toEqual([]);
 });
 
 test("LM Studio MCP client posts native chat requests with integrations", async () => {
@@ -92,7 +92,38 @@ test("LM Studio MCP client posts native chat requests with integrations", async 
   expect(body.input).toBe("USER: Use browser tools.");
   expect(body.system_prompt).toContain("You are Bay.");
   expect(body.system_prompt).toContain("LM STUDIO MCP LANE");
+  expect(body.system_prompt).toContain("Configured integrations: mcp/playwright");
   expect(response.output_text).toBe("Done from MCP.");
   expect(response.meta?.provider).toBe("lmstudio-mcp");
   expect(response.meta?.lmstudio_tool_calls).toEqual(["browser_navigate"]);
+});
+
+test("LM Studio MCP client explains missing plugin handles", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "switchbay-mcp-missing-plugin-"));
+  await mkdir(workspaceStorageDir(cwd), { recursive: true });
+  await writeFile(
+    join(workspaceStorageDir(cwd), "lmstudio.mcp.json"),
+    JSON.stringify({
+      enabled: true,
+      nativeBase: "http://192.168.1.50:1234/api/v1",
+      model: "qwen-local",
+      integrations: ["mcp/playwright"],
+    }),
+    "utf-8",
+  );
+
+  const fetchImpl = (async () =>
+    Response.json({
+      error: {
+        message: "Unable to get plugin tools for 'mcp/playwright'. Error: Cannot find plugin handle for plugin: mcp/playwright",
+        type: "plugin_connection_error",
+        param: "integrations",
+      },
+    }, { status: 400 })) as unknown as typeof fetch;
+
+  const client = new LmStudioMcpClient({ cwd, fetchImpl });
+
+  await expect(client.createChatCompletion("dev", {
+    messages: [{ role: "user", content: "Use MCP tools." }],
+  })).rejects.toThrow("could not find MCP plugin `mcp/playwright`");
 });

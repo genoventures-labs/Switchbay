@@ -66,12 +66,8 @@ export function createDefaultLmStudioMcpConfig(): LmStudioMcpConfig {
     enabled: true,
     nativeBase: getLmStudioNativeBase(),
     model: getLmStudioModel(),
-    integrations: ["mcp/playwright"],
-    mcpServers: {
-      playwright: {
-        note: "Install/configure this server inside LM Studio's mcp.json, then Switchbay can request it as mcp/playwright.",
-      },
-    },
+    integrations: [],
+    mcpServers: {},
   };
 }
 
@@ -102,7 +98,9 @@ export function describeLmStudioMcpConfig(status: LmStudioMcpConfigStatus): stri
     "Integrations:",
     integrations,
     "",
-    "Use `/mcp init` to create the workspace config, `/lane mcp` to switch lanes, and `/model mcp` to select local models for it.",
+    status.integrations.length
+      ? "Use `/lane mcp` to switch lanes and `/model mcp` to select local models for it."
+      : "Add LM Studio-installed MCP server ids like `mcp/<server-label>` to `integrations`, then use `/lane mcp`.",
   ].join("\n");
 }
 

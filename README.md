@@ -93,7 +93,7 @@ export SWITCHBAY_LMSTUDIO_BASE=http://192.168.1.50:1234/v1
 export SWITCHBAY_LMSTUDIO_API_KEY=... # create in LM Studio if auth is enabled
 ```
 
-Then create or tune `.switchbay/lmstudio.mcp.json`:
+Then create or tune `~/.switchbay/lmstudio.mcp.json`:
 
 ```json
 {
@@ -212,7 +212,7 @@ Switchbay looks for:
 - `.switchbay/pins.json`: pinned files and repo notes.
 - `.switchbay/agents/*.md`: custom local specialist agents.
 - `.switchbay/engines/*.engine.json`: workspace engine manifests.
-- `.switchbay/lmstudio.mcp.json`: workspace LM Studio MCP lane config.
+- `~/.switchbay/lmstudio.mcp.json`: user LM Studio MCP lane config.
 
 Switchbay reads and writes the Switchbay names directly. Old project aliases are no longer part of the active workflow.
 

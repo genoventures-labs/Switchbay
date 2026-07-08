@@ -148,7 +148,7 @@ triggers: [launch, release]
   expect(draft.content).toContain("id: launch-check");
 });
 
-test("generateLmStudioMcpConfig produces a workspace MCP config draft", async () => {
+test("generateLmStudioMcpConfig produces a user MCP config draft", async () => {
   const { client } = createMockClient([
     createResponse(`{
   "enabled": true,
@@ -160,20 +160,31 @@ test("generateLmStudioMcpConfig produces a workspace MCP config draft", async ()
   }
 }`),
   ]);
+  const previous = Bun.env.SWITCHBAY_LMSTUDIO_MCP_CONFIG;
+  const configPath = join(await mkdtemp(join(tmpdir(), "switchbay-mcp-draft-")), "lmstudio.mcp.json");
+  Bun.env.SWITCHBAY_LMSTUDIO_MCP_CONFIG = configPath;
 
-  const draft = await generateLmStudioMcpConfig(client, "dev", {
-    name: "Browser MCP",
-    purpose: "Let local models use browser tools.",
-    servers: "playwright",
-    integrations: "mcp/playwright",
-    notes: "Use http://192.168.1.50:1234.",
-  });
+  try {
+    const draft = await generateLmStudioMcpConfig(client, "dev", {
+      name: "Browser MCP",
+      purpose: "Let local models use browser tools.",
+      servers: "playwright",
+      integrations: "mcp/playwright",
+      notes: "Use http://192.168.1.50:1234.",
+    });
 
-  expect(draft.id).toBe("lmstudio-mcp");
-  expect(draft.savePath).toContain(".switchbay/lmstudio.mcp.json");
-  const parsed = JSON.parse(draft.content);
-  expect(parsed.integrations).toEqual(["mcp/playwright"]);
-  expect(parsed.nativeBase).toBe("http://192.168.1.50:1234/api/v1");
+    expect(draft.id).toBe("lmstudio-mcp");
+    expect(draft.savePath).toBe(configPath);
+    const parsed = JSON.parse(draft.content);
+    expect(parsed.integrations).toEqual(["mcp/playwright"]);
+    expect(parsed.nativeBase).toBe("http://192.168.1.50:1234/api/v1");
+  } finally {
+    if (previous === undefined) {
+      delete Bun.env.SWITCHBAY_LMSTUDIO_MCP_CONFIG;
+    } else {
+      Bun.env.SWITCHBAY_LMSTUDIO_MCP_CONFIG = previous;
+    }
+  }
 });
 
 test("generateLmStudioMcpConfig refuses unknown MCP servers", async () => {

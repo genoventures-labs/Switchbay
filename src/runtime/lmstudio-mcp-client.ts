@@ -179,7 +179,7 @@ function formatLmStudioMcpError(status: number, body: string): string {
       return [
         `LM Studio MCP API error: ${status}.`,
         `LM Studio could not find MCP plugin \`${plugin}\`.`,
-        "Open LM Studio, confirm that MCP server is installed/enabled in its mcp.json, then set the matching id in `.switchbay/lmstudio.mcp.json` under `integrations`.",
+        "Open LM Studio, confirm that MCP server is installed/enabled in its mcp.json, then set the matching id in `~/.switchbay/lmstudio.mcp.json` under `integrations`.",
         "If you do not have that server configured yet, remove it from `integrations` or run `switchbay mcp init` to start from an empty config.",
       ].join(" ");
     }

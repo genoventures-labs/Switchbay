@@ -1,14 +1,15 @@
 import { afterEach, expect, test } from "bun:test";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { workspaceStorageDir } from "../config/paths";
+import { dirname, join } from "node:path";
 import { LmStudioMcpClient } from "./lmstudio-mcp-client";
 import { loadLmStudioMcpConfig, resolveLmStudioMcpIntegrations } from "./lmstudio-mcp-config";
 
 const savedEnv = {
   SWITCHBAY_LANE: Bun.env.SWITCHBAY_LANE,
+  SWITCHBAY_CONFIG_DIR: Bun.env.SWITCHBAY_CONFIG_DIR,
   SWITCHBAY_LMSTUDIO_API_KEY: Bun.env.SWITCHBAY_LMSTUDIO_API_KEY,
+  SWITCHBAY_LMSTUDIO_MCP_CONFIG: Bun.env.SWITCHBAY_LMSTUDIO_MCP_CONFIG,
   SWITCHBAY_LMSTUDIO_MODEL: Bun.env.SWITCHBAY_LMSTUDIO_MODEL,
 };
 
@@ -35,22 +36,37 @@ test("loads default MCP config when workspace config is missing", async () => {
   Bun.env.SWITCHBAY_LANE = "local-mcp";
   Bun.env.SWITCHBAY_LMSTUDIO_MODEL = "configured-local";
   const cwd = await mkdtemp(join(tmpdir(), "switchbay-mcp-config-"));
+  Bun.env.SWITCHBAY_LMSTUDIO_MCP_CONFIG = join(cwd, "lmstudio.mcp.json");
 
   const status = await loadLmStudioMcpConfig(cwd);
 
   expect(status.exists).toBe(false);
+  expect(status.path).toBe(join(cwd, "lmstudio.mcp.json"));
   expect(status.config.model).toBe("configured-local");
   expect(status.integrations).toEqual([]);
+});
+
+test("uses the user config dir for the default MCP config path", async () => {
+  const configDir = await mkdtemp(join(tmpdir(), "switchbay-user-config-"));
+  delete Bun.env.SWITCHBAY_LMSTUDIO_MCP_CONFIG;
+  Bun.env.SWITCHBAY_CONFIG_DIR = configDir;
+
+  const status = await loadLmStudioMcpConfig(await mkdtemp(join(tmpdir(), "switchbay-workspace-")));
+
+  expect(status.exists).toBe(false);
+  expect(status.path).toBe(join(configDir, "lmstudio.mcp.json"));
 });
 
 test("LM Studio MCP client posts native chat requests with integrations", async () => {
   Bun.env.SWITCHBAY_LANE = "local-mcp";
   Bun.env.SWITCHBAY_LMSTUDIO_API_KEY = "test-local-key";
   const cwd = await mkdtemp(join(tmpdir(), "switchbay-mcp-client-"));
+  const configPath = join(cwd, "config", "lmstudio.mcp.json");
+  Bun.env.SWITCHBAY_LMSTUDIO_MCP_CONFIG = configPath;
   await writeFile(join(cwd, "package.json"), "{}", "utf-8");
-  await mkdir(workspaceStorageDir(cwd), { recursive: true });
+  await mkdir(dirname(configPath), { recursive: true });
   await writeFile(
-    join(workspaceStorageDir(cwd), "lmstudio.mcp.json"),
+    configPath,
     JSON.stringify({
       enabled: true,
       nativeBase: "http://192.168.1.50:1234/api/v1",
@@ -100,9 +116,11 @@ test("LM Studio MCP client posts native chat requests with integrations", async 
 
 test("LM Studio MCP client explains missing plugin handles", async () => {
   const cwd = await mkdtemp(join(tmpdir(), "switchbay-mcp-missing-plugin-"));
-  await mkdir(workspaceStorageDir(cwd), { recursive: true });
+  const configPath = join(cwd, "config", "lmstudio.mcp.json");
+  Bun.env.SWITCHBAY_LMSTUDIO_MCP_CONFIG = configPath;
+  await mkdir(dirname(configPath), { recursive: true });
   await writeFile(
-    join(workspaceStorageDir(cwd), "lmstudio.mcp.json"),
+    configPath,
     JSON.stringify({
       enabled: true,
       nativeBase: "http://192.168.1.50:1234/api/v1",

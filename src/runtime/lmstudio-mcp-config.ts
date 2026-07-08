@@ -1,8 +1,9 @@
 import { existsSync } from "node:fs";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
-import { dirname } from "node:path";
+import { dirname, resolve } from "node:path";
+import os from "node:os";
 import { getLmStudioModel, getLmStudioNativeBase } from "../config/env";
-import { workspaceDataPath } from "../config/paths";
+import { userConfigPath } from "../config/paths";
 
 export const LMSTUDIO_MCP_CONFIG_FILE = "lmstudio.mcp.json";
 
@@ -39,7 +40,10 @@ export type LmStudioMcpConfigStatus = {
 };
 
 export function lmStudioMcpConfigPath(cwd = process.cwd()): string {
-  return workspaceDataPath(cwd, LMSTUDIO_MCP_CONFIG_FILE);
+  void cwd;
+  const configured = Bun.env.SWITCHBAY_LMSTUDIO_MCP_CONFIG?.trim();
+  if (configured) return resolve(configured.replace(/^~/, os.homedir()));
+  return userConfigPath(LMSTUDIO_MCP_CONFIG_FILE);
 }
 
 export async function loadLmStudioMcpConfig(cwd = process.cwd()): Promise<LmStudioMcpConfigStatus> {

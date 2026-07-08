@@ -1,8 +1,15 @@
 import path from "node:path";
+import os from "node:os";
 import { existsSync } from "node:fs";
 
 export const APP_STORAGE_DIR = ".switchbay";
 export const PROJECT_CONTEXT_FILE = "SWITCHBAY.md";
+
+export function userConfigDir(): string {
+  const configured = Bun.env.SWITCHBAY_CONFIG_DIR?.trim();
+  if (configured) return path.resolve(configured.replace(/^~/, os.homedir()));
+  return path.join(os.homedir(), APP_STORAGE_DIR);
+}
 
 export function workspaceStorageDir(cwd = process.cwd()): string {
   return path.join(cwd, APP_STORAGE_DIR);
@@ -26,4 +33,8 @@ export function existingWorkspaceDataPath(cwd: string, fileName: string): string
   const next = workspaceDataPath(cwd, fileName);
   if (existsSync(next)) return next;
   return next;
+}
+
+export function userConfigPath(fileName: string): string {
+  return path.join(userConfigDir(), fileName);
 }

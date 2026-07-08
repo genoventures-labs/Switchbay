@@ -336,7 +336,7 @@ export async function generateLmStudioMcpConfig(
       "Trusted options:",
       describeTrustedMcpCatalog(),
       "",
-      "Best next step: install/enable the desired MCP server in LM Studio, give it a stable server label in LM Studio's mcp.json, then ask Bay for one of the trusted options or add the exact integration id manually to `.switchbay/lmstudio.mcp.json`.",
+      "Best next step: install/enable the desired MCP server in LM Studio, give it a stable server label in LM Studio's mcp.json, then ask Bay for one of the trusted options or add the exact integration id manually to `~/.switchbay/lmstudio.mcp.json`.",
     ].join("\n"));
   }
 

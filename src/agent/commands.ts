@@ -338,7 +338,7 @@ async function handleMcpCommand(
       const path = await saveLmStudioMcpConfig(createDefaultLmStudioMcpConfig(), cwd);
       return {
         handled: true,
-        assistantMessage: `Created LM Studio MCP config at \`${path}\`.\n\nEdit it to match the MCP servers installed in LM Studio, then switch with \`/lane mcp\`.`,
+        assistantMessage: `Created Switchbay MCP config at \`${path}\`.\n\nEdit it to match trusted MCP intent, then enable the bridge with \`/mcp on\`. Use \`/lane native-mcp\` only when testing LM Studio's native MCP API.`,
       };
     }
 
@@ -349,17 +349,17 @@ async function handleMcpCommand(
     if (action === "catalog") {
       return {
         handled: true,
-        assistantMessage: `**Trusted MCP Catalog**\n\n${describeTrustedMcpCatalog()}\n\nBay will only create MCP configs from this catalog. For anything else, install and verify the MCP server in LM Studio first, then add the exact id manually.`,
+        assistantMessage: `**Trusted MCP Catalog**\n\n${describeTrustedMcpCatalog()}\n\nBay will only create MCP configs from this catalog. For anything else, verify the server first, then add the exact id manually.`,
       };
     }
 
     if (action && action !== "status") {
-      return { handled: true, assistantMessage: "Usage: `/mcp [status|init|create|catalog]`" };
+      return { handled: true, assistantMessage: "Usage: `/mcp [status|init|create|catalog|on|off]`" };
     }
 
     return { handled: true, assistantMessage: describeLmStudioMcpConfig(await loadLmStudioMcpConfig(cwd)) };
   } catch (e: any) {
-    return { handled: true, assistantMessage: `LM Studio MCP config failed: ${e.message}` };
+    return { handled: true, assistantMessage: `MCP config failed: ${e.message}` };
   }
 }
 

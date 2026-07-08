@@ -24,7 +24,9 @@ test("parses MCP runtime lane aliases", () => {
 });
 
 test("normalizes cloud MCP runtime lane aliases", () => {
+  expect(normalizeRuntimeLane("mcp")).toBe("cloud-mcp");
   expect(normalizeRuntimeLane("cloud-mcp")).toBe("cloud-mcp");
   expect(normalizeRuntimeLane("cloudmcp")).toBe("cloud-mcp");
   expect(normalizeRuntimeLane("cmcp")).toBe("cloud-mcp");
+  expect(normalizeRuntimeLane("native-mcp")).toBe("local-mcp");
 });

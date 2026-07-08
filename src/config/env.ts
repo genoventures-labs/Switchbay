@@ -15,14 +15,15 @@ function readFirstEnv(...keys: string[]): string | undefined {
 }
 
 export type RuntimeLane = "cloud" | "cloud-mcp" | "local" | "local-mcp";
+export type ToolMode = "standard" | "switchbay-mcp";
 export type CloudProvider = "auto" | "openai" | "anthropic";
 
 export function normalizeRuntimeLane(value?: string | null): RuntimeLane {
   const lane = (value ?? DEFAULTS.lane).toLowerCase();
-  if (lane === "cloud-mcp" || lane === "cloudmcp" || lane === "cmcp") {
+  if (lane === "mcp" || lane === "cloud-mcp" || lane === "cloudmcp" || lane === "cmcp") {
     return "cloud-mcp";
   }
-  if (lane === "mcp" || lane === "local-mcp" || lane === "lm-mcp" || lane === "lmstudio-mcp") {
+  if (lane === "native-mcp" || lane === "local-mcp" || lane === "lm-mcp" || lane === "lmstudio-mcp") {
     return "local-mcp";
   }
   if (lane === "local" || lane === "lm" || lane === "lmstudio") {
@@ -33,6 +34,26 @@ export function normalizeRuntimeLane(value?: string | null): RuntimeLane {
 
 export function getRuntimeLane(): RuntimeLane {
   return normalizeRuntimeLane(readFirstEnv("SWITCHBAY_LANE"));
+}
+
+export function normalizeToolMode(value?: string | null): ToolMode {
+  const mode = (value ?? DEFAULTS.toolMode ?? "standard").toLowerCase();
+  if (
+    mode === "mcp" ||
+    mode === "on" ||
+    mode === "true" ||
+    mode === "1" ||
+    mode === "switchbay-mcp" ||
+    mode === "switchbaymcp" ||
+    mode === "bridge"
+  ) {
+    return "switchbay-mcp";
+  }
+  return "standard";
+}
+
+export function getToolMode(): ToolMode {
+  return normalizeToolMode(readFirstEnv("SWITCHBAY_TOOL_MODE", "SWITCHBAY_MCP"));
 }
 
 export function getDefaultModel(): string {

@@ -47,9 +47,9 @@ export function createRuntimeClient(
 }
 
 export function getRuntimeLaneLabel(lane: RuntimeLane = getRuntimeLane()): string {
-  if (lane === "cloud-mcp") return "Cloud MCP";
+  if (lane === "cloud-mcp") return "Cloud + MCP Bridge";
   if (lane === "local") return "LM Studio";
-  if (lane === "local-mcp") return "LM Studio MCP";
+  if (lane === "local-mcp") return "LM Studio Native MCP";
   return "Cloud";
 }
 

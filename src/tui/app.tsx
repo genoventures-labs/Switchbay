@@ -11,7 +11,7 @@ import { parseApprovalIntent, tryLocalCommand } from "../agent/commands";
 import { resolveAgentPolicy } from "../agent/policy";
 import type { ChatRuntimeClient } from "../runtime/client";
 import { createRuntimeClient, getRuntimeLaneLabel } from "../runtime/client";
-import type { RuntimeLane } from "../config/env";
+import { getToolMode, type RuntimeLane, type ToolMode } from "../config/env";
 import { createSessionStore, sessionReducer } from "../session/store";
 import { createTranscriptEntry } from "../agent/turn-state";
 import { loadPersistedSession, savePersistedSession, listSessions, purgeSessions } from "../session/persistence";
@@ -74,6 +74,9 @@ export function SwitchbayApp({
 }: SwitchbayAppProps) {
   const initialLane = lane ?? "cloud";
   const [runtimeLane, setRuntimeLane] = useState<RuntimeLane>(initialLane);
+  const [toolMode, setToolMode] = useState<ToolMode>(() =>
+    initialLane === "cloud-mcp" ? "switchbay-mcp" : getToolMode()
+  );
   const [runtimeClient, setRuntimeClient] = useState<ChatRuntimeClient>(() => client ?? createRuntimeClient(initialLane));
   const { stdout } = useStdout();
   const [dimensions, setDimensions] = useState({
@@ -172,9 +175,13 @@ export function SwitchbayApp({
   const modelDrawerVisible = composerMode === "model_picker";
   const skillDrawerVisible = composerMode === "skill_picker";
   const engineDrawerItems = useMemo(() => flattenEngineDrawerItems(availableEngines), [availableEngines]);
+  const runtimeBaseLabel = getRuntimeLaneLabel(runtimeLane);
+  const runtimeToolSuffix = toolMode === "switchbay-mcp" && runtimeLane !== "cloud-mcp" && runtimeLane !== "local-mcp"
+    ? " + MCP Bridge"
+    : "";
   const runtimeBadge = activeRuntimeModel
-    ? `${getRuntimeLaneLabel(runtimeLane)} · ${activeRuntimeModel.id}`
-    : getRuntimeLaneLabel(runtimeLane);
+    ? `${runtimeBaseLabel}${runtimeToolSuffix} · ${activeRuntimeModel.id}`
+    : `${runtimeBaseLabel}${runtimeToolSuffix}`;
 
   const editPickerState = useMemo(() => {
     if (composerMode !== "edit_file_picker") {
@@ -231,19 +238,33 @@ export function SwitchbayApp({
   function switchRuntimeLane(nextLane?: RuntimeLane) {
     const resolved = nextLane ?? (
       runtimeLane === "cloud"
-        ? "cloud-mcp"
-        : runtimeLane === "cloud-mcp"
-          ? "local"
-          : runtimeLane === "local"
-            ? "local-mcp"
+        ? "local"
+        : runtimeLane === "local"
+          ? "cloud"
+          : runtimeLane === "cloud-mcp"
+            ? "local"
             : "cloud"
     );
     setRuntimeLane(resolved);
+    if (resolved === "cloud-mcp") setToolMode("switchbay-mcp");
+    if (resolved === "local-mcp") setToolMode("standard");
     setActiveRuntimeModel(null);
     setRuntimeClient(createRuntimeClient(resolved));
     dispatch({
       type: "assistant/appended",
       message: `Runtime lane switched to **${getRuntimeLaneLabel(resolved)}**.`,
+    });
+    setQuerySync("");
+  }
+
+  function switchToolMode(nextMode?: ToolMode) {
+    const resolved = nextMode ?? (toolMode === "switchbay-mcp" ? "standard" : "switchbay-mcp");
+    setToolMode(resolved);
+    dispatch({
+      type: "assistant/appended",
+      message: resolved === "switchbay-mcp"
+        ? "Switchbay MCP bridge enabled for this session."
+        : "Switchbay MCP bridge disabled for this session.",
     });
     setQuerySync("");
   }
@@ -271,6 +292,8 @@ export function SwitchbayApp({
       ? model.provider
       : null;
     setRuntimeLane(model.lane);
+    if (model.lane === "cloud-mcp") setToolMode("switchbay-mcp");
+    if (model.lane === "local-mcp") setToolMode("standard");
     setActiveRuntimeModel(model);
     setRuntimeClient(createRuntimeClient(model.lane, { model: model.id, provider }));
     setComposerMode("default");
@@ -831,20 +854,25 @@ export function SwitchbayApp({
         return;
       }
       if (requested === "cloud-mcp" || requested === "cloudmcp" || requested === "cmcp") {
-        switchRuntimeLane("cloud-mcp");
+        setToolMode("switchbay-mcp");
+        switchRuntimeLane("cloud");
         return;
       }
       if (requested === "local" || requested === "lm" || requested === "lmstudio") {
         switchRuntimeLane("local");
         return;
       }
-      if (requested === "mcp" || requested === "local-mcp" || requested === "lm-mcp" || requested === "lmstudio-mcp") {
+      if (requested === "mcp" || requested === "switchbay-mcp" || requested === "bridge") {
+        switchToolMode("switchbay-mcp");
+        return;
+      }
+      if (requested === "native-mcp" || requested === "local-mcp" || requested === "lm-mcp" || requested === "lmstudio-mcp") {
         switchRuntimeLane("local-mcp");
         return;
       }
       dispatch({
         type: "assistant/appended",
-        message: `Unknown lane \`${requested}\`. Use \`/lane cloud\`, \`/lane cloud-mcp\`, \`/lane local\`, \`/lane mcp\`, or \`/lane\` to toggle.`,
+        message: `Unknown lane \`${requested}\`. Use \`/lane cloud\`, \`/lane local\`, \`/lane mcp\`, \`/lane native-mcp\`, or \`/lane\` to toggle.`,
       });
       setQuerySync("");
       return;
@@ -874,7 +902,8 @@ export function SwitchbayApp({
         return;
       }
       if (requested === "cloud-mcp" || requested === "cloudmcp" || requested === "cmcp") {
-        void openModelDrawer("cloud-mcp");
+        setToolMode("switchbay-mcp");
+        void openModelDrawer("cloud");
         setQuerySync("");
         return;
       }
@@ -883,7 +912,13 @@ export function SwitchbayApp({
         setQuerySync("");
         return;
       }
-      if (requested === "mcp" || requested === "local-mcp" || requested === "lm-mcp" || requested === "lmstudio-mcp") {
+      if (requested === "mcp" || requested === "switchbay-mcp" || requested === "bridge") {
+        setToolMode("switchbay-mcp");
+        void openModelDrawer(runtimeLane === "local-mcp" ? "local" : runtimeLane);
+        setQuerySync("");
+        return;
+      }
+      if (requested === "native-mcp" || requested === "local-mcp" || requested === "lm-mcp" || requested === "lmstudio-mcp") {
         void openModelDrawer("local-mcp");
         setQuerySync("");
         return;
@@ -893,6 +928,21 @@ export function SwitchbayApp({
         message: `Unknown model lane \`${requested}\`. Use \`/model\`, \`/model cloud\`, \`/model cloud-mcp\`, \`/model local\`, or \`/model mcp\`.`,
       });
       setQuerySync("");
+      return;
+    }
+
+    if (trimmedVal === "/mcp on" || trimmedVal === "/mcp bridge" || trimmedVal === "/mcp switchbay") {
+      switchToolMode("switchbay-mcp");
+      return;
+    }
+
+    if (trimmedVal === "/mcp off" || trimmedVal === "/mcp standard") {
+      switchToolMode("standard");
+      return;
+    }
+
+    if (trimmedVal === "/mcp native") {
+      switchRuntimeLane("local-mcp");
       return;
     }
 
@@ -1019,7 +1069,7 @@ export function SwitchbayApp({
           await wf(pendingMcpDraft.savePath, pendingMcpDraft.content, "utf-8");
           dispatch({
             type: "assistant/appended",
-            message: `✓ MCP config **${pendingMcpDraft.name}** saved to \`${pendingMcpDraft.savePath}\`\n\nSwitch to it with \`/lane mcp\`. Check status with \`/mcp\`.`,
+            message: `✓ MCP config **${pendingMcpDraft.name}** saved to \`${pendingMcpDraft.savePath}\`\n\nEnable Switchbay's bridge with \`/mcp on\`. Test LM Studio's native API with \`/lane native-mcp\`.`,
           });
         } catch (e: any) {
           dispatch({ type: "assistant/appended", message: `Save failed: ${e.message}` });
@@ -1409,6 +1459,7 @@ export function SwitchbayApp({
       workspace,
       activeAgentId: state.activeAgentId,
       runtimeLane,
+      toolMode,
     });
 
     dispatch({

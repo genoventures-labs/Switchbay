@@ -51,7 +51,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   {
     category: "runtime",
     command: "/lane",
-    description: "Cycle runtime lane between Cloud, LM Studio, and LM Studio MCP.",
+    description: "Cycle model lane between Cloud and LM Studio.",
     example: "/lane",
   },
   {
@@ -63,7 +63,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   {
     category: "runtime",
     command: "/lane cloud-mcp",
-    description: "Switch to cloud models with Switchbay MCP guide/tool bridging.",
+    description: "Use cloud models with Switchbay MCP bridge enabled.",
     example: "/lane cloud-mcp",
   },
   {
@@ -75,8 +75,14 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   {
     category: "runtime",
     command: "/lane mcp",
-    description: "Switch this TUI session to the LM Studio MCP lane.",
+    description: "Enable Switchbay MCP bridge for the active model lane.",
     example: "/lane mcp",
+  },
+  {
+    category: "runtime",
+    command: "/lane native-mcp",
+    description: "Switch to LM Studio's native MCP API lane for testing.",
+    example: "/lane native-mcp",
   },
   {
     category: "runtime",
@@ -87,7 +93,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   {
     category: "runtime",
     command: "/model cloud-mcp",
-    description: "Pick a cloud model for the Cloud MCP lane.",
+    description: "Pick a cloud model and keep Switchbay MCP bridge enabled.",
     example: "/model cloud-mcp",
   },
   {
@@ -105,7 +111,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   {
     category: "runtime",
     command: "/mcp",
-    description: "Show or initialize the workspace LM Studio MCP lane config.",
+    description: "Show MCP bridge config or use /mcp on and /mcp off.",
     example: "/mcp init",
   },
   {
@@ -113,6 +119,18 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     command: "/mcp catalog",
     description: "List trusted MCP servers Bay can configure without guessing.",
     example: "/mcp catalog",
+  },
+  {
+    category: "runtime",
+    command: "/mcp on",
+    description: "Enable Switchbay MCP bridge on the active cloud/local model lane.",
+    example: "/mcp on",
+  },
+  {
+    category: "runtime",
+    command: "/mcp off",
+    description: "Disable Switchbay MCP bridge for this session.",
+    example: "/mcp off",
   },
   {
     category: "runtime",

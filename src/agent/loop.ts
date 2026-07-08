@@ -28,8 +28,8 @@ import {
 import { buildToolboxPromptBlock } from "../toolbox/hub";
 import { buildMemoryPromptBlock } from "../memory/store";
 import { buildGuidesPromptBlock, generateRuleDraft, type RuleDraftAnswers, type PendingRuleDraft } from "../context/guides";
-import type { RuntimeLane } from "../config/env";
-import { buildCloudMcpPromptBlock, loadLmStudioMcpConfig } from "../runtime/lmstudio-mcp-config";
+import type { RuntimeLane, ToolMode } from "../config/env";
+import { buildSwitchbayMcpPromptBlock, loadLmStudioMcpConfig } from "../runtime/lmstudio-mcp-config";
 import {
   type AgentMode,
   createThoughtFrame,
@@ -526,6 +526,7 @@ export async function buildTurn(input: {
   workspace: WorkspaceSnapshot | null;
   activeAgentId?: string | null;
   runtimeLane?: RuntimeLane;
+  toolMode?: ToolMode;
 }): Promise<BuiltTurn> {
   const mode = (input.mode as AgentMode) || "build";
   const objective = input.input.slice(0, 100);
@@ -572,8 +573,11 @@ export async function buildTurn(input: {
 
   const toolboxBlock = await buildToolboxPromptBlock();
   const guidesBlock = await buildGuidesPromptBlock(cwd);
-  const cloudMcpBlock = input.runtimeLane === "cloud-mcp"
-    ? buildCloudMcpPromptBlock(await loadLmStudioMcpConfig(cwd))
+  const effectiveToolMode: ToolMode = input.toolMode === "switchbay-mcp" || input.runtimeLane === "cloud-mcp"
+    ? "switchbay-mcp"
+    : "standard";
+  const switchbayMcpBlock = effectiveToolMode === "switchbay-mcp"
+    ? buildSwitchbayMcpPromptBlock(await loadLmStudioMcpConfig(cwd), input.runtimeLane ?? "cloud")
     : "";
 
   let systemPrompt = `You are a local-first coding agent running inside a terminal switchbay.
@@ -581,7 +585,8 @@ Current Mode: ${mode}
 Current Profile: ${input.profile}
 Current Workspace: ${cwd}
 Runtime Lane: ${input.runtimeLane ?? "cloud"}
-Assistant Callsign: Bay${oriMdBlock}${memoryBlock}${pinsBlock}${agentBlock}${toolboxBlock}${guidesBlock}${cloudMcpBlock}
+Tool Mode: ${effectiveToolMode}
+Assistant Callsign: Bay${oriMdBlock}${memoryBlock}${pinsBlock}${agentBlock}${toolboxBlock}${guidesBlock}${switchbayMcpBlock}
 
 GROUNDING RULES:
 1. You are running inside a local development tool.

@@ -6,6 +6,7 @@ export const DEFAULTS = {
   profile: "switchbay",
   mode: "build",
   lane: "cloud",
+  toolMode: "standard",
   openAiBase: "https://api.openai.com/v1",
   anthropicBase: "https://api.anthropic.com/v1",
   cloudProvider: "auto",

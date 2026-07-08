@@ -60,7 +60,7 @@ export class LmStudioMcpClient {
     const configStatus = await loadLmStudioMcpConfig(this.cwd);
     const config = configStatus.config;
     if (config.enabled === false) {
-      throw new Error(`LM Studio MCP lane is disabled in ${configStatus.path}.`);
+      throw new Error(`LM Studio native MCP lane is disabled in ${configStatus.path}.`);
     }
 
     const apiBase = this.apiBase ?? config.nativeBase ?? getLmStudioNativeBase();

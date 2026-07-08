@@ -92,7 +92,7 @@ export function describeLmStudioMcpConfig(status: LmStudioMcpConfigStatus): stri
     : "- No integrations configured yet.";
 
   return [
-    "**LM Studio MCP Lane**",
+    "**LM Studio Native MCP Lane (legacy/experimental)**",
     "",
     `Config: \`${status.path}\`${status.exists ? "" : " (not created yet)"}`,
     `Native API: \`${status.config.nativeBase ?? getLmStudioNativeBase()}\``,
@@ -103,12 +103,15 @@ export function describeLmStudioMcpConfig(status: LmStudioMcpConfigStatus): stri
     integrations,
     "",
     status.integrations.length
-      ? "Use `/lane mcp` to switch lanes and `/model mcp` to select local models for it."
-      : "Add LM Studio-installed MCP server ids like `mcp/<server-label>` to `integrations`, then use `/lane mcp`.",
+      ? "Use `/lane native-mcp` to test LM Studio's native MCP chat API. Use `/mcp on` for Switchbay's own bridge."
+      : "Add LM Studio-installed MCP server ids like `mcp/<server-label>` to `integrations`, then use `/lane native-mcp`.",
   ].join("\n");
 }
 
-export function buildCloudMcpPromptBlock(status: LmStudioMcpConfigStatus): string {
+export function buildSwitchbayMcpPromptBlock(
+  status: LmStudioMcpConfigStatus,
+  modelLane = "cloud",
+): string {
   const integrations = status.integrations.length
     ? status.integrations.map((item) => `- ${formatIntegrationLabel(item)}`).join("\n")
     : "- No MCP integrations configured yet.";
@@ -116,18 +119,23 @@ export function buildCloudMcpPromptBlock(status: LmStudioMcpConfigStatus): strin
   return [
     "",
     "",
-    "SWITCHBAY CLOUD MCP LANE:",
+    "SWITCHBAY MCP BRIDGE:",
+    `Model lane: ${modelLane}`,
     `Config: ${status.path}${status.exists ? "" : " (not created yet)"}`,
-    "The active model is a cloud model. Do not call LM Studio's native MCP chat API.",
+    "Switchbay owns MCP/tool execution for this turn. Do not call LM Studio's native MCP chat API unless the runtime lane is explicitly local-mcp.",
     "Use Switchbay's local tool bridge for tool execution and treat configured MCP integrations as allowed tool intent.",
     "Configured MCP integrations:",
     integrations,
     "",
-    "Cloud MCP rules:",
+    "Switchbay MCP bridge rules:",
     "- If the user asks for configured MCP/browser/file/fetch behavior, use the matching Switchbay tool calls when available.",
     "- If a requested MCP server is not configured or no matching Switchbay bridge tool exists, say exactly what is missing.",
     "- Do not invent MCP server ids, tool names, plugin handles, or external capabilities.",
   ].join("\n");
+}
+
+export function buildCloudMcpPromptBlock(status: LmStudioMcpConfigStatus): string {
+  return buildSwitchbayMcpPromptBlock(status, "cloud");
 }
 
 export function formatIntegrationLabel(item: LmStudioMcpIntegration): string {

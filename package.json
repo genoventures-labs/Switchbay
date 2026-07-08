@@ -1,7 +1,7 @@
 {
   "name": "switchbay",
   "version": "0.9.78",
-  "description": "Terminal-first AI coding workbench with cloud, local, and MCP lanes",
+  "description": "Terminal-first AI coding workbench with cloud/local model lanes and MCP bridge",
   "module": "index.tsx",
   "type": "module",
   "private": false,

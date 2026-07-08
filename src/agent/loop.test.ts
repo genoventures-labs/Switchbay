@@ -278,7 +278,7 @@ test("buildTurn injects Toolbox skills into system context", async () => {
   expect(system).toContain("tool-use-quick-start");
 });
 
-test("buildTurn injects Cloud MCP guidance for cloud-mcp lane", async () => {
+test("buildTurn injects Switchbay MCP guidance for cloud-mcp lane", async () => {
   const cwd = await mkdtemp(join(tmpdir(), "switchbay-cloud-mcp-context-"));
   const previous = Bun.env.SWITCHBAY_CONFIG_DIR;
   Bun.env.SWITCHBAY_CONFIG_DIR = join(cwd, "user-config");
@@ -303,8 +303,46 @@ test("buildTurn injects Cloud MCP guidance for cloud-mcp lane", async () => {
 
     const system = turn.request.messages.find((message) => message.role === "system")?.content ?? "";
     expect(system).toContain("Runtime Lane: cloud-mcp");
-    expect(system).toContain("SWITCHBAY CLOUD MCP LANE");
+    expect(system).toContain("SWITCHBAY MCP BRIDGE");
     expect(system).toContain("Do not call LM Studio's native MCP chat API");
+  } finally {
+    if (previous === undefined) {
+      delete Bun.env.SWITCHBAY_CONFIG_DIR;
+    } else {
+      Bun.env.SWITCHBAY_CONFIG_DIR = previous;
+    }
+  }
+});
+
+test("buildTurn injects Switchbay MCP guidance for local lane tool mode", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "switchbay-local-mcp-bridge-context-"));
+  const previous = Bun.env.SWITCHBAY_CONFIG_DIR;
+  Bun.env.SWITCHBAY_CONFIG_DIR = join(cwd, "user-config");
+
+  try {
+    const turn = await buildTurn({
+      input: "use local MCP bridge tools",
+      mode: "build",
+      previousObjective: null,
+      profile: "switchbay",
+      runtimeLane: "local",
+      toolMode: "switchbay-mcp",
+      transcript: [],
+      workspace: {
+        cwd,
+        repoRoot: cwd,
+        branch: null,
+        dirtyFiles: [],
+        recentFiles: [],
+        diff: { hasChanges: false, stat: "" },
+      },
+    });
+
+    const system = turn.request.messages.find((message) => message.role === "system")?.content ?? "";
+    expect(system).toContain("Runtime Lane: local");
+    expect(system).toContain("Tool Mode: switchbay-mcp");
+    expect(system).toContain("SWITCHBAY MCP BRIDGE");
+    expect(system).toContain("Model lane: local");
   } finally {
     if (previous === undefined) {
       delete Bun.env.SWITCHBAY_CONFIG_DIR;

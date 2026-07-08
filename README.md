@@ -27,7 +27,7 @@ Switchbay gives you one fast shell for everyday agentic development:
 - Move between specialist agents for backend, UI, security, debugging, architecture, docs, and review.
 - Resume sessions, pin context, save local memories, and keep work visible in the terminal.
 - Route between cloud models and local LM Studio models without changing the workflow.
-- Use LM Studio's native MCP lane for local models that can call MCP servers configured in LM Studio.
+- Enable Switchbay's MCP bridge for cloud or local models that should use configured tool workflows.
 - Add swappable engines from local manifests or the GitHub-backed Engine Bay.
 - Give agents reusable Toolbox skills for review, debugging, planning, testing, API checks, UI polish, and releases.
 
@@ -39,7 +39,7 @@ Most AI coding tools make one model, hosted service, or private backend feel lik
 
 - Use cloud models for deeper reasoning, code review, architecture, and complex implementation.
 - Use local LM Studio models for smaller utility work, offline-friendly tasks, private machine-close work, and quick summaries.
-- Use the LM Studio MCP lane when local models should call MCP servers that are already configured in LM Studio.
+- Enable Switchbay's MCP bridge when cloud or local models should use configured tool intent through Switchbay's own local tool bridge.
 - Keep approvals practical: broad-impact, destructive, privileged, publishing, refunding, and deploy-style actions still gate.
 - Keep the workbench useful even if a provider, hosted API, VPS, or local model setup changes.
 - Keep extensions portable through Engine Bay instead of baking every workflow into the core app.
@@ -85,20 +85,27 @@ export SWITCHBAY_LMSTUDIO_API_KEY=... # generate in LM Studio when MCP/tool acce
 export SWITCHBAY_LMSTUDIO_MODEL=qwen2.5-7b-instruct
 ```
 
-Local LM Studio MCP lane:
+Switchbay MCP bridge:
 
 ```bash
-export SWITCHBAY_LANE=local-mcp
-export SWITCHBAY_LMSTUDIO_BASE=http://192.168.1.50:1234/v1
-export SWITCHBAY_LMSTUDIO_API_KEY=... # create in LM Studio if auth is enabled
+export SWITCHBAY_TOOL_MODE=switchbay-mcp
+# or: export SWITCHBAY_MCP=on
 ```
 
-Cloud MCP lane:
+Cloud compatibility alias:
 
 ```bash
 export SWITCHBAY_LANE=cloud-mcp
 export OPENAI_API_KEY=...
 export ANTHROPIC_API_KEY=...
+```
+
+LM Studio native MCP lane is still available for testing LM Studio's own MCP chat API:
+
+```bash
+export SWITCHBAY_LANE=native-mcp
+export SWITCHBAY_LMSTUDIO_BASE=http://192.168.1.50:1234/v1
+export SWITCHBAY_LMSTUDIO_API_KEY=... # create in LM Studio if auth is enabled
 ```
 
 Then create or tune `~/.switchbay/lmstudio.mcp.json`:
@@ -113,9 +120,9 @@ Then create or tune `~/.switchbay/lmstudio.mcp.json`:
 }
 ```
 
-Add only MCP ids that actually exist in LM Studio, such as `"mcp/playwright"` after Playwright is installed/enabled in LM Studio's `mcp.json`.
+Add only trusted MCP ids that actually exist in your setup, such as `"mcp/playwright"` after Playwright is installed/enabled.
 
-Inside the TUI, use `/lane` to cycle Cloud/Cloud MCP/LM Studio/LM Studio MCP, `/lane cloud-mcp` for cloud models with Switchbay MCP guide/tool bridging, `/lane mcp` for LM Studio's native MCP lane, and `/model` to open the model drawer. Cloud models use built-in OpenAI/Anthropic presets; LM Studio models are fetched from `SWITCHBAY_LMSTUDIO_BASE`. Use `/mcp init` for an empty starter config, `/mcp catalog` to list trusted MCP options, or `/create-mcp` for the conversational MCP config builder. LM Studio still needs the MCP servers installed/enabled in its own app settings when you use `local-mcp`; `cloud-mcp` does not call LM Studio's native MCP chat API.
+Inside the TUI, use `/lane` to cycle Cloud and LM Studio model lanes, `/mcp on` to enable Switchbay's MCP bridge under the active model lane, `/mcp off` to disable it, and `/lane native-mcp` only when testing LM Studio's native MCP API. Cloud models use built-in OpenAI/Anthropic presets; LM Studio models are fetched from `SWITCHBAY_LMSTUDIO_BASE`. Use `/mcp init` for an empty starter config, `/mcp catalog` to list trusted MCP options, or `/create-mcp` for the conversational MCP config builder.
 
 Bay only creates MCP configs from Switchbay's trusted catalog: Playwright, filesystem, GitHub, memory, fetch, sequential-thinking, and Postgres. If a request is not in that catalog, Bay refuses to invent a server id and tells you how to proceed manually.
 
@@ -123,9 +130,9 @@ Per command:
 
 ```bash
 switchbay --lane cloud "review the auth flow"
-switchbay --lane cloud-mcp "use the configured MCP-style browser/file workflow through Switchbay"
+SWITCHBAY_MCP=on switchbay --lane cloud "use the configured MCP-style browser/file workflow through Switchbay"
 switchbay --lane local "summarize the changed files"
-switchbay --lane mcp "use my local MCP browser tools"
+SWITCHBAY_MCP=on switchbay --lane local "use my local MCP-style browser workflow through Switchbay"
 ```
 
 ## Usage
@@ -182,7 +189,7 @@ Inside the TUI:
 /new               Start a fresh session
 /compact           Compress the transcript into context
 /clear             Clear the visible conversation
-/lane              Cycle Cloud, Cloud MCP, LM Studio, and LM Studio MCP lanes
+/lane              Cycle Cloud and LM Studio model lanes
 /model             Pick a cloud preset or LM Studio model
 /init              Generate SWITCHBAY.md for this repo
 /pin               Pin a file into future turn context
@@ -203,14 +210,16 @@ Inside the TUI:
 /agents            Browse available agents
 /create-agent      Create a custom local agent
 /create-skill      Create a custom Toolbox skill
-/create-mcp        Create a custom LM Studio MCP lane config
+/create-mcp        Create a custom Switchbay MCP bridge config
 /edit              Open the file edit picker
 /engines           List registered engines
 /create-engine     Create a custom workspace engine manifest
 /engine-bay        Show or sync the GitHub engine hub
 /creative          Show the built-in Creative Engine lane
 /toolbox           Show or sync reusable agent skills
-/mcp               Show or initialize LM Studio MCP config
+/mcp               Show or initialize Switchbay MCP bridge config
+/mcp on            Enable the Switchbay MCP bridge for this session
+/mcp off           Disable the Switchbay MCP bridge for this session
 /mcp catalog       List trusted MCP config options
 ```
 
@@ -228,7 +237,7 @@ Switchbay looks for:
 - `.switchbay/quickstarts/*.md`: workspace-specific quick-start guides.
 - `~/.switchbay/rules/*.rule.md`: user operating rules shared across repos.
 - `~/.switchbay/quickstarts/*.md`: user quick-start guides shared across repos.
-- `~/.switchbay/lmstudio.mcp.json`: user LM Studio MCP lane config.
+- `~/.switchbay/lmstudio.mcp.json`: user MCP bridge config, also used by the legacy LM Studio native MCP lane.
 
 Switchbay reads and writes the Switchbay names directly. Old project aliases are no longer part of the active workflow.
 
@@ -277,7 +286,7 @@ Memory is injected into sessions as a compact operational block. Opening a sessi
 
 Switchbay injects a compact Quick Starts and Rules block into Bay's system context. These guides act like small "read this first" packets before Bay uses a tool lane, edits a file type, or follows a custom workflow.
 
-Built-in guides cover local tool use, Web Engine use, LM Studio MCP setup, Engine Bay calls, and local-first workspace boundaries. Add your own as markdown files:
+Built-in guides cover local tool use, Web Engine use, Switchbay MCP setup, Engine Bay calls, and local-first workspace boundaries. Add your own as markdown files:
 
 ```text
 ~/.switchbay/rules/*.rule.md

@@ -110,7 +110,7 @@ test("sends the LM Studio API key when configured", async () => {
   expect(authHeaders).toEqual(["Bearer lmstudio-test-key", "Bearer lmstudio-test-key"]);
 });
 
-test("lists LM Studio models for the MCP lane", async () => {
+test("lists LM Studio models for the native MCP lane", async () => {
   Bun.env.SWITCHBAY_LANE = "local-mcp";
   Bun.env.SWITCHBAY_LMSTUDIO_MODEL = "mcp-default";
 

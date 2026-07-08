@@ -2,7 +2,7 @@ import React from "react";
 import { render } from "ink";
 import { parseCliArgs } from "./src/cli/args";
 import { createRuntimeClient } from "./src/runtime/client";
-import { normalizeRuntimeLane } from "./src/config/env";
+import { getToolMode, normalizeRuntimeLane } from "./src/config/env";
 import { SwitchbayApp } from "./src/tui/app";
 import { loadSwitchbayConfig } from "./src/config/switchbay-config";
 import { fuzzyMatchLocations, travelTo } from "./src/tools/travel";
@@ -263,7 +263,9 @@ async function runMcpCommand(action: "status" | "init" | "catalog") {
 }
 
 async function runCliMode(options: any, resumeId: string | null) {
-  const client = createRuntimeClient(normalizeRuntimeLane(options.lane));
+  const runtimeLane = normalizeRuntimeLane(options.lane);
+  const toolMode = getToolMode();
+  const client = createRuntimeClient(runtimeLane);
   const workspace = await refreshWorkspace();
   
   let state = await loadPersistedSession(resumeId === "latest" ? undefined : resumeId || undefined);
@@ -286,6 +288,8 @@ async function runCliMode(options: any, resumeId: string | null) {
     previousObjective: state.currentObjective,
     transcript: state.conversation,
     workspace,
+    runtimeLane,
+    toolMode,
   });
 
   process.stdout.write(`\n${CLR.accent}⏺${CLR.reset} ${CLR.text}${CLR.bold}Switchbay${CLR.reset} ${CLR.muted}(thinking...)${CLR.reset}\n`);

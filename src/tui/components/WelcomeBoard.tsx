@@ -71,7 +71,7 @@ export function WelcomeBoard({ appName, lane, version, cwd, terminalWidth }: Wel
             <Text key={i} color={brandColor}>{line}</Text>
           ))}
           <Box marginTop={0}>
-            <Text color={dimColor}>{"          "}cloud/local/MCP lanes</Text>
+            <Text color={dimColor}>{"          "}cloud/local + MCP bridge</Text>
           </Box>
         </Box>
 
@@ -85,7 +85,7 @@ export function WelcomeBoard({ appName, lane, version, cwd, terminalWidth }: Wel
             </Box>
             <Text color={grayColor}>{appName}</Text>
             <Text color={dimColor}>terminal-first AI coding workbench</Text>
-            <Text color={dimColor}>cloud, local, and MCP lanes</Text>
+            <Text color={dimColor}>cloud/local models, Switchbay MCP bridge</Text>
             <Text color={dimColor}>assistant callsign: Bay</Text>
             <Box marginTop={1}>
               <Text color={dimColor}>{displayCwd}</Text>

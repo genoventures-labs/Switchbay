@@ -158,6 +158,24 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     category: "context",
+    command: "/quickstarts",
+    description: "List quick-start guides Bay reads before matching tool/lane work.",
+    example: "/quickstarts",
+  },
+  {
+    category: "context",
+    command: "/rules",
+    description: "List user, workspace, and built-in operating rules.",
+    example: "/rules",
+  },
+  {
+    category: "context",
+    command: "/create-rule",
+    description: "Create a conversational operating rule for Bay and agents.",
+    example: "/create-rule",
+  },
+  {
+    category: "context",
     command: "/forget",
     description: "Remove a memory note by index.",
     example: "/forget 0",

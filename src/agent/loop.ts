@@ -27,6 +27,7 @@ import {
 } from "./agents";
 import { buildToolboxPromptBlock } from "../toolbox/hub";
 import { buildMemoryPromptBlock } from "../memory/store";
+import { buildGuidesPromptBlock, generateRuleDraft, type RuleDraftAnswers, type PendingRuleDraft } from "../context/guides";
 import {
   type AgentMode,
   createThoughtFrame,
@@ -109,6 +110,8 @@ export type PendingMcpDraft = {
   content: string;
   savePath: string;
 };
+
+export type { PendingRuleDraft, RuleDraftAnswers };
 
 export async function generateAgentDefinition(
   client: ChatRuntimeClient,
@@ -232,6 +235,15 @@ Brief:
   if (!content) throw new Error("The model returned no skill content.");
   const savePath = join(workspaceStorageDir(process.cwd()), "toolbox", "skills", `${id}.skill.md`);
   return { id, name: answers.name, content: `${content}\n`, savePath };
+}
+
+export async function generateRuleDefinition(
+  answers: RuleDraftAnswers,
+  cwd = process.cwd(),
+): Promise<PendingRuleDraft> {
+  if (!answers.name.trim()) throw new Error("Rule name is required.");
+  if (!answers.rule.trim()) throw new Error("Rule text is required.");
+  return generateRuleDraft(answers, cwd);
 }
 
 export async function generateEngineManifest(
@@ -556,12 +568,13 @@ export async function buildTurn(input: {
   }
 
   const toolboxBlock = await buildToolboxPromptBlock();
+  const guidesBlock = await buildGuidesPromptBlock(cwd);
 
   let systemPrompt = `You are a local-first coding agent running inside a terminal switchbay.
 Current Mode: ${mode}
 Current Profile: ${input.profile}
 Current Workspace: ${cwd}
-Assistant Callsign: Bay${oriMdBlock}${memoryBlock}${pinsBlock}${agentBlock}${toolboxBlock}
+Assistant Callsign: Bay${oriMdBlock}${memoryBlock}${pinsBlock}${agentBlock}${toolboxBlock}${guidesBlock}
 
 GROUNDING RULES:
 1. You are running inside a local development tool.

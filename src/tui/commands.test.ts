@@ -14,6 +14,9 @@ test("command palette lists only implemented command families", () => {
   expect(commands).toContain("/checkpoint");
   expect(commands).toContain("/edit");
   expect(commands).toContain("/memory");
+  expect(commands).toContain("/quickstarts");
+  expect(commands).toContain("/rules");
+  expect(commands).toContain("/create-rule");
   expect(commands).toContain("/engines");
   expect(commands).toContain("/engine-bay");
   expect(commands).toContain("/creative");
@@ -37,6 +40,9 @@ test("command palette searches commands, examples, descriptions, and categories"
   expect(getCommandMatches("/stash").map((item) => item.command)).toContain("/checkpoint");
   expect(getCommandMatches("/session").map((item) => item.command)).toContain("/sessions");
   expect(getCommandMatches("/memory").map((item) => item.command)).toContain("/memory");
+  expect(getCommandMatches("/rule").map((item) => item.command)).toContain("/rules");
+  expect(getCommandMatches("/rule").map((item) => item.command)).toContain("/create-rule");
+  expect(getCommandMatches("/quick").map((item) => item.command)).toContain("/quickstarts");
   expect(getCommandMatches("/mcp").map((item) => item.command)).toContain("/mcp");
   expect(getCommandMatches("/mcp").map((item) => item.command)).toContain("/create-mcp");
   expect(getCommandMatches("/engine").map((item) => item.command)).toContain("/engines");

@@ -35,8 +35,9 @@ import { EngineDrawer, flattenEngineDrawerItems } from "./components/EngineDrawe
 import { CreateAgentDrawer, type CreateAgentAnswers } from "./components/CreateAgentDrawer";
 import { CreateEngineDrawer, type CreateEngineAnswers } from "./components/CreateEngineDrawer";
 import { CreateMcpDrawer, type CreateMcpAnswers } from "./components/CreateMcpDrawer";
+import { CreateRuleDrawer, type CreateRuleAnswers } from "./components/CreateRuleDrawer";
 import { CreateSkillDrawer, type CreateSkillAnswers } from "./components/CreateSkillDrawer";
-import { generateAgentDefinition, generateEngineManifest, generateLmStudioMcpConfig, generatePlan, generateSkillDefinition, type PendingAgentDraft, type PendingEngineDraft, type PendingMcpDraft, type PendingSkillDraft } from "../agent/loop";
+import { generateAgentDefinition, generateEngineManifest, generateLmStudioMcpConfig, generatePlan, generateRuleDefinition, generateSkillDefinition, type PendingAgentDraft, type PendingEngineDraft, type PendingMcpDraft, type PendingRuleDraft, type PendingSkillDraft } from "../agent/loop";
 import type { ActivePlan } from "../agent/turn-state";
 import { ShortcutDrawer } from "./components/ShortcutDrawer";
 import { getCommandMatches } from "./commands";
@@ -59,7 +60,7 @@ export type SwitchbayAppProps = {
   resumeId?: string | null;
 };
 
-type ComposerMode = "default" | "edit_file_picker" | "edit_intent" | "resume_picker" | "agent_picker" | "engine_picker" | "model_picker" | "skill_picker" | "create_agent" | "create_engine" | "create_mcp" | "create_skill" | "shortcut_picker";
+type ComposerMode = "default" | "edit_file_picker" | "edit_intent" | "resume_picker" | "agent_picker" | "engine_picker" | "model_picker" | "skill_picker" | "create_agent" | "create_engine" | "create_mcp" | "create_rule" | "create_skill" | "shortcut_picker";
 
 export function SwitchbayApp({
   client,
@@ -129,6 +130,8 @@ export function SwitchbayApp({
   const [pendingEngineDraft, setPendingEngineDraft] = useState<PendingEngineDraft | null>(null);
   const [createMcpGenerating, setCreateMcpGenerating] = useState(false);
   const [pendingMcpDraft, setPendingMcpDraft] = useState<PendingMcpDraft | null>(null);
+  const [createRuleGenerating, setCreateRuleGenerating] = useState(false);
+  const [pendingRuleDraft, setPendingRuleDraft] = useState<PendingRuleDraft | null>(null);
   const [createSkillGenerating, setCreateSkillGenerating] = useState(false);
   const [pendingSkillDraft, setPendingSkillDraft] = useState<PendingSkillDraft | null>(null);
   const [turnThoughts, setTurnThoughts] = useState<string[]>([]);
@@ -199,7 +202,7 @@ export function SwitchbayApp({
   const composerRows = initialQuery ? 3 : state.status === "THINKING" ? Math.min(7, 4 + turnThoughts.length) : 4;
   const drawerRows =
     commandDrawerVisible || mentionPickerVisible || resumeDrawerVisible || shortcutDrawerVisible ||
-    editPickerState.visible || composerMode === "agent_picker" || engineDrawerVisible || modelDrawerVisible || skillDrawerVisible || composerMode === "create_agent" || composerMode === "create_engine" || composerMode === "create_mcp" || composerMode === "create_skill"
+    editPickerState.visible || composerMode === "agent_picker" || engineDrawerVisible || modelDrawerVisible || skillDrawerVisible || composerMode === "create_agent" || composerMode === "create_engine" || composerMode === "create_mcp" || composerMode === "create_rule" || composerMode === "create_skill"
       ? 10
       : composerMode === "edit_intent"
         ? 5
@@ -300,7 +303,7 @@ export function SwitchbayApp({
       return;
     }
 
-    if (composerMode === "create_agent" || composerMode === "create_engine" || composerMode === "create_mcp" || composerMode === "create_skill") {
+    if (composerMode === "create_agent" || composerMode === "create_engine" || composerMode === "create_mcp" || composerMode === "create_rule" || composerMode === "create_skill") {
       if (key.escape) {
         setComposerMode("default");
         setQuerySync("");
@@ -1016,6 +1019,33 @@ export function SwitchbayApp({
       }
     }
 
+    if (pendingRuleDraft) {
+      const intent = parseApprovalIntent(trimmedVal);
+      if (intent === "apply" || intent === "always") {
+        try {
+          const dir = pendingRuleDraft.savePath.replace(/\/[^/]+$/, "");
+          const { mkdir, writeFile: wf } = await import("node:fs/promises");
+          await mkdir(dir, { recursive: true });
+          await wf(pendingRuleDraft.savePath, pendingRuleDraft.content, "utf-8");
+          dispatch({
+            type: "assistant/appended",
+            message: `✓ Rule **${pendingRuleDraft.name}** saved to \`${pendingRuleDraft.savePath}\`\n\nBay will load it in future turns through Quick Starts and Rules.`,
+          });
+        } catch (e: any) {
+          dispatch({ type: "assistant/appended", message: `Save failed: ${e.message}` });
+        }
+        setPendingRuleDraft(null);
+        setQuerySync("");
+        return;
+      }
+      if (intent === "cancel") {
+        setPendingRuleDraft(null);
+        dispatch({ type: "assistant/appended", message: "Rule discarded." });
+        setQuerySync("");
+        return;
+      }
+    }
+
     if (pendingSkillDraft) {
       const intent = parseApprovalIntent(trimmedVal);
       if (intent === "apply" || intent === "always") {
@@ -1266,6 +1296,12 @@ export function SwitchbayApp({
 
       if (localCommand.openCreateMcp) {
         setComposerMode("create_mcp");
+        setQuerySync("");
+        return;
+      }
+
+      if (localCommand.openCreateRule) {
+        setComposerMode("create_rule");
         setQuerySync("");
         return;
       }
@@ -1558,6 +1594,24 @@ export function SwitchbayApp({
     }
   }
 
+  async function handleCreateRuleComplete(answers: CreateRuleAnswers) {
+    setCreateRuleGenerating(true);
+    try {
+      const draft = await generateRuleDefinition(answers, state.workspace?.cwd ?? process.cwd());
+      setComposerMode("default");
+      setCreateRuleGenerating(false);
+      setPendingRuleDraft(draft);
+      dispatch({
+        type: "assistant/appended",
+        message: `Here's your **${draft.name}** rule:\n\n\`\`\`markdown\n${draft.content}\`\`\`\n\nSave path: \`${draft.savePath}\`\n\n**y** to save · **n** to discard`,
+      });
+    } catch (e: any) {
+      setComposerMode("default");
+      setCreateRuleGenerating(false);
+      dispatch({ type: "assistant/appended", message: `Failed to generate rule: ${e.message}` });
+    }
+  }
+
   async function handleCreateSkillComplete(answers: CreateSkillAnswers) {
     setCreateSkillGenerating(true);
     try {
@@ -1597,7 +1651,7 @@ export function SwitchbayApp({
   useEffect(() => {
     const trimmed = query.trim();
 
-    if (composerMode === "edit_intent" || composerMode === "resume_picker" || composerMode === "agent_picker" || composerMode === "model_picker" || composerMode === "skill_picker" || composerMode === "create_agent" || composerMode === "create_engine" || composerMode === "create_mcp" || composerMode === "create_skill" || composerMode === "shortcut_picker") {
+    if (composerMode === "edit_intent" || composerMode === "resume_picker" || composerMode === "agent_picker" || composerMode === "model_picker" || composerMode === "skill_picker" || composerMode === "create_agent" || composerMode === "create_engine" || composerMode === "create_mcp" || composerMode === "create_rule" || composerMode === "create_skill" || composerMode === "shortcut_picker") {
       return;
     }
 
@@ -1712,6 +1766,12 @@ export function SwitchbayApp({
           onComplete={handleCreateMcpComplete}
           onCancel={() => { setComposerMode("default"); setQuerySync(""); }}
         />
+        <CreateRuleDrawer
+          visible={composerMode === "create_rule" || createRuleGenerating}
+          generating={createRuleGenerating}
+          onComplete={handleCreateRuleComplete}
+          onCancel={() => { setComposerMode("default"); setQuerySync(""); }}
+        />
         <CreateSkillDrawer
           visible={composerMode === "create_skill" || createSkillGenerating}
           generating={createSkillGenerating}
@@ -1732,11 +1792,12 @@ export function SwitchbayApp({
           visible={mentionPickerVisible}
         />
         <Composer
-          disabled={composerMode === "edit_intent" || composerMode === "create_agent" || composerMode === "create_engine" || composerMode === "create_mcp" || composerMode === "create_skill"}
+          disabled={composerMode === "edit_intent" || composerMode === "create_agent" || composerMode === "create_engine" || composerMode === "create_mcp" || composerMode === "create_rule" || composerMode === "create_skill"}
           initialQuery={initialQuery}
           pendingApprovalKind={
             pendingEngineDraft ? "engine_draft" :
             pendingMcpDraft ? "mcp_draft" :
+            pendingRuleDraft ? "rule_draft" :
             pendingSkillDraft ? "skill_draft" :
             pendingAgentDraft ? "agent_draft" :
             state.activePlan?.status === "pending_approval" ? "plan_approval" :

@@ -30,6 +30,7 @@ import {
   readMemoryFacts,
   refreshMemory,
 } from "../memory/store";
+import { describeGuides } from "../context/guides";
 
 export type LocalCommandResult = {
   handled: boolean;
@@ -44,6 +45,7 @@ export type LocalCommandResult = {
   openCreateAgent?: boolean;
   openCreateEngine?: boolean;
   openCreateMcp?: boolean;
+  openCreateRule?: boolean;
   openCreateSkill?: boolean;
   openEnginePicker?: boolean;
   openSkillPicker?: boolean;
@@ -83,6 +85,7 @@ export async function tryLocalCommand(
     if (creationIntent === "agent") return { handled: true, openCreateAgent: true };
     if (creationIntent === "engine") return { handled: true, openCreateEngine: true };
     if (creationIntent === "mcp") return { handled: true, openCreateMcp: true };
+    if (creationIntent === "rule") return { handled: true, openCreateRule: true };
     if (creationIntent === "skill") return { handled: true, openCreateSkill: true };
     return { handled: false };
   }
@@ -146,6 +149,25 @@ export async function tryLocalCommand(
 
   if (trimmed === "/create-skill") {
     return { handled: true, openCreateSkill: true };
+  }
+
+  if (trimmed === "/create-rule") {
+    return { handled: true, openCreateRule: true };
+  }
+
+  if (trimmed === "/quickstarts" || trimmed === "/quickstart") {
+    const cwd = options.workspace?.cwd ?? process.cwd();
+    return { handled: true, assistantMessage: await describeGuides(cwd, "quickstart") };
+  }
+
+  if (trimmed === "/rules" || trimmed.startsWith("/rules ")) {
+    const action = trimmed.slice("/rules".length).trim().toLowerCase();
+    if (action === "create") return { handled: true, openCreateRule: true };
+    if (action && action !== "list") {
+      return { handled: true, assistantMessage: "Usage: `/rules [list|create]`" };
+    }
+    const cwd = options.workspace?.cwd ?? process.cwd();
+    return { handled: true, assistantMessage: await describeGuides(cwd, "rule") };
   }
 
   if (trimmed === "/mcp" || trimmed.startsWith("/mcp ")) {
@@ -287,7 +309,7 @@ export async function tryLocalCommand(
   return { handled: false };
 }
 
-function parseConversationalCreationIntent(input: string): "agent" | "engine" | "mcp" | "skill" | null {
+function parseConversationalCreationIntent(input: string): "agent" | "engine" | "mcp" | "rule" | "skill" | null {
   const normalized = input
     .toLowerCase()
     .replace(/^[,\s]*(hey|yo|ok|okay)?\s*(bay|switchbay)[,\s:;-]*/i, "")
@@ -300,6 +322,7 @@ function parseConversationalCreationIntent(input: string): "agent" | "engine" | 
   if (/\b(agent|specialist|persona)\b/.test(normalized)) return "agent";
   if (/\b(mcp|mcp config|mcp lane|lm studio mcp|lmstudio mcp|tool server|tool servers)\b/.test(normalized)) return "mcp";
   if (/\b(engine|engine builder|engine manifest|tool engine)\b/.test(normalized)) return "engine";
+  if (/\b(rule|rules|operating rule|behavior rule|always remember to|never do|must always|must never)\b/.test(normalized)) return "rule";
   if (/\b(skill|toolbox skill|workflow|checklist)\b/.test(normalized)) return "skill";
   return null;
 }

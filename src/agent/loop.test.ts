@@ -11,6 +11,7 @@ import {
   extractAssistantText,
   generateEngineManifest,
   generateLmStudioMcpConfig,
+  generateRuleDefinition,
   generateSkillDefinition,
   synthesizeAssistantFallback,
 } from "./loop";
@@ -148,6 +149,33 @@ triggers: [launch, release]
   expect(draft.content).toContain("id: launch-check");
 });
 
+test("generateRuleDefinition produces a user rule draft", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "switchbay-rule-draft-"));
+  const previous = Bun.env.SWITCHBAY_CONFIG_DIR;
+  Bun.env.SWITCHBAY_CONFIG_DIR = join(cwd, "user-config");
+
+  try {
+    const draft = await generateRuleDefinition({
+      name: "Spreadsheet Edits",
+      trigger: "spreadsheet, csv, sheets",
+      rule: "Read the quick start before editing sheets.\nNever overwrite formulas without calling it out.",
+      appliesTo: "Spreadsheet and CSV editing tasks.",
+      scope: "global",
+    }, cwd);
+
+    expect(draft.id).toBe("spreadsheet-edits");
+    expect(draft.savePath).toBe(join(cwd, "user-config", "rules", "spreadsheet-edits.rule.md"));
+    expect(draft.content).toContain("triggers: [spreadsheet, csv, sheets]");
+    expect(draft.content).toContain("Never overwrite formulas");
+  } finally {
+    if (previous === undefined) {
+      delete Bun.env.SWITCHBAY_CONFIG_DIR;
+    } else {
+      Bun.env.SWITCHBAY_CONFIG_DIR = previous;
+    }
+  }
+});
+
 test("generateLmStudioMcpConfig produces a user MCP config draft", async () => {
   const { client } = createMockClient([
     createResponse(`{
@@ -246,6 +274,8 @@ test("buildTurn injects Toolbox skills into system context", async () => {
   const system = turn.request.messages.find((message) => message.role === "system")?.content ?? "";
   expect(system).toContain("TOOLBOX SKILLS");
   expect(system).toContain("code-review-pass");
+  expect(system).toContain("QUICK STARTS AND RULES");
+  expect(system).toContain("tool-use-quick-start");
 });
 
 test("operational memory commands save, refresh, and inject context", async () => {
@@ -788,6 +818,10 @@ test("conversational creation requests open builders", async () => {
   expect(mcp.handled).toBe(true);
   expect(mcp.openCreateMcp).toBe(true);
 
+  const rule = await tryLocalCommand("make a rule that Bay always reads spreadsheet quick starts", baseOptions);
+  expect(rule.handled).toBe(true);
+  expect(rule.openCreateRule).toBe(true);
+
   const skill = await tryLocalCommand("create a release checklist skill", baseOptions);
   expect(skill.handled).toBe(true);
   expect(skill.openCreateSkill).toBe(true);
@@ -852,6 +886,36 @@ test("toolbox tools and slash command expose built-in skills", async () => {
   });
   expect(slash.handled).toBe(true);
   expect(slash.assistantMessage).toContain("implementation-plan");
+});
+
+test("guide slash commands expose quick starts and rules", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "switchbay-guides-"));
+  const baseOptions = {
+    client: {} as any,
+    profile: "switchbay",
+    sessionId: "test-session",
+    surface: "dev",
+    workspace: {
+      cwd,
+      repoRoot: cwd,
+      branch: null,
+      dirtyFiles: [],
+      recentFiles: [],
+      diff: { hasChanges: false, stat: "" },
+    },
+  };
+
+  const quickstarts = await tryLocalCommand("/quickstarts", baseOptions);
+  expect(quickstarts.handled).toBe(true);
+  expect(quickstarts.assistantMessage).toContain("Tool Use Quick Start");
+
+  const rules = await tryLocalCommand("/rules", baseOptions);
+  expect(rules.handled).toBe(true);
+  expect(rules.assistantMessage).toContain("Local First Rule");
+
+  const create = await tryLocalCommand("/rules create", baseOptions);
+  expect(create.handled).toBe(true);
+  expect(create.openCreateRule).toBe(true);
 });
 
 test("engine bay slash command lists cached templates", async () => {

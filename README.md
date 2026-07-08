@@ -181,6 +181,9 @@ Inside the TUI:
 /remember          Save a workspace memory note
 /memories          List workspace memory notes
 /memory            Show or refresh operational memory
+/quickstarts       List quick-start guides Bay reads before matching tool work
+/rules             List built-in, user, and workspace operating rules
+/create-rule       Create a conversational rule for Bay and agents
 /review            Review the current diff
 /checkpoint        Save a git-stash checkpoint
 /checkpoints       List checkpoints
@@ -212,6 +215,10 @@ Switchbay looks for:
 - `.switchbay/pins.json`: pinned files and repo notes.
 - `.switchbay/agents/*.md`: custom local specialist agents.
 - `.switchbay/engines/*.engine.json`: workspace engine manifests.
+- `.switchbay/rules/*.rule.md`: workspace-specific operating rules.
+- `.switchbay/quickstarts/*.md`: workspace-specific quick-start guides.
+- `~/.switchbay/rules/*.rule.md`: user operating rules shared across repos.
+- `~/.switchbay/quickstarts/*.md`: user quick-start guides shared across repos.
 - `~/.switchbay/lmstudio.mcp.json`: user LM Studio MCP lane config.
 
 Switchbay reads and writes the Switchbay names directly. Old project aliases are no longer part of the active workflow.
@@ -256,6 +263,30 @@ Model tools:
 - `memory_facts`
 
 Memory is injected into sessions as a compact operational block. Opening a session does not create memory files; `/remember`, `/memory refresh`, or `switchbay memory` initializes the store.
+
+## Quick Starts And Rules
+
+Switchbay injects a compact Quick Starts and Rules block into Bay's system context. These guides act like small "read this first" packets before Bay uses a tool lane, edits a file type, or follows a custom workflow.
+
+Built-in guides cover local tool use, Web Engine use, LM Studio MCP setup, Engine Bay calls, and local-first workspace boundaries. Add your own as markdown files:
+
+```text
+~/.switchbay/rules/*.rule.md
+~/.switchbay/quickstarts/*.md
+.switchbay/rules/*.rule.md
+.switchbay/quickstarts/*.md
+```
+
+TUI:
+
+```text
+/quickstarts
+/rules
+/rules create
+/create-rule
+```
+
+Rules are created conversationally and default to `~/.switchbay/rules` so they follow you across projects. Choose `workspace` in the rule builder for repo-specific behavior.
 
 ## Engine Bay
 

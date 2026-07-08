@@ -33,6 +33,11 @@ type NativeChatResponse = {
   output_text?: string;
 };
 
+type NativeChatPayload = {
+  input: string;
+  systemPrompt?: string;
+};
+
 export class LmStudioMcpClient {
   private readonly apiBase?: string;
   private readonly apiKey?: string;
@@ -65,14 +70,15 @@ export class LmStudioMcpClient {
     if (this.apiKey) {
       headers.Authorization = `Bearer ${this.apiKey}`;
     }
+    const nativePayload = messagesToNativePayload(request.messages, config.systemPrompt);
 
     const response = await this.fetchImpl(`${apiBase}/chat`, {
       method: "POST",
       headers,
       body: JSON.stringify({
         model: request.model ?? config.model ?? getDefaultModel(),
-        input: messagesToInput(request.messages),
-        ...(config.systemPrompt ? { system_prompt: config.systemPrompt } : {}),
+        input: nativePayload.input,
+        ...(nativePayload.systemPrompt ? { system_prompt: nativePayload.systemPrompt } : {}),
         ...(config.contextLength ? { context_length: config.contextLength } : {}),
         ...(integrations.length > 0 ? { integrations } : {}),
         stream: false,
@@ -119,26 +125,48 @@ export class LmStudioMcpClient {
   }
 }
 
-function messagesToInput(messages: ChatMessage[]): Array<{ role: string; content: unknown }> {
-  const normalized = messages
-    .filter((message) => message.role !== "tool")
-    .map((message) => ({
-      role: message.role === "system" ? "system" : message.role,
-      content: message.content,
-    }));
+function messagesToNativePayload(messages: ChatMessage[], configSystemPrompt?: string): NativeChatPayload {
+  const systemParts = [
+    ...messages
+      .filter((message) => message.role === "system")
+      .map((message) => stringifyMessageContent(message.content))
+      .filter(Boolean),
+    configSystemPrompt?.trim() ?? "",
+    [
+      "LM STUDIO MCP LANE:",
+      "Use LM Studio's configured MCP integrations for tool access in this turn.",
+      "Do not attempt Switchbay function-tool calls in this lane; they are not sent through the native LM Studio MCP API.",
+      "If the required MCP server or tool is unavailable, say exactly what is missing.",
+    ].join("\n"),
+  ].filter(Boolean);
 
-  return [
-    ...normalized,
-    {
-      role: "system",
-      content: [
-        "LM STUDIO MCP LANE:",
-        "Use LM Studio's configured MCP integrations for tool access in this turn.",
-        "Do not attempt Switchbay function-tool calls in this lane; they are not sent through the native LM Studio MCP API.",
-        "If the required MCP server or tool is unavailable, say exactly what is missing.",
-      ].join("\n"),
-    },
-  ];
+  const input = messages
+    .filter((message) => message.role !== "system" && message.role !== "tool")
+    .map((message) => `${message.role.toUpperCase()}: ${stringifyMessageContent(message.content)}`)
+    .filter((line) => line.trim().length > 0)
+    .join("\n\n")
+    .trim();
+
+  return {
+    input: input || "Continue.",
+    systemPrompt: systemParts.join("\n\n"),
+  };
+}
+
+function stringifyMessageContent(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content.map(stringifyMessageContent).filter(Boolean).join("");
+  }
+  if (content && typeof content === "object") {
+    const record = content as Record<string, unknown>;
+    if (typeof record.text === "string") return record.text;
+    if (typeof record.content === "string") return record.content;
+    if (record.text || record.content || record.value) {
+      return stringifyMessageContent(record.text ?? record.content ?? record.value);
+    }
+  }
+  return content == null ? "" : String(content);
 }
 
 function extractNativeOutputText(response: NativeChatResponse): string {

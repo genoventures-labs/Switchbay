@@ -89,6 +89,9 @@ test("LM Studio MCP client posts native chat requests with integrations", async 
   const body = JSON.parse(String(calls[0]?.init?.body));
   expect(body.model).toBe("qwen-local");
   expect(body.integrations).toEqual(["mcp/playwright"]);
+  expect(body.input).toBe("USER: Use browser tools.");
+  expect(body.system_prompt).toContain("You are Bay.");
+  expect(body.system_prompt).toContain("LM STUDIO MCP LANE");
   expect(response.output_text).toBe("Done from MCP.");
   expect(response.meta?.provider).toBe("lmstudio-mcp");
   expect(response.meta?.lmstudio_tool_calls).toEqual(["browser_navigate"]);

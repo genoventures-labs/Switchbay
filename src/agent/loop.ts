@@ -28,6 +28,8 @@ import {
 import { buildToolboxPromptBlock } from "../toolbox/hub";
 import { buildMemoryPromptBlock } from "../memory/store";
 import { buildGuidesPromptBlock, generateRuleDraft, type RuleDraftAnswers, type PendingRuleDraft } from "../context/guides";
+import type { RuntimeLane } from "../config/env";
+import { buildCloudMcpPromptBlock, loadLmStudioMcpConfig } from "../runtime/lmstudio-mcp-config";
 import {
   type AgentMode,
   createThoughtFrame,
@@ -523,6 +525,7 @@ export async function buildTurn(input: {
   transcript: ChatMessage[];
   workspace: WorkspaceSnapshot | null;
   activeAgentId?: string | null;
+  runtimeLane?: RuntimeLane;
 }): Promise<BuiltTurn> {
   const mode = (input.mode as AgentMode) || "build";
   const objective = input.input.slice(0, 100);
@@ -569,12 +572,16 @@ export async function buildTurn(input: {
 
   const toolboxBlock = await buildToolboxPromptBlock();
   const guidesBlock = await buildGuidesPromptBlock(cwd);
+  const cloudMcpBlock = input.runtimeLane === "cloud-mcp"
+    ? buildCloudMcpPromptBlock(await loadLmStudioMcpConfig(cwd))
+    : "";
 
   let systemPrompt = `You are a local-first coding agent running inside a terminal switchbay.
 Current Mode: ${mode}
 Current Profile: ${input.profile}
 Current Workspace: ${cwd}
-Assistant Callsign: Bay${oriMdBlock}${memoryBlock}${pinsBlock}${agentBlock}${toolboxBlock}${guidesBlock}
+Runtime Lane: ${input.runtimeLane ?? "cloud"}
+Assistant Callsign: Bay${oriMdBlock}${memoryBlock}${pinsBlock}${agentBlock}${toolboxBlock}${guidesBlock}${cloudMcpBlock}
 
 GROUNDING RULES:
 1. You are running inside a local development tool.

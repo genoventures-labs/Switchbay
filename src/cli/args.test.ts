@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { normalizeRuntimeLane } from "../config/env";
 import { parseCliArgs } from "./args";
 
 test("parses MCP CLI helper commands", () => {
@@ -20,4 +21,10 @@ test("parses MCP runtime lane aliases", () => {
   expect(parsed.subcommand).toBe("run");
   expect(parsed.lane).toBe("mcp");
   expect(parsed.initialQuery).toBe("hello");
+});
+
+test("normalizes cloud MCP runtime lane aliases", () => {
+  expect(normalizeRuntimeLane("cloud-mcp")).toBe("cloud-mcp");
+  expect(normalizeRuntimeLane("cloudmcp")).toBe("cloud-mcp");
+  expect(normalizeRuntimeLane("cmcp")).toBe("cloud-mcp");
 });

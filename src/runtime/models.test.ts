@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { getCloudModelPresets, listLmStudioModels } from "./models";
+import { getCloudModelPresets, listRuntimeModels, listLmStudioModels } from "./models";
 
 const savedEnv = {
   SWITCHBAY_LANE: Bun.env.SWITCHBAY_LANE,
@@ -31,6 +31,15 @@ test("cloud presets include the current OpenAI main, mini, and nano models", () 
     "gpt-5.4-mini",
     "gpt-5.4-nano",
   ]);
+});
+
+test("cloud MCP model list uses cloud presets on the cloud-mcp lane", async () => {
+  const result = await listRuntimeModels("cloud-mcp");
+
+  expect(result.models.length).toBeGreaterThan(0);
+  expect(result.models.every((model) => model.lane === "cloud-mcp")).toBe(true);
+  expect(result.models.map((model) => model.provider)).toContain("openai");
+  expect(result.models.map((model) => model.provider)).toContain("anthropic");
 });
 
 test("lists LM Studio models from the configured host", async () => {

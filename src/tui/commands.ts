@@ -62,6 +62,12 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     category: "runtime",
+    command: "/lane cloud-mcp",
+    description: "Switch to cloud models with Switchbay MCP guide/tool bridging.",
+    example: "/lane cloud-mcp",
+  },
+  {
+    category: "runtime",
     command: "/lane local",
     description: "Switch this TUI session to the local LM Studio lane.",
     example: "/lane local",
@@ -77,6 +83,12 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     command: "/model",
     description: "Open the model picker for the active runtime lane.",
     example: "/model",
+  },
+  {
+    category: "runtime",
+    command: "/model cloud-mcp",
+    description: "Pick a cloud model for the Cloud MCP lane.",
+    example: "/model cloud-mcp",
   },
   {
     category: "runtime",

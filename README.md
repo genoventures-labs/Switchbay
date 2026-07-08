@@ -93,6 +93,14 @@ export SWITCHBAY_LMSTUDIO_BASE=http://192.168.1.50:1234/v1
 export SWITCHBAY_LMSTUDIO_API_KEY=... # create in LM Studio if auth is enabled
 ```
 
+Cloud MCP lane:
+
+```bash
+export SWITCHBAY_LANE=cloud-mcp
+export OPENAI_API_KEY=...
+export ANTHROPIC_API_KEY=...
+```
+
 Then create or tune `~/.switchbay/lmstudio.mcp.json`:
 
 ```json
@@ -107,7 +115,7 @@ Then create or tune `~/.switchbay/lmstudio.mcp.json`:
 
 Add only MCP ids that actually exist in LM Studio, such as `"mcp/playwright"` after Playwright is installed/enabled in LM Studio's `mcp.json`.
 
-Inside the TUI, use `/lane` to cycle Cloud/LM Studio/LM Studio MCP, `/lane mcp` to jump straight to the MCP lane, and `/model` to open the model drawer. Cloud models use built-in OpenAI/Anthropic presets; LM Studio models are fetched from `SWITCHBAY_LMSTUDIO_BASE`. Use `/mcp init` for an empty starter config, `/mcp catalog` to list trusted MCP options, or `/create-mcp` for the conversational MCP config builder. LM Studio still needs the MCP servers installed/enabled in its own app settings; Switchbay requests those servers through the native LM Studio API.
+Inside the TUI, use `/lane` to cycle Cloud/Cloud MCP/LM Studio/LM Studio MCP, `/lane cloud-mcp` for cloud models with Switchbay MCP guide/tool bridging, `/lane mcp` for LM Studio's native MCP lane, and `/model` to open the model drawer. Cloud models use built-in OpenAI/Anthropic presets; LM Studio models are fetched from `SWITCHBAY_LMSTUDIO_BASE`. Use `/mcp init` for an empty starter config, `/mcp catalog` to list trusted MCP options, or `/create-mcp` for the conversational MCP config builder. LM Studio still needs the MCP servers installed/enabled in its own app settings when you use `local-mcp`; `cloud-mcp` does not call LM Studio's native MCP chat API.
 
 Bay only creates MCP configs from Switchbay's trusted catalog: Playwright, filesystem, GitHub, memory, fetch, sequential-thinking, and Postgres. If a request is not in that catalog, Bay refuses to invent a server id and tells you how to proceed manually.
 
@@ -115,6 +123,7 @@ Per command:
 
 ```bash
 switchbay --lane cloud "review the auth flow"
+switchbay --lane cloud-mcp "use the configured MCP-style browser/file workflow through Switchbay"
 switchbay --lane local "summarize the changed files"
 switchbay --lane mcp "use my local MCP browser tools"
 ```
@@ -173,7 +182,7 @@ Inside the TUI:
 /new               Start a fresh session
 /compact           Compress the transcript into context
 /clear             Clear the visible conversation
-/lane              Cycle Cloud, LM Studio, and LM Studio MCP lanes
+/lane              Cycle Cloud, Cloud MCP, LM Studio, and LM Studio MCP lanes
 /model             Pick a cloud preset or LM Studio model
 /init              Generate SWITCHBAY.md for this repo
 /pin               Pin a file into future turn context

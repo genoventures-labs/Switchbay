@@ -229,7 +229,15 @@ export function SwitchbayApp({
   }
 
   function switchRuntimeLane(nextLane?: RuntimeLane) {
-    const resolved = nextLane ?? (runtimeLane === "cloud" ? "local" : runtimeLane === "local" ? "local-mcp" : "cloud");
+    const resolved = nextLane ?? (
+      runtimeLane === "cloud"
+        ? "cloud-mcp"
+        : runtimeLane === "cloud-mcp"
+          ? "local"
+          : runtimeLane === "local"
+            ? "local-mcp"
+            : "cloud"
+    );
     setRuntimeLane(resolved);
     setActiveRuntimeModel(null);
     setRuntimeClient(createRuntimeClient(resolved));
@@ -822,6 +830,10 @@ export function SwitchbayApp({
         switchRuntimeLane("cloud");
         return;
       }
+      if (requested === "cloud-mcp" || requested === "cloudmcp" || requested === "cmcp") {
+        switchRuntimeLane("cloud-mcp");
+        return;
+      }
       if (requested === "local" || requested === "lm" || requested === "lmstudio") {
         switchRuntimeLane("local");
         return;
@@ -832,7 +844,7 @@ export function SwitchbayApp({
       }
       dispatch({
         type: "assistant/appended",
-        message: `Unknown lane \`${requested}\`. Use \`/lane cloud\`, \`/lane local\`, \`/lane mcp\`, or \`/lane\` to toggle.`,
+        message: `Unknown lane \`${requested}\`. Use \`/lane cloud\`, \`/lane cloud-mcp\`, \`/lane local\`, \`/lane mcp\`, or \`/lane\` to toggle.`,
       });
       setQuerySync("");
       return;
@@ -861,6 +873,11 @@ export function SwitchbayApp({
         setQuerySync("");
         return;
       }
+      if (requested === "cloud-mcp" || requested === "cloudmcp" || requested === "cmcp") {
+        void openModelDrawer("cloud-mcp");
+        setQuerySync("");
+        return;
+      }
       if (requested === "local" || requested === "lm" || requested === "lmstudio") {
         void openModelDrawer("local");
         setQuerySync("");
@@ -873,7 +890,7 @@ export function SwitchbayApp({
       }
       dispatch({
         type: "assistant/appended",
-        message: `Unknown model lane \`${requested}\`. Use \`/model\`, \`/model cloud\`, \`/model local\`, or \`/model mcp\`.`,
+        message: `Unknown model lane \`${requested}\`. Use \`/model\`, \`/model cloud\`, \`/model cloud-mcp\`, \`/model local\`, or \`/model mcp\`.`,
       });
       setQuerySync("");
       return;
@@ -1391,6 +1408,7 @@ export function SwitchbayApp({
       transcript: state.conversation,
       workspace,
       activeAgentId: state.activeAgentId,
+      runtimeLane,
     });
 
     dispatch({

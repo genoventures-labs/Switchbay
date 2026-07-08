@@ -14,11 +14,14 @@ function readFirstEnv(...keys: string[]): string | undefined {
   return undefined;
 }
 
-export type RuntimeLane = "cloud" | "local" | "local-mcp";
+export type RuntimeLane = "cloud" | "cloud-mcp" | "local" | "local-mcp";
 export type CloudProvider = "auto" | "openai" | "anthropic";
 
 export function normalizeRuntimeLane(value?: string | null): RuntimeLane {
   const lane = (value ?? DEFAULTS.lane).toLowerCase();
+  if (lane === "cloud-mcp" || lane === "cloudmcp" || lane === "cmcp") {
+    return "cloud-mcp";
+  }
   if (lane === "mcp" || lane === "local-mcp" || lane === "lm-mcp" || lane === "lmstudio-mcp") {
     return "local-mcp";
   }

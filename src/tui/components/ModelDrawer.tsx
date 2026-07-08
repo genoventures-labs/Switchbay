@@ -83,7 +83,9 @@ export function ModelDrawer({
                       ? "LM Studio local lane"
                       : item.lane === "local-mcp"
                         ? "LM Studio MCP lane"
-                        : "Cloud lane"} · {item.source}
+                        : item.lane === "cloud-mcp"
+                          ? "Cloud MCP lane"
+                          : "Cloud lane"} · {item.source}
                   </Text>
                 </Box>
               ) : null}

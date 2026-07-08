@@ -54,17 +54,21 @@ type LmStudioNativeModelsResponse = {
 type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 
 export function getCloudModelPresets(): RuntimeModelOption[] {
+  return getCloudModelPresetsForLane("cloud");
+}
+
+export function getCloudModelPresetsForLane(lane: Extract<RuntimeLane, "cloud" | "cloud-mcp">): RuntimeModelOption[] {
   return uniqueModels([
-    envModelOption(getOpenAiModel(), "OpenAI env default", "cloud", "openai"),
-    envModelOption(getAnthropicModel(), "Anthropic env default", "cloud", "anthropic"),
-    ...OPENAI_PRESETS,
-    ...ANTHROPIC_PRESETS,
+    envModelOption(getOpenAiModel(), "OpenAI env default", lane, "openai"),
+    envModelOption(getAnthropicModel(), "Anthropic env default", lane, "anthropic"),
+    ...OPENAI_PRESETS.map((model) => ({ ...model, lane })),
+    ...ANTHROPIC_PRESETS.map((model) => ({ ...model, lane })),
   ]);
 }
 
 export async function listRuntimeModels(lane: RuntimeLane): Promise<RuntimeModelList> {
-  if (lane === "cloud") {
-    return { models: getCloudModelPresets() };
+  if (lane === "cloud" || lane === "cloud-mcp") {
+    return { models: getCloudModelPresetsForLane(lane) };
   }
 
   return listLmStudioModels(undefined, lane);

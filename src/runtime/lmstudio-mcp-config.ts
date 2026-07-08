@@ -108,6 +108,28 @@ export function describeLmStudioMcpConfig(status: LmStudioMcpConfigStatus): stri
   ].join("\n");
 }
 
+export function buildCloudMcpPromptBlock(status: LmStudioMcpConfigStatus): string {
+  const integrations = status.integrations.length
+    ? status.integrations.map((item) => `- ${formatIntegrationLabel(item)}`).join("\n")
+    : "- No MCP integrations configured yet.";
+
+  return [
+    "",
+    "",
+    "SWITCHBAY CLOUD MCP LANE:",
+    `Config: ${status.path}${status.exists ? "" : " (not created yet)"}`,
+    "The active model is a cloud model. Do not call LM Studio's native MCP chat API.",
+    "Use Switchbay's local tool bridge for tool execution and treat configured MCP integrations as allowed tool intent.",
+    "Configured MCP integrations:",
+    integrations,
+    "",
+    "Cloud MCP rules:",
+    "- If the user asks for configured MCP/browser/file/fetch behavior, use the matching Switchbay tool calls when available.",
+    "- If a requested MCP server is not configured or no matching Switchbay bridge tool exists, say exactly what is missing.",
+    "- Do not invent MCP server ids, tool names, plugin handles, or external capabilities.",
+  ].join("\n");
+}
+
 export function formatIntegrationLabel(item: LmStudioMcpIntegration): string {
   if (typeof item === "string") return item;
   if (item.type === "plugin") return item.id;

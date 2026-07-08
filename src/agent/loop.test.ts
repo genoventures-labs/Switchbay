@@ -278,6 +278,42 @@ test("buildTurn injects Toolbox skills into system context", async () => {
   expect(system).toContain("tool-use-quick-start");
 });
 
+test("buildTurn injects Cloud MCP guidance for cloud-mcp lane", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "switchbay-cloud-mcp-context-"));
+  const previous = Bun.env.SWITCHBAY_CONFIG_DIR;
+  Bun.env.SWITCHBAY_CONFIG_DIR = join(cwd, "user-config");
+
+  try {
+    const turn = await buildTurn({
+      input: "use browser MCP tools",
+      mode: "build",
+      previousObjective: null,
+      profile: "switchbay",
+      runtimeLane: "cloud-mcp",
+      transcript: [],
+      workspace: {
+        cwd,
+        repoRoot: cwd,
+        branch: null,
+        dirtyFiles: [],
+        recentFiles: [],
+        diff: { hasChanges: false, stat: "" },
+      },
+    });
+
+    const system = turn.request.messages.find((message) => message.role === "system")?.content ?? "";
+    expect(system).toContain("Runtime Lane: cloud-mcp");
+    expect(system).toContain("SWITCHBAY CLOUD MCP LANE");
+    expect(system).toContain("Do not call LM Studio's native MCP chat API");
+  } finally {
+    if (previous === undefined) {
+      delete Bun.env.SWITCHBAY_CONFIG_DIR;
+    } else {
+      Bun.env.SWITCHBAY_CONFIG_DIR = previous;
+    }
+  }
+});
+
 test("operational memory commands save, refresh, and inject context", async () => {
   const cwd = await mkdtemp(join(tmpdir(), "switchbay-memory-"));
   await writeFile(join(cwd, "package.json"), JSON.stringify({ name: "memory-demo", scripts: { test: "bun test" } }), "utf-8");

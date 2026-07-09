@@ -242,6 +242,30 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     category: "context",
+    command: "/agenda",
+    description: "Show today's Daily Board.",
+    example: "/agenda",
+  },
+  {
+    category: "context",
+    command: "/task add",
+    description: "Add a task to today's Daily Board.",
+    example: "/task add test brew install",
+  },
+  {
+    category: "context",
+    command: "/task done",
+    description: "Mark a Daily Board task done.",
+    example: "/task done 1",
+  },
+  {
+    category: "context",
+    command: "/task clear",
+    description: "Clear today's Daily Board.",
+    example: "/task clear",
+  },
+  {
+    category: "context",
     command: "/index",
     description: "Show or refresh the local Workspace Knowledge map.",
     example: "/index refresh",

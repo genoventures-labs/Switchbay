@@ -23,6 +23,10 @@ test("command palette lists only implemented command families", () => {
   expect(commands).toContain("/checkpoint");
   expect(commands).toContain("/edit");
   expect(commands).toContain("/memory");
+  expect(commands).toContain("/agenda");
+  expect(commands).toContain("/task add");
+  expect(commands).toContain("/task done");
+  expect(commands).toContain("/task clear");
   expect(commands).toContain("/index");
   expect(commands).toContain("/search");
   expect(commands).toContain("/trace");
@@ -60,6 +64,9 @@ test("command palette searches commands, examples, descriptions, and categories"
   expect(getCommandMatches("/stash").map((item) => item.command)).toContain("/checkpoint");
   expect(getCommandMatches("/session").map((item) => item.command)).toContain("/sessions");
   expect(getCommandMatches("/memory").map((item) => item.command)).toContain("/memory");
+  expect(getCommandMatches("/agenda").map((item) => item.command)).toContain("/agenda");
+  expect(getCommandMatches("/task").map((item) => item.command)).toContain("/task add");
+  expect(getCommandMatches("/task").map((item) => item.command)).toContain("/task done");
   expect(getCommandMatches("/knowledge").map((item) => item.command)).toContain("/index");
   expect(getCommandMatches("/snippet").map((item) => item.command)).toContain("/search");
   expect(getCommandMatches("/receipt").map((item) => item.command)).toContain("/trace");

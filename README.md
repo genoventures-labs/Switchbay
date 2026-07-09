@@ -255,6 +255,10 @@ Inside the TUI:
 /remember          Save a workspace memory note
 /memories          List workspace memory notes
 /memory            Show or refresh operational memory
+/agenda            Show today's Daily Board
+/task add          Add a task to today's Daily Board
+/task done         Mark a Daily Board task done
+/task clear        Clear today's Daily Board
 /index             Show or refresh Workspace Knowledge
 /search            Search sourced Workspace Knowledge snippets
 /trace             Show the latest durable turn receipt

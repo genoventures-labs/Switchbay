@@ -53,6 +53,7 @@ import { loadToolboxInventory, type ToolboxSkill } from "../toolbox/hub";
 import { RightRail } from "./components/RightRail";
 import { saveTraceRecord } from "../trace/store";
 import { formatRouteTag } from "../runtime/route-display";
+import { addDailyTask, clearDailyBoard, completeDailyTask, describeDailyBoard } from "../operator/daily-board";
 
 export type SwitchbayAppProps = {
   client: ChatRuntimeClient;
@@ -1301,6 +1302,82 @@ export function SwitchbayApp({
       setSelectedEditFile(null);
       setEditIntent("");
       return;
+    }
+
+    if (trimmedVal === "/agenda" || trimmedVal === "/today" || trimmedVal === "/tasks") {
+      dispatch({ type: "assistant/appended", message: describeDailyBoard() });
+      setQuerySync("");
+      return;
+    }
+
+    if (trimmedVal === "/task" || trimmedVal.startsWith("/task ")) {
+      const rest = trimmedVal.slice("/task".length).trim();
+      const [action, ...args] = rest.split(/\s+/).filter(Boolean);
+      try {
+        if (!action || action === "status" || action === "list") {
+          dispatch({ type: "assistant/appended", message: describeDailyBoard() });
+          setQuerySync("");
+          return;
+        }
+
+        if (action === "add" || action === "remember" || action === "remind") {
+          const text = args.join(" ").trim();
+          if (!text) {
+            dispatch({ type: "assistant/appended", message: "Give me the task text, like `/task add test brew install`." });
+            setQuerySync("");
+            return;
+          }
+          const task = addDailyTask(text);
+          dispatch({
+            type: "assistant/appended",
+            message: `Added Daily Board task **${task.id}**: ${task.text}\n\n${describeDailyBoard()}`,
+          });
+          setQuerySync("");
+          return;
+        }
+
+        if (action === "done" || action === "complete" || action === "finish") {
+          const id = Number.parseInt(args[0] ?? "", 10);
+          if (!Number.isInteger(id) || id <= 0) {
+            dispatch({ type: "assistant/appended", message: "Tell me which task to mark done, like `/task done 1`." });
+            setQuerySync("");
+            return;
+          }
+          const task = completeDailyTask(id);
+          if (!task) {
+            dispatch({ type: "assistant/appended", message: `I don't see task **${id}** on today's board.` });
+            setQuerySync("");
+            return;
+          }
+          dispatch({
+            type: "assistant/appended",
+            message: `Completed Daily Board task **${task.id}**: ${task.text}\n\n${describeDailyBoard()}`,
+          });
+          setQuerySync("");
+          return;
+        }
+
+        if (action === "clear" || action === "reset") {
+          const count = clearDailyBoard();
+          dispatch({
+            type: "assistant/appended",
+            message: `Cleared ${count} Daily Board task${count === 1 ? "" : "s"}.`,
+          });
+          setQuerySync("");
+          return;
+        }
+
+        dispatch({
+          type: "assistant/appended",
+          message: `Unknown task action \`${action}\`. Use \`/task add <text>\`, \`/task done <id>\`, or \`/task clear\`.`,
+        });
+        setQuerySync("");
+        return;
+      } catch (error: any) {
+        dispatch({ type: "assistant/appended", message: `Daily Board: ${error.message}` });
+        setQuerySync("");
+        return;
+      }
     }
 
     const workspace = state.workspace ?? (await refreshWorkspace());

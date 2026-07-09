@@ -62,6 +62,18 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     category: "runtime",
+    command: "/lane openai",
+    description: "Switch this TUI session to the OpenAI cloud provider.",
+    example: "/lane openai",
+  },
+  {
+    category: "runtime",
+    command: "/lane anthropic",
+    description: "Switch this TUI session to the Anthropic cloud provider.",
+    example: "/lane anthropic",
+  },
+  {
+    category: "runtime",
     command: "/lane cloud-mcp",
     description: "Use cloud models with Switchbay MCP bridge enabled.",
     example: "/lane cloud-mcp",

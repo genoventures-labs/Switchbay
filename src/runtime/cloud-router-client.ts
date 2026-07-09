@@ -1,17 +1,15 @@
 import {
-  getAnthropicApiKey,
-  getAnthropicModel,
-  getCloudProvider,
-  getOpenAiApiKey,
-  getOpenAiModel,
-  type CloudProvider,
-} from "../config/env";
+  getActiveCloudProvider,
+  getCloudProviderConfig,
+  hasCloudProviderKey,
+  type CloudProviderId,
+} from "./cloud-providers";
 import { AnthropicClient } from "./anthropic-client";
 import { OpenAiClient } from "./openai-client";
 import type { ChatRuntimeClient } from "./client";
 import type { ChatCompletionRequest, ChatCompletionResponse, ChatMessage, WorkspaceFocus } from "./types";
 
-type ProviderName = Exclude<CloudProvider, "auto">;
+type ProviderName = CloudProviderId;
 
 type CloudRouterClientOptions = {
   openAi?: ChatRuntimeClient;
@@ -73,27 +71,27 @@ export class CloudRouterClient implements ChatRuntimeClient {
 }
 
 function chooseProvider(request: ChatCompletionRequest): CloudRoutingDecision {
-  const configured = getCloudProvider();
+  const configured = getActiveCloudProvider();
   if (configured === "openai" || configured === "anthropic") {
     assertProviderConfigured(configured);
     return {
       provider: configured,
-      model: configured === "anthropic" ? getAnthropicModel() : getOpenAiModel(),
+      model: getCloudProviderConfig(configured).model,
       intent: classifyIntent(request).intent,
       reason: `Explicit cloud provider: ${configured}.`,
       mode: "explicit",
     };
   }
 
-  const hasOpenAi = Boolean(getOpenAiApiKey());
-  const hasAnthropic = Boolean(getAnthropicApiKey());
+  const hasOpenAi = hasCloudProviderKey("openai");
+  const hasAnthropic = hasCloudProviderKey("anthropic");
   if (!hasOpenAi && !hasAnthropic) {
     throw new Error("Missing cloud provider key. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.");
   }
   if (!hasOpenAi) {
     return {
       provider: "anthropic",
-      model: getAnthropicModel(),
+      model: getCloudProviderConfig("anthropic").model,
       intent: classifyIntent(request).intent,
       reason: "Only Anthropic key is configured.",
       mode: "availability",
@@ -102,7 +100,7 @@ function chooseProvider(request: ChatCompletionRequest): CloudRoutingDecision {
   if (!hasAnthropic) {
     return {
       provider: "openai",
-      model: getOpenAiModel(),
+      model: getCloudProviderConfig("openai").model,
       intent: classifyIntent(request).intent,
       reason: "Only OpenAI key is configured.",
       mode: "availability",
@@ -115,7 +113,7 @@ function chooseProvider(request: ChatCompletionRequest): CloudRoutingDecision {
     : "openai";
   return {
     provider,
-    model: provider === "anthropic" ? getAnthropicModel() : getOpenAiModel(),
+    model: getCloudProviderConfig(provider).model,
     intent: classified.intent,
     reason: classified.reason,
     mode: "auto",
@@ -123,11 +121,8 @@ function chooseProvider(request: ChatCompletionRequest): CloudRoutingDecision {
 }
 
 function assertProviderConfigured(provider: ProviderName): void {
-  if (provider === "openai" && !getOpenAiApiKey()) {
-    throw new Error("Missing OPENAI_API_KEY");
-  }
-  if (provider === "anthropic" && !getAnthropicApiKey()) {
-    throw new Error("Missing ANTHROPIC_API_KEY");
+  if (!hasCloudProviderKey(provider)) {
+    throw new Error(`Missing ${getCloudProviderConfig(provider).apiKeyEnv}`);
   }
 }
 

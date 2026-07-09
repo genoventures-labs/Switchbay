@@ -20,6 +20,7 @@ import { describePlugins, loadPluginInventory, readPlugin } from "./src/plugins/
 import { listRuntimeModels, pullLmStudioModel, type RuntimeModelOption } from "./src/runtime/models";
 import { describeLocalProviders, getActiveLocalProvider, normalizeLocalProvider, setActiveLocalProvider, type LocalProviderId } from "./src/runtime/local-providers";
 import { formatRouteTag } from "./src/runtime/route-display";
+import { describeCloudProviders, normalizeCloudProvider, setActiveCloudProvider } from "./src/runtime/cloud-providers";
 
 // Ensure config is initialized on first boot
 loadSwitchbayConfig();
@@ -48,6 +49,8 @@ Models and lanes:
   switchbay model <id>               Pin a model for the active lane
   switchbay model <lane> <id>        Pin a model for a specific lane
   switchbay model pull <id|url>      Pull/load a model through the active local provider
+  switchbay cloud-provider           Show cloud provider/router config
+  switchbay cloud-provider set <id>  Switch cloud provider: auto | openai | anthropic
   switchbay local-provider           Show local provider config
   switchbay local-provider set <id>  Switch local provider: lmstudio | ollama
   switchbay mcp                      Show Switchbay MCP bridge config
@@ -147,6 +150,11 @@ Options:
     return;
   }
 
+  if (options.subcommand === "cloud-provider") {
+    await runCloudProviderCommand(options.cloudProviderAction ?? "status", options.cloudProviderTarget ?? null);
+    return;
+  }
+
   if (options.subcommand !== "run") return;
 
   if (options.purge) {
@@ -203,8 +211,11 @@ Options:
   // TUI Mode: No query, launch interactive app
   const lane = normalizeRuntimeLane(options.lane);
   const localProvider = normalizeLocalProvider(options.lane);
+  const cloudProvider = normalizeCloudProvider(options.lane);
   const selected = getSelectedRuntimeModel(lane);
-  const client = createRuntimeClient(lane, selected ? { model: selected.id, provider: normalizeClientProvider(selected.provider), localProvider } : { localProvider });
+  const client = createRuntimeClient(lane, selected
+    ? { model: selected.id, provider: normalizeClientProvider(selected.provider) ?? normalizeClientCloudProvider(cloudProvider), localProvider }
+    : { localProvider, provider: normalizeClientCloudProvider(cloudProvider) });
   render(
     <SwitchbayApp
       client={client}
@@ -446,6 +457,20 @@ async function runLocalProviderCommand(action: "status" | "set", target: string 
   console.log(describeLocalProviders());
 }
 
+async function runCloudProviderCommand(action: "status" | "set", target: string | null) {
+  if (action === "set") {
+    const provider = normalizeCloudProvider(target);
+    if (!provider) {
+      console.error("switchbay cloud-provider: set requires `auto`, `openai`, or `anthropic`.");
+      process.exit(1);
+    }
+    setActiveCloudProvider(provider);
+    console.log(`Cloud provider set to ${provider}.`);
+    return;
+  }
+  console.log(describeCloudProviders());
+}
+
 async function runModelsCommand(rawLane: string | null) {
   const lane = normalizeRuntimeLane(rawLane);
   const localProvider = normalizeLocalProvider(rawLane) ?? undefined;
@@ -561,8 +586,11 @@ async function runCliMode(options: any, resumeId: string | null) {
   const runtimeLane = normalizeRuntimeLane(options.lane);
   const toolMode = getToolMode();
   const localProvider = normalizeLocalProvider(options.lane);
+  const cloudProvider = normalizeCloudProvider(options.lane);
   const selected = getSelectedRuntimeModel(runtimeLane);
-  const client = createRuntimeClient(runtimeLane, selected ? { model: selected.id, provider: normalizeClientProvider(selected.provider), localProvider } : { localProvider });
+  const client = createRuntimeClient(runtimeLane, selected
+    ? { model: selected.id, provider: normalizeClientProvider(selected.provider) ?? normalizeClientCloudProvider(cloudProvider), localProvider }
+    : { localProvider, provider: normalizeClientCloudProvider(cloudProvider) });
   const workspace = await refreshWorkspace();
   
   let state = await loadPersistedSession(resumeId === "latest" ? undefined : resumeId || undefined);
@@ -655,6 +683,10 @@ function formatModelRow(model: RuntimeModelOption, selected: boolean): string {
 }
 
 function normalizeClientProvider(provider: string | undefined) {
+  return provider === "openai" || provider === "anthropic" ? provider : null;
+}
+
+function normalizeClientCloudProvider(provider: ReturnType<typeof normalizeCloudProvider>) {
   return provider === "openai" || provider === "anthropic" ? provider : null;
 }
 

@@ -47,6 +47,7 @@ import { loadEngineRegistry, type EngineManifest } from "../engines/registry";
 import { ModelDrawer } from "./components/ModelDrawer";
 import { listRuntimeModels, type RuntimeModelOption } from "../runtime/models";
 import { getActiveLocalProvider, normalizeLocalProvider, setActiveLocalProvider, type LocalProviderId } from "../runtime/local-providers";
+import { getActiveCloudProvider, normalizeCloudProvider, setActiveCloudProvider, type CloudProviderMode } from "../runtime/cloud-providers";
 import { SkillDrawer } from "./components/SkillDrawer";
 import { loadToolboxInventory, type ToolboxSkill } from "../toolbox/hub";
 import { RightRail } from "./components/RightRail";
@@ -79,10 +80,11 @@ export function SwitchbayApp({
   const initialLane = lane ?? "cloud";
   const [runtimeLane, setRuntimeLane] = useState<RuntimeLane>(initialLane);
   const [localProvider, setLocalProvider] = useState<LocalProviderId>(() => getActiveLocalProvider());
+  const [cloudProvider, setCloudProvider] = useState<CloudProviderMode>(() => getActiveCloudProvider());
   const [toolMode, setToolMode] = useState<ToolMode>(() =>
     initialLane === "cloud-mcp" ? "switchbay-mcp" : getToolMode()
   );
-  const [runtimeClient, setRuntimeClient] = useState<ChatRuntimeClient>(() => client ?? createRuntimeClient(initialLane, { localProvider }));
+  const [runtimeClient, setRuntimeClient] = useState<ChatRuntimeClient>(() => client ?? createRuntimeClient(initialLane, { localProvider, provider: cloudProvider === "auto" ? null : cloudProvider }));
   const { stdout } = useStdout();
   const [dimensions, setDimensions] = useState({
     columns: stdout?.columns ?? 120,
@@ -242,7 +244,7 @@ export function SwitchbayApp({
     setSelectedMentionIndex(0);
   }
 
-  function switchRuntimeLane(nextLane?: RuntimeLane, nextLocalProvider?: LocalProviderId) {
+  function switchRuntimeLane(nextLane?: RuntimeLane, nextLocalProvider?: LocalProviderId, nextCloudProvider?: CloudProviderMode) {
     const resolved = nextLane ?? (
       runtimeLane === "cloud"
         ? "local"
@@ -253,18 +255,26 @@ export function SwitchbayApp({
             : "cloud"
     );
     const resolvedLocalProvider = nextLocalProvider ?? localProvider;
+    const resolvedCloudProvider = nextCloudProvider ?? cloudProvider;
     if (nextLocalProvider) {
       setActiveLocalProvider(nextLocalProvider);
       setLocalProvider(nextLocalProvider);
+    }
+    if (nextCloudProvider) {
+      setActiveCloudProvider(nextCloudProvider);
+      setCloudProvider(nextCloudProvider);
     }
     setRuntimeLane(resolved);
     if (resolved === "cloud-mcp") setToolMode("switchbay-mcp");
     if (resolved === "local-mcp") setToolMode("standard");
     setActiveRuntimeModel(null);
-    setRuntimeClient(createRuntimeClient(resolved, { localProvider: resolvedLocalProvider }));
+    setRuntimeClient(createRuntimeClient(resolved, {
+      localProvider: resolvedLocalProvider,
+      provider: resolvedCloudProvider === "auto" ? null : resolvedCloudProvider,
+    }));
     dispatch({
       type: "assistant/appended",
-      message: `Runtime lane switched to **${getRuntimeLaneLabel(resolved)}**.`,
+      message: `Runtime lane switched to **${getRuntimeLaneLabel(resolved)}**${resolved === "cloud" && resolvedCloudProvider !== "auto" ? ` using **${resolvedCloudProvider}**` : ""}.`,
     });
     setQuerySync("");
   }
@@ -308,6 +318,10 @@ export function SwitchbayApp({
       const provider = model.provider === "ollama" ? "ollama" : "lmstudio";
       setActiveLocalProvider(provider);
       setLocalProvider(provider);
+    }
+    if (model.provider === "openai" || model.provider === "anthropic") {
+      setActiveCloudProvider(model.provider);
+      setCloudProvider(model.provider);
     }
     if (model.lane === "cloud-mcp") setToolMode("switchbay-mcp");
     if (model.lane === "local-mcp") setToolMode("standard");
@@ -867,7 +881,12 @@ export function SwitchbayApp({
         return;
       }
       if (requested === "cloud") {
-        switchRuntimeLane("cloud");
+        switchRuntimeLane("cloud", undefined, "auto");
+        return;
+      }
+      const requestedCloudProvider = normalizeCloudProvider(requested);
+      if (requestedCloudProvider && requestedCloudProvider !== "auto") {
+        switchRuntimeLane("cloud", undefined, requestedCloudProvider);
         return;
       }
       if (requested === "cloud-mcp" || requested === "cloudmcp" || requested === "cmcp") {
@@ -897,7 +916,7 @@ export function SwitchbayApp({
       }
       dispatch({
         type: "assistant/appended",
-        message: `Unknown lane \`${requested}\`. Use \`/lane cloud\`, \`/lane local\`, \`/lane ollama\`, \`/lane lmstudio\`, \`/lane mcp\`, \`/lane native-mcp\`, or \`/lane\` to toggle.`,
+        message: `Unknown lane \`${requested}\`. Use \`/lane cloud\`, \`/lane openai\`, \`/lane anthropic\`, \`/lane local\`, \`/lane ollama\`, \`/lane lmstudio\`, \`/lane mcp\`, \`/lane native-mcp\`, or \`/lane\` to toggle.`,
       });
       setQuerySync("");
       return;
@@ -922,6 +941,11 @@ export function SwitchbayApp({
         return;
       }
       if (requested === "cloud") {
+        void openModelDrawer("cloud");
+        setQuerySync("");
+        return;
+      }
+      if (normalizeCloudProvider(requested)) {
         void openModelDrawer("cloud");
         setQuerySync("");
         return;

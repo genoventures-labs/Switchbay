@@ -1,9 +1,7 @@
 import {
-  getAnthropicApiKey,
-  getAnthropicBase,
-  getAnthropicModel,
   getDebugEmptyResponses,
 } from "../config/env";
+import { getCloudProviderApiKey, getCloudProviderConfig } from "./cloud-providers";
 import type {
   ChatCompletionRequest,
   ChatCompletionResponse,
@@ -34,8 +32,9 @@ export class AnthropicClient {
   private readonly fetchImpl: typeof fetch;
 
   constructor(options: AnthropicClientOptions = {}) {
-    this.apiBase = options.apiBase ?? getAnthropicBase();
-    this.apiKey = options.apiKey ?? getAnthropicApiKey();
+    const config = getCloudProviderConfig("anthropic");
+    this.apiBase = options.apiBase ?? config.apiBase;
+    this.apiKey = options.apiKey ?? getCloudProviderApiKey("anthropic");
     this.fetchImpl = options.fetchImpl ?? fetch;
   }
 
@@ -58,7 +57,7 @@ export class AnthropicClient {
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: request.model ?? getAnthropicModel(),
+        model: request.model ?? getCloudProviderConfig("anthropic").model,
         max_tokens: 4096,
         ...(converted.system ? { system: converted.system } : {}),
         messages: converted.messages,

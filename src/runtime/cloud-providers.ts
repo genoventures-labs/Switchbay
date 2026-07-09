@@ -1,0 +1,180 @@
+import fs from "node:fs";
+import path from "node:path";
+import { DEFAULTS } from "../config/defaults";
+import { userConfigPath } from "../config/paths";
+
+export type CloudProviderId = "openai" | "anthropic";
+export type CloudProviderMode = "auto" | CloudProviderId;
+
+export type CloudProviderConfig = {
+  id: CloudProviderId;
+  label: string;
+  apiBase: string;
+  apiKeyEnv: string;
+  model: string;
+};
+
+export type CloudProvidersConfig = {
+  active: CloudProviderMode;
+  providers: Record<CloudProviderId, CloudProviderConfig>;
+};
+
+const CONFIG_FILE = "cloud-providers.json";
+
+const DEFAULT_CONFIG: CloudProvidersConfig = {
+  active: "auto",
+  providers: {
+    openai: {
+      id: "openai",
+      label: "OpenAI",
+      apiBase: DEFAULTS.openAiBase,
+      apiKeyEnv: "OPENAI_API_KEY",
+      model: DEFAULTS.openAiModel,
+    },
+    anthropic: {
+      id: "anthropic",
+      label: "Anthropic",
+      apiBase: DEFAULTS.anthropicBase,
+      apiKeyEnv: "ANTHROPIC_API_KEY",
+      model: DEFAULTS.anthropicModel,
+    },
+  },
+};
+
+let cached: CloudProvidersConfig | null = null;
+
+export function cloudProvidersConfigPath(): string {
+  return userConfigPath(CONFIG_FILE);
+}
+
+export function normalizeCloudProvider(value?: string | null): CloudProviderMode | null {
+  const normalized = value?.trim().toLowerCase();
+  if (!normalized) return null;
+  if (normalized === "auto" || normalized === "router" || normalized === "cloud") return "auto";
+  if (normalized === "openai" || normalized === "open-ai" || normalized === "gpt") return "openai";
+  if (normalized === "anthropic" || normalized === "claude") return "anthropic";
+  return null;
+}
+
+export function loadCloudProvidersConfig(): CloudProvidersConfig {
+  if (cached) return cached;
+  const target = cloudProvidersConfigPath();
+  try {
+    if (fs.existsSync(target)) {
+      const parsed = JSON.parse(fs.readFileSync(target, "utf-8")) as Partial<CloudProvidersConfig>;
+      cached = normalizeConfig(parsed);
+      return cached;
+    }
+  } catch {
+    // Fall through to defaults.
+  }
+  cached = applyEnv({ ...DEFAULT_CONFIG, providers: { ...DEFAULT_CONFIG.providers } });
+  return cached;
+}
+
+export function saveCloudProvidersConfig(config: CloudProvidersConfig): void {
+  const normalized = normalizeConfig(config);
+  const target = cloudProvidersConfigPath();
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.writeFileSync(target, JSON.stringify(normalized, null, 2) + "\n", "utf-8");
+  cached = normalized;
+}
+
+export function getActiveCloudProvider(): CloudProviderMode {
+  return normalizeCloudProvider(Bun.env.SWITCHBAY_CLOUD_PROVIDER ?? Bun.env.SWITCHBAY_CLOUD_ROUTER)
+    ?? loadCloudProvidersConfig().active;
+}
+
+export function setActiveCloudProvider(provider: CloudProviderMode): CloudProvidersConfig {
+  const config = loadCloudProvidersConfig();
+  const next = { ...config, active: provider };
+  saveCloudProvidersConfig(next);
+  return next;
+}
+
+export function getCloudProviderConfig(provider: CloudProviderId): CloudProviderConfig {
+  return loadCloudProvidersConfig().providers[provider];
+}
+
+export function getCloudProviderApiKey(provider: CloudProviderId): string | undefined {
+  const key = Bun.env[getCloudProviderConfig(provider).apiKeyEnv]?.trim();
+  return key || undefined;
+}
+
+export function hasCloudProviderKey(provider: CloudProviderId): boolean {
+  return Boolean(getCloudProviderApiKey(provider));
+}
+
+export function describeCloudProviders(): string {
+  const config = loadCloudProvidersConfig();
+  const rows = (Object.values(config.providers) as CloudProviderConfig[])
+    .map((provider) => {
+      const active = config.active === provider.id ? "*" : " ";
+      const keyStatus = getCloudProviderApiKey(provider.id) ? "key=set" : `key=${provider.apiKeyEnv}`;
+      return `${active} ${provider.id} - ${provider.label} (${provider.apiBase}) model=${provider.model} ${keyStatus}`;
+    });
+  return [
+    "Cloud model providers",
+    `Config: ${cloudProvidersConfigPath()}`,
+    `Active: ${config.active}`,
+    "",
+    ...rows,
+    "",
+    "Switch with `/lane openai`, `/lane anthropic`, or `switchbay cloud-provider set auto|openai|anthropic`.",
+  ].join("\n");
+}
+
+export function invalidateCloudProvidersConfig(): void {
+  cached = null;
+}
+
+function normalizeConfig(parsed: Partial<CloudProvidersConfig>): CloudProvidersConfig {
+  const providers = {
+    openai: normalizeProvider(parsed.providers?.openai, DEFAULT_CONFIG.providers.openai),
+    anthropic: normalizeProvider(parsed.providers?.anthropic, DEFAULT_CONFIG.providers.anthropic),
+  };
+  const active = normalizeCloudProvider(parsed.active) ?? DEFAULT_CONFIG.active;
+  return applyEnv({ active, providers });
+}
+
+function normalizeProvider(value: unknown, fallback: CloudProviderConfig): CloudProviderConfig {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return { ...fallback };
+  const raw = value as Record<string, unknown>;
+  return {
+    ...fallback,
+    label: String(raw.label ?? fallback.label).trim() || fallback.label,
+    apiBase: normalizeBase(String(raw.apiBase ?? fallback.apiBase), fallback.apiBase),
+    apiKeyEnv: String(raw.apiKeyEnv ?? fallback.apiKeyEnv).trim() || fallback.apiKeyEnv,
+    model: String(raw.model ?? fallback.model).trim() || fallback.model,
+  };
+}
+
+function applyEnv(config: CloudProvidersConfig): CloudProvidersConfig {
+  const openAiBase = Bun.env.SWITCHBAY_OPENAI_BASE || Bun.env.OPENAI_BASE_URL;
+  const openAiModel = Bun.env.SWITCHBAY_OPENAI_MODEL || Bun.env.OPENAI_MODEL;
+  const anthropicBase = Bun.env.SWITCHBAY_ANTHROPIC_BASE || Bun.env.ANTHROPIC_BASE_URL;
+  const anthropicModel = Bun.env.SWITCHBAY_ANTHROPIC_MODEL || Bun.env.ANTHROPIC_MODEL;
+  return {
+    ...config,
+    active: normalizeCloudProvider(Bun.env.SWITCHBAY_CLOUD_PROVIDER ?? Bun.env.SWITCHBAY_CLOUD_ROUTER) ?? config.active,
+    providers: {
+      openai: {
+        ...config.providers.openai,
+        apiBase: openAiBase ? normalizeBase(openAiBase, config.providers.openai.apiBase) : config.providers.openai.apiBase,
+        model: openAiModel?.trim() || config.providers.openai.model,
+      },
+      anthropic: {
+        ...config.providers.anthropic,
+        apiBase: anthropicBase ? normalizeBase(anthropicBase, config.providers.anthropic.apiBase) : config.providers.anthropic.apiBase,
+        model: anthropicModel?.trim() || config.providers.anthropic.model,
+      },
+    },
+  };
+}
+
+function normalizeBase(value: string, fallback: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return fallback;
+  if (trimmed.endsWith("/v1")) return trimmed;
+  return `${trimmed.replace(/\/$/, "")}/v1`;
+}

@@ -1,12 +1,11 @@
 import {
-  getAnthropicModel,
   getLmStudioApiKey,
   getLmStudioBase,
   getLmStudioNativeBase,
-  getOpenAiModel,
   type CloudProvider,
   type RuntimeLane,
 } from "../config/env";
+import { getCloudProviderConfig } from "./cloud-providers";
 import { getActiveLocalProvider, getLocalProviderConfig } from "./local-providers";
 
 export type RuntimeModelProvider = Exclude<CloudProvider, "auto"> | "lmstudio" | "lmstudio-mcp" | "ollama";
@@ -76,9 +75,11 @@ export function getCloudModelPresets(): RuntimeModelOption[] {
 }
 
 export function getCloudModelPresetsForLane(lane: Extract<RuntimeLane, "cloud" | "cloud-mcp">): RuntimeModelOption[] {
+  const openAi = getCloudProviderConfig("openai");
+  const anthropic = getCloudProviderConfig("anthropic");
   return uniqueModels([
-    envModelOption(getOpenAiModel(), "OpenAI env default", lane, "openai"),
-    envModelOption(getAnthropicModel(), "Anthropic env default", lane, "anthropic"),
+    envModelOption(openAi.model, "OpenAI configured default", lane, "openai"),
+    envModelOption(anthropic.model, "Anthropic configured default", lane, "anthropic"),
     ...OPENAI_PRESETS.map((model) => ({ ...model, lane })),
     ...ANTHROPIC_PRESETS.map((model) => ({ ...model, lane })),
   ]);

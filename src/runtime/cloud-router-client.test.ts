@@ -1,5 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
 import { CloudRouterClient } from "./cloud-router-client";
+import { invalidateCloudProvidersConfig } from "./cloud-providers";
 import type { ChatRuntimeClient } from "./client";
 import type { ChatCompletionRequest } from "./types";
 
@@ -11,6 +12,7 @@ const savedEnv = {
 };
 
 afterEach(() => {
+  invalidateCloudProvidersConfig();
   for (const [key, value] of Object.entries(savedEnv)) {
     if (value === undefined) {
       delete Bun.env[key];
@@ -18,6 +20,7 @@ afterEach(() => {
       Bun.env[key] = value;
     }
   }
+  invalidateCloudProvidersConfig();
 });
 
 function mockProvider(label: string, calls: string[]): ChatRuntimeClient {

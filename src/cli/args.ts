@@ -10,7 +10,7 @@ export type CliOptions = {
   resume: string | boolean; // string (id/index) or true (latest)
   newSession: boolean;
   purge: string | null;
-  subcommand: "run" | "update" | "version" | "help" | "engines" | "skills" | "toolbox" | "plugins" | "memory" | "knowledge" | "trace" | "mcp" | "models" | "model" | "local-provider";
+  subcommand: "run" | "update" | "version" | "help" | "engines" | "skills" | "toolbox" | "plugins" | "memory" | "knowledge" | "trace" | "mcp" | "models" | "model" | "local-provider" | "cloud-provider";
   engineAction: "status" | "sync" | "list" | "templates";
   toolboxAction: "status" | "sync" | "list" | "templates" | "read";
   toolboxSkill: string | null;
@@ -24,6 +24,8 @@ export type CliOptions = {
   mcpAction: "status" | "init" | "catalog";
   localProviderAction?: "status" | "set";
   localProviderTarget?: string | null;
+  cloudProviderAction?: "status" | "set";
+  cloudProviderTarget?: string | null;
   modelAction?: "show" | "set" | "pull";
   modelTarget: string | null;
   modelLane: string | null;
@@ -290,6 +292,34 @@ export function parseCliArgs(argv: string[]): CliOptions {
         modelTarget: null,
         modelLane: null,
       };
+    } else if (arg === "cloud-provider" || arg === "cloud-providers" || arg === "cloud-router") {
+      const action = args[i + 1];
+      const cloudProviderAction = action === "set" ? "set" : "status";
+      return {
+        surface,
+        profile,
+        mode,
+        lane,
+        initialQuery: "",
+        hop,
+        resume,
+        newSession,
+        purge,
+        subcommand: "cloud-provider",
+        engineAction: "status",
+        toolboxAction: "status",
+        toolboxSkill: null,
+        memoryAction: "status",
+        memoryNote: null,
+        knowledgeAction: "status",
+        knowledgeQuery: null,
+        traceAction: "last",
+        mcpAction: "status",
+        cloudProviderAction,
+        cloudProviderTarget: cloudProviderAction === "set" ? args[i + 2] ?? null : null,
+        modelTarget: null,
+        modelLane: null,
+      };
     } else if (arg === "models") {
       const commandLane = readLaneFlag(args.slice(i + 1));
       return {
@@ -434,5 +464,10 @@ function isLaneAlias(value: string | null): boolean {
     value === "lm" ||
     value === "lmstudio" ||
     value === "lm-studio" ||
-    value === "ollama";
+    value === "ollama" ||
+    value === "openai" ||
+    value === "open-ai" ||
+    value === "gpt" ||
+    value === "anthropic" ||
+    value === "claude";
 }

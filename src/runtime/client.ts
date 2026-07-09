@@ -1,6 +1,7 @@
-import { getRuntimeLane, type CloudProvider, type RuntimeLane } from "../config/env";
+import { getRuntimeLane, type RuntimeLane } from "../config/env";
 import { AnthropicClient } from "./anthropic-client";
 import { CloudRouterClient } from "./cloud-router-client";
+import { getCloudProviderConfig, type CloudProviderId } from "./cloud-providers";
 import { LmStudioClient } from "./lmstudio-client";
 import { LmStudioMcpClient } from "./lmstudio-mcp-client";
 import { getActiveLocalProvider, getLocalProviderConfig, type LocalProviderId } from "./local-providers";
@@ -24,7 +25,7 @@ export type ChatRuntimeClient = {
 
 export type RuntimeClientOptions = {
   model?: string | null;
-  provider?: Exclude<CloudProvider, "auto"> | null;
+  provider?: CloudProviderId | null;
   localProvider?: LocalProviderId | null;
 };
 
@@ -54,15 +55,17 @@ export function createRuntimeClient(
     routerMode = "explicit";
   } else if (options.provider === "openai") {
     client = new OpenAiClient();
-    using = `cloud/openai/${model ?? "configured"}`;
+    const config = getCloudProviderConfig("openai");
+    using = `cloud/openai/${model ?? config.model}`;
     routerIntent = "explicit_provider";
-    routerReason = "Explicit OpenAI provider selected.";
+    routerReason = `Explicit cloud provider selected: ${config.label}.`;
     routerMode = "explicit";
   } else if (options.provider === "anthropic") {
     client = new AnthropicClient();
-    using = `cloud/anthropic/${model ?? "configured"}`;
+    const config = getCloudProviderConfig("anthropic");
+    using = `cloud/anthropic/${model ?? config.model}`;
     routerIntent = "explicit_provider";
-    routerReason = "Explicit Anthropic provider selected.";
+    routerReason = `Explicit cloud provider selected: ${config.label}.`;
     routerMode = "explicit";
   } else {
     client = new CloudRouterClient();

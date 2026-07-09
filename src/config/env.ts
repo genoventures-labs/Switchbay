@@ -29,6 +29,9 @@ export function normalizeRuntimeLane(value?: string | null): RuntimeLane {
   if (lane === "local" || lane === "lm" || lane === "lmstudio" || lane === "lm-studio" || lane === "ollama") {
     return "local";
   }
+  if (lane === "openai" || lane === "open-ai" || lane === "gpt" || lane === "anthropic" || lane === "claude") {
+    return "cloud";
+  }
   return "cloud";
 }
 

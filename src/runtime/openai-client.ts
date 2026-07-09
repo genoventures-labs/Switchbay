@@ -1,9 +1,7 @@
 import {
   getDebugEmptyResponses,
-  getOpenAiApiKey,
-  getOpenAiBase,
-  getOpenAiModel,
 } from "../config/env";
+import { getCloudProviderApiKey, getCloudProviderConfig } from "./cloud-providers";
 import type { ChatCompletionRequest, ChatCompletionResponse } from "./types";
 
 type OpenAiClientOptions = {
@@ -18,8 +16,9 @@ export class OpenAiClient {
   private readonly fetchImpl: typeof fetch;
 
   constructor(options: OpenAiClientOptions = {}) {
-    this.apiBase = options.apiBase ?? getOpenAiBase();
-    this.apiKey = options.apiKey ?? getOpenAiApiKey();
+    const config = getCloudProviderConfig("openai");
+    this.apiBase = options.apiBase ?? config.apiBase;
+    this.apiKey = options.apiKey ?? getCloudProviderApiKey("openai");
     this.fetchImpl = options.fetchImpl ?? fetch;
   }
 
@@ -40,7 +39,7 @@ export class OpenAiClient {
         Authorization: `Bearer ${this.apiKey}`,
       },
       body: JSON.stringify({
-        model: request.model ?? getOpenAiModel(),
+        model: request.model ?? getCloudProviderConfig("openai").model,
         messages: request.messages,
         stream: useStream,
         ...(request.tools && request.tools.length > 0 ? { tools: request.tools } : {}),

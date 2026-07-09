@@ -133,6 +133,28 @@ test("parses local provider helper commands", () => {
   expect(set.localProviderTarget).toBe("ollama");
 });
 
+test("parses cloud provider helper commands", () => {
+  const status = parseCliArgs(["bun", "index.tsx", "cloud-provider"]);
+  expect(status.subcommand).toBe("cloud-provider");
+  expect(status.cloudProviderAction).toBe("status");
+
+  const set = parseCliArgs(["bun", "index.tsx", "cloud-provider", "set", "anthropic"]);
+  expect(set.subcommand).toBe("cloud-provider");
+  expect(set.cloudProviderAction).toBe("set");
+  expect(set.cloudProviderTarget).toBe("anthropic");
+});
+
+test("parses cloud provider lane aliases for model commands", () => {
+  const openai = parseCliArgs(["bun", "index.tsx", "model", "openai", "gpt-5.5"]);
+  expect(openai.subcommand).toBe("model");
+  expect(openai.modelLane).toBe("openai");
+  expect(openai.modelTarget).toBe("gpt-5.5");
+
+  const claude = parseCliArgs(["bun", "index.tsx", "model", "claude", "claude-sonnet-4-5"]);
+  expect(claude.modelLane).toBe("claude");
+  expect(claude.modelTarget).toBe("claude-sonnet-4-5");
+});
+
 test("parses Trace helper commands", () => {
   const last = parseCliArgs(["bun", "index.tsx", "trace"]);
   expect(last.subcommand).toBe("trace");
@@ -150,4 +172,6 @@ test("normalizes cloud MCP runtime lane aliases", () => {
   expect(normalizeRuntimeLane("cmcp")).toBe("cloud-mcp");
   expect(normalizeRuntimeLane("native-mcp")).toBe("local-mcp");
   expect(normalizeRuntimeLane("ollama")).toBe("local");
+  expect(normalizeRuntimeLane("openai")).toBe("cloud");
+  expect(normalizeRuntimeLane("claude")).toBe("cloud");
 });

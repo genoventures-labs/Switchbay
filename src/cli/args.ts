@@ -10,7 +10,7 @@ export type CliOptions = {
   resume: string | boolean; // string (id/index) or true (latest)
   newSession: boolean;
   purge: string | null;
-  subcommand: "run" | "update" | "version" | "help" | "engines" | "skills" | "toolbox" | "plugins" | "memory" | "knowledge" | "trace" | "mcp" | "models" | "model" | "local-provider" | "cloud-provider";
+  subcommand: "run" | "update" | "version" | "help" | "engines" | "skills" | "toolbox" | "plugins" | "memory" | "knowledge" | "trace" | "mcp" | "models" | "model" | "local-provider" | "cloud-provider" | "agenda" | "task";
   engineAction: "status" | "sync" | "list" | "templates";
   toolboxAction: "status" | "sync" | "list" | "templates" | "read";
   toolboxSkill: string | null;
@@ -26,6 +26,9 @@ export type CliOptions = {
   localProviderTarget?: string | null;
   cloudProviderAction?: "status" | "set";
   cloudProviderTarget?: string | null;
+  taskAction?: "status" | "add" | "done" | "clear";
+  taskText?: string | null;
+  taskId?: number | null;
   modelAction?: "show" | "set" | "pull";
   modelTarget: string | null;
   modelLane: string | null;
@@ -179,6 +182,58 @@ export function parseCliArgs(argv: string[]): CliOptions {
         knowledgeQuery: null,
         traceAction: "last",
         mcpAction: "status",
+        modelTarget: null,
+        modelLane: null,
+      };
+    } else if (arg === "agenda" || arg === "today") {
+      return {
+        surface,
+        profile,
+        mode,
+        lane,
+        initialQuery: "",
+        hop,
+        resume,
+        newSession,
+        purge,
+        subcommand: "agenda",
+        engineAction: "status",
+        toolboxAction: "status",
+        toolboxSkill: null,
+        memoryAction: "status",
+        memoryNote: null,
+        knowledgeAction: "status",
+        knowledgeQuery: null,
+        traceAction: "last",
+        mcpAction: "status",
+        modelTarget: null,
+        modelLane: null,
+      };
+    } else if (arg === "task" || arg === "tasks") {
+      const parsedTask = parseTaskCommand(args.slice(i + 1));
+      return {
+        surface,
+        profile,
+        mode,
+        lane,
+        initialQuery: "",
+        hop,
+        resume,
+        newSession,
+        purge,
+        subcommand: "task",
+        engineAction: "status",
+        toolboxAction: "status",
+        toolboxSkill: null,
+        memoryAction: "status",
+        memoryNote: null,
+        knowledgeAction: "status",
+        knowledgeQuery: null,
+        traceAction: "last",
+        mcpAction: "status",
+        taskAction: parsedTask.action,
+        taskText: parsedTask.text,
+        taskId: parsedTask.id,
         modelTarget: null,
         modelLane: null,
       };
@@ -421,6 +476,26 @@ type ParsedModelCommand = {
   quantization: string | null;
 };
 
+type ParsedTaskCommand = {
+  action: "status" | "add" | "done" | "clear";
+  text: string | null;
+  id: number | null;
+};
+
+function parseTaskCommand(args: string[]): ParsedTaskCommand {
+  const action = args[0];
+  if (action === "add" || action === "remember" || action === "remind") {
+    return { action: "add", text: args.slice(1).join(" ") || null, id: null };
+  }
+  if (action === "done" || action === "complete" || action === "finish") {
+    return { action: "done", text: null, id: parsePositiveInt(args[1]) };
+  }
+  if (action === "clear" || action === "reset") {
+    return { action: "clear", text: null, id: null };
+  }
+  return { action: "status", text: null, id: null };
+}
+
 function parseModelCommand(args: string[]): ParsedModelCommand {
   const rest: string[] = [];
   let flagLane: string | null = null;
@@ -452,6 +527,11 @@ function parseModelCommand(args: string[]): ParsedModelCommand {
 function readLaneFlag(args: string[]): string | null {
   const index = args.indexOf("--lane");
   return index >= 0 ? args[index + 1] ?? null : null;
+}
+
+function parsePositiveInt(value: string | undefined): number | null {
+  const parsed = Number.parseInt(value ?? "", 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
 function isLaneAlias(value: string | null): boolean {

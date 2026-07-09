@@ -21,6 +21,7 @@ import { listRuntimeModels, pullLmStudioModel, type RuntimeModelOption } from ".
 import { describeLocalProviders, getActiveLocalProvider, normalizeLocalProvider, setActiveLocalProvider, type LocalProviderId } from "./src/runtime/local-providers";
 import { formatRouteTag } from "./src/runtime/route-display";
 import { describeCloudProviders, normalizeCloudProvider, setActiveCloudProvider } from "./src/runtime/cloud-providers";
+import { addDailyTask, clearDailyBoard, completeDailyTask, describeDailyBoard } from "./src/operator/daily-board";
 
 // Ensure config is initialized on first boot
 loadSwitchbayConfig();
@@ -58,6 +59,10 @@ Models and lanes:
   switchbay mcp catalog              List trusted MCP config options
 
 Context and memory:
+  switchbay agenda                   Show today's Daily Board
+  switchbay task add <text>          Add a Daily Board task
+  switchbay task done <id>           Mark a Daily Board task done
+  switchbay task clear               Clear today's Daily Board
   switchbay memory                   Show workspace memory status
   switchbay memory add <note>        Add a workspace memory note
   switchbay memory refresh           Refresh operational memory
@@ -117,6 +122,16 @@ Options:
 
   if (options.subcommand === "memory") {
     await runMemoryCommand(options.memoryAction, options.memoryNote);
+    return;
+  }
+
+  if (options.subcommand === "agenda") {
+    console.log(describeDailyBoard());
+    return;
+  }
+
+  if (options.subcommand === "task") {
+    await runTaskCommand(options.taskAction ?? "status", options.taskText ?? null, options.taskId ?? null);
     return;
   }
 
@@ -377,6 +392,48 @@ async function runMemoryCommand(action: "status" | "refresh" | "list" | "facts" 
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`switchbay memory: ${msg}`);
+    process.exit(1);
+  }
+}
+
+async function runTaskCommand(action: "status" | "add" | "done" | "clear", text: string | null, id: number | null) {
+  try {
+    if (action === "add") {
+      if (!text?.trim()) {
+        console.error("switchbay task add: requires task text.");
+        process.exit(1);
+      }
+      const task = addDailyTask(text);
+      console.log(`Added Daily Board task ${task.id}: ${task.text}`);
+      console.log(`\n${describeDailyBoard()}`);
+      return;
+    }
+
+    if (action === "done") {
+      if (!id) {
+        console.error("switchbay task done: requires a task id.");
+        process.exit(1);
+      }
+      const task = completeDailyTask(id);
+      if (!task) {
+        console.error(`switchbay task done: task ${id} not found on today's board.`);
+        process.exit(1);
+      }
+      console.log(`Completed Daily Board task ${task.id}: ${task.text}`);
+      console.log(`\n${describeDailyBoard()}`);
+      return;
+    }
+
+    if (action === "clear") {
+      const count = clearDailyBoard();
+      console.log(`Cleared ${count} Daily Board task${count === 1 ? "" : "s"}.`);
+      return;
+    }
+
+    console.log(describeDailyBoard());
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`switchbay task: ${msg}`);
     process.exit(1);
   }
 }

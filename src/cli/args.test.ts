@@ -63,6 +63,28 @@ test("parses Memory helper add commands", () => {
   expect(remember.memoryNote).toBe("prefer local workspaces");
 });
 
+test("parses Daily Board helper commands", () => {
+  const agenda = parseCliArgs(["bun", "index.tsx", "agenda"]);
+  expect(agenda.subcommand).toBe("agenda");
+
+  const today = parseCliArgs(["bun", "index.tsx", "today"]);
+  expect(today.subcommand).toBe("agenda");
+
+  const add = parseCliArgs(["bun", "index.tsx", "task", "add", "test", "brew"]);
+  expect(add.subcommand).toBe("task");
+  expect(add.taskAction).toBe("add");
+  expect(add.taskText).toBe("test brew");
+
+  const done = parseCliArgs(["bun", "index.tsx", "task", "done", "2"]);
+  expect(done.subcommand).toBe("task");
+  expect(done.taskAction).toBe("done");
+  expect(done.taskId).toBe(2);
+
+  const clear = parseCliArgs(["bun", "index.tsx", "tasks", "clear"]);
+  expect(clear.subcommand).toBe("task");
+  expect(clear.taskAction).toBe("clear");
+});
+
 test("parses Skills helper commands and keeps toolbox alias", () => {
   const skills = parseCliArgs(["bun", "index.tsx", "skills", "read", "debugging-triage"]);
   expect(skills.subcommand).toBe("skills");

@@ -217,6 +217,9 @@ switchbay engines sync
 switchbay skills list
 switchbay plugins
 switchbay memory refresh
+switchbay agenda
+switchbay task add "test brew install"
+switchbay task done 1
 switchbay knowledge refresh
 switchbay knowledge search "approval gates"
 switchbay trace

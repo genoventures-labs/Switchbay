@@ -164,6 +164,9 @@ test("parses cloud provider helper commands", () => {
   expect(set.subcommand).toBe("cloud-provider");
   expect(set.cloudProviderAction).toBe("set");
   expect(set.cloudProviderTarget).toBe("anthropic");
+
+  const google = parseCliArgs(["bun", "index.tsx", "cloud-provider", "set", "google"]);
+  expect(google.cloudProviderTarget).toBe("google");
 });
 
 test("parses cloud provider lane aliases for model commands", () => {
@@ -175,6 +178,10 @@ test("parses cloud provider lane aliases for model commands", () => {
   const claude = parseCliArgs(["bun", "index.tsx", "model", "claude", "claude-sonnet-4-5"]);
   expect(claude.modelLane).toBe("claude");
   expect(claude.modelTarget).toBe("claude-sonnet-4-5");
+
+  const gemini = parseCliArgs(["bun", "index.tsx", "model", "gemini", "gemini-3.5-flash"]);
+  expect(gemini.modelLane).toBe("gemini");
+  expect(gemini.modelTarget).toBe("gemini-3.5-flash");
 });
 
 test("parses Trace helper commands", () => {

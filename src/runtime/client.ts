@@ -67,6 +67,13 @@ export function createRuntimeClient(
     routerIntent = "explicit_provider";
     routerReason = `Explicit cloud provider selected: ${config.label}.`;
     routerMode = "explicit";
+  } else if (options.provider === "google") {
+    client = new OpenAiClient({ provider: "google" });
+    const config = getCloudProviderConfig("google");
+    using = `cloud/google/${model ?? config.model}`;
+    routerIntent = "explicit_provider";
+    routerReason = `Explicit cloud provider selected: ${config.label}.`;
+    routerMode = "explicit";
   } else {
     client = new CloudRouterClient();
   }

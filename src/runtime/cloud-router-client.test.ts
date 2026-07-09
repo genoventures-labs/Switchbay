@@ -7,6 +7,7 @@ import type { ChatCompletionRequest } from "./types";
 const savedEnv = {
   OPENAI_API_KEY: Bun.env.OPENAI_API_KEY,
   ANTHROPIC_API_KEY: Bun.env.ANTHROPIC_API_KEY,
+  GOOGLE_API_KEY: Bun.env.GOOGLE_API_KEY,
   SWITCHBAY_CLOUD_PROVIDER: Bun.env.SWITCHBAY_CLOUD_PROVIDER,
   SWITCHBAY_CLOUD_ROUTER: Bun.env.SWITCHBAY_CLOUD_ROUTER,
 };
@@ -99,4 +100,38 @@ test("cloud router picks Anthropic for code work", async () => {
   expect(response.meta?.router_intent).toBe("code_work");
   expect(response.meta?.router_mode).toBe("auto");
   expect(response.meta?.using).toContain("cloud/anthropic/");
+});
+
+test("cloud router honors Google as an explicit provider", async () => {
+  Bun.env.GOOGLE_API_KEY = "test-google";
+  Bun.env.SWITCHBAY_CLOUD_PROVIDER = "google";
+  const calls: string[] = [];
+  const router = new CloudRouterClient({
+    google: mockProvider("google", calls),
+  });
+
+  const response = await router.createChatCompletion("dev", request("summarize this"));
+
+  expect(calls).toEqual(["google"]);
+  expect(response.meta?.provider).toBe("google");
+  expect(response.meta?.router_mode).toBe("explicit");
+  expect(response.meta?.using).toContain("cloud/google/");
+});
+
+test("cloud router uses Google when it is the only configured key", async () => {
+  delete Bun.env.OPENAI_API_KEY;
+  delete Bun.env.ANTHROPIC_API_KEY;
+  Bun.env.GOOGLE_API_KEY = "test-google";
+  delete Bun.env.SWITCHBAY_CLOUD_PROVIDER;
+  const calls: string[] = [];
+  const router = new CloudRouterClient({
+    google: mockProvider("google", calls),
+  });
+
+  const response = await router.createChatCompletion("dev", request("summarize as strict JSON"));
+
+  expect(calls).toEqual(["google"]);
+  expect(response.meta?.provider).toBe("google");
+  expect(response.meta?.router_mode).toBe("availability");
+  expect(response.meta?.using).toContain("cloud/google/");
 });

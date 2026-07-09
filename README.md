@@ -75,9 +75,10 @@ Cloud lane:
 
 ```bash
 export SWITCHBAY_LANE=cloud
-export SWITCHBAY_CLOUD_PROVIDER=auto # auto | openai | anthropic
+export SWITCHBAY_CLOUD_PROVIDER=auto # auto | openai | anthropic | google
 export OPENAI_API_KEY=...
 export ANTHROPIC_API_KEY=...
+export GOOGLE_API_KEY=...
 ```
 
 Switchbay also stores cloud provider defaults in `~/.switchbay/cloud-providers.json`. Use it to keep provider routing, API bases, key env names, and default models portable without rewriting shell startup files:
@@ -87,6 +88,7 @@ switchbay cloud-provider
 switchbay cloud-provider set auto
 switchbay cloud-provider set openai
 switchbay cloud-provider set anthropic
+switchbay cloud-provider set google
 ```
 
 Local LM Studio lane:
@@ -144,7 +146,7 @@ Then create or tune `~/.switchbay/lmstudio.mcp.json`:
 
 Add only trusted MCP ids that actually exist in your setup, such as `"mcp/playwright"` after Playwright is installed/enabled.
 
-Inside the TUI, use `/lane` to cycle Cloud and the active local provider, `/lane openai` or `/lane anthropic` to pin a cloud provider, `/lane ollama` to use Ollama, `/lane lmstudio` to use LM Studio, `/mcp on` to enable Switchbay's MCP bridge under the active model lane, `/mcp off` to disable it, and `/lane native-mcp` only when testing LM Studio's native MCP API. Cloud models use built-in OpenAI/Anthropic presets and `~/.switchbay/cloud-providers.json`; local models are fetched from the active provider in `~/.switchbay/local-providers.json`. Use `/mcp init` for an empty starter config, `/mcp catalog` to list trusted MCP options, or `/create-mcp` for the conversational MCP config builder.
+Inside the TUI, use `/lane` to cycle Cloud and the active local provider, `/lane openai`, `/lane anthropic`, or `/lane google` to pin a cloud provider, `/lane ollama` to use Ollama, `/lane lmstudio` to use LM Studio, `/mcp on` to enable Switchbay's MCP bridge under the active model lane, `/mcp off` to disable it, and `/lane native-mcp` only when testing LM Studio's native MCP API. Cloud models use built-in OpenAI, Anthropic, and Google Gemini presets plus `~/.switchbay/cloud-providers.json`; local models are fetched from the active provider in `~/.switchbay/local-providers.json`. Use `/mcp init` for an empty starter config, `/mcp catalog` to list trusted MCP options, or `/create-mcp` for the conversational MCP config builder.
 
 Auto routing is visible by design. When Switchbay chooses a provider/model, completed turns show a tag like:
 
@@ -217,9 +219,12 @@ switchbay update
 switchbay models --lane local
 switchbay models --lane ollama
 switchbay models --lane openai
+switchbay models --lane google
 switchbay model local qwen/qwen3-4b-2507
 switchbay model openai gpt-5.5
+switchbay model google gemini-3.5-flash
 switchbay cloud-provider set anthropic
+switchbay cloud-provider set google
 switchbay local-provider set ollama
 switchbay model pull ibm/granite-4-micro
 switchbay model pull https://huggingface.co/lmstudio-community/gpt-oss-20b-GGUF --quant Q4_K_M
@@ -253,6 +258,7 @@ Inside the TUI:
 /lane              Cycle Cloud and the active local provider
 /lane openai       Use OpenAI for the cloud lane
 /lane anthropic    Use Anthropic for the cloud lane
+/lane google       Use Google Gemini for the cloud lane
 /model             Pick a cloud preset or LM Studio model
 /init              Generate SWITCHBAY.md for this repo
 /workspace         Show the active workspace snapshot

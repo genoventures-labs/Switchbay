@@ -16,7 +16,7 @@ function readFirstEnv(...keys: string[]): string | undefined {
 
 export type RuntimeLane = "cloud" | "cloud-mcp" | "local" | "local-mcp";
 export type ToolMode = "standard" | "switchbay-mcp";
-export type CloudProvider = "auto" | "openai" | "anthropic";
+export type CloudProvider = "auto" | "openai" | "anthropic" | "google";
 
 export function normalizeRuntimeLane(value?: string | null): RuntimeLane {
   const lane = (value ?? DEFAULTS.lane).toLowerCase();
@@ -29,7 +29,7 @@ export function normalizeRuntimeLane(value?: string | null): RuntimeLane {
   if (lane === "local" || lane === "lm" || lane === "lmstudio" || lane === "lm-studio" || lane === "ollama") {
     return "local";
   }
-  if (lane === "openai" || lane === "open-ai" || lane === "gpt" || lane === "anthropic" || lane === "claude") {
+  if (lane === "openai" || lane === "open-ai" || lane === "gpt" || lane === "anthropic" || lane === "claude" || lane === "google" || lane === "gemini") {
     return "cloud";
   }
   return "cloud";
@@ -69,6 +69,9 @@ export function getDefaultModel(): string {
   if (provider === "anthropic") {
     return getAnthropicModel();
   }
+  if (provider === "google") {
+    return getGoogleModel();
+  }
   return getOpenAiModel();
 }
 
@@ -86,7 +89,7 @@ export function getCloudProvider(): CloudProvider {
     readEnv("SWITCHBAY_CLOUD_ROUTER") ??
     DEFAULTS.cloudProvider
   ).toLowerCase();
-  if (provider === "openai" || provider === "anthropic") {
+  if (provider === "openai" || provider === "anthropic" || provider === "google") {
     return provider;
   }
   return "auto";
@@ -114,6 +117,18 @@ export function getAnthropicApiKey(): string | undefined {
 
 export function getAnthropicModel(): string {
   return readFirstEnv("SWITCHBAY_ANTHROPIC_MODEL", "ANTHROPIC_MODEL") ?? DEFAULTS.anthropicModel;
+}
+
+export function getGoogleBase(): string {
+  return readFirstEnv("SWITCHBAY_GOOGLE_BASE", "GOOGLE_BASE_URL", "GEMINI_BASE_URL") ?? DEFAULTS.googleBase;
+}
+
+export function getGoogleApiKey(): string | undefined {
+  return readFirstEnv("GOOGLE_API_KEY", "GEMINI_API_KEY");
+}
+
+export function getGoogleModel(): string {
+  return readFirstEnv("SWITCHBAY_GOOGLE_MODEL", "GOOGLE_MODEL", "GEMINI_MODEL") ?? DEFAULTS.googleModel;
 }
 
 export function getLmStudioBase(): string {

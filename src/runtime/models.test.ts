@@ -1,10 +1,12 @@
 import { afterEach, expect, test } from "bun:test";
 import { getCloudModelPresets, listRuntimeModels, listLmStudioModels, listOllamaModels, pullLmStudioModel, pullOllamaModel } from "./models";
 import { invalidateLocalProvidersConfig } from "./local-providers";
+import { invalidateCloudProvidersConfig } from "./cloud-providers";
 
 const savedEnv = {
   SWITCHBAY_LANE: Bun.env.SWITCHBAY_LANE,
   SWITCHBAY_OPENAI_MODEL: Bun.env.SWITCHBAY_OPENAI_MODEL,
+  SWITCHBAY_GOOGLE_MODEL: Bun.env.SWITCHBAY_GOOGLE_MODEL,
   SWITCHBAY_LMSTUDIO_BASE: Bun.env.SWITCHBAY_LMSTUDIO_BASE,
   SWITCHBAY_LMSTUDIO_API_KEY: Bun.env.SWITCHBAY_LMSTUDIO_API_KEY,
   SWITCHBAY_LMSTUDIO_MODEL: Bun.env.SWITCHBAY_LMSTUDIO_MODEL,
@@ -22,6 +24,7 @@ afterEach(() => {
     }
   }
   invalidateLocalProvidersConfig();
+  invalidateCloudProvidersConfig();
 });
 
 test("cloud presets include the current OpenAI main, mini, and nano models", () => {
@@ -45,6 +48,7 @@ test("cloud MCP model list uses cloud presets on the cloud-mcp lane", async () =
   expect(result.models.every((model) => model.lane === "cloud-mcp")).toBe(true);
   expect(result.models.map((model) => model.provider)).toContain("openai");
   expect(result.models.map((model) => model.provider)).toContain("anthropic");
+  expect(result.models.map((model) => model.provider)).toContain("google");
 });
 
 test("lists LM Studio models from the configured host", async () => {

@@ -14,6 +14,7 @@ type ProviderName = CloudProviderId;
 type CloudRouterClientOptions = {
   openAi?: ChatRuntimeClient;
   anthropic?: ChatRuntimeClient;
+  google?: ChatRuntimeClient;
 };
 
 type RoutingIntent = "structured_output" | "code_work" | "tool_work" | "general";
@@ -29,10 +30,12 @@ type CloudRoutingDecision = {
 export class CloudRouterClient implements ChatRuntimeClient {
   private readonly openAi: ChatRuntimeClient;
   private readonly anthropic: ChatRuntimeClient;
+  private readonly google: ChatRuntimeClient;
 
   constructor(options: CloudRouterClientOptions = {}) {
     this.openAi = options.openAi ?? new OpenAiClient();
     this.anthropic = options.anthropic ?? new AnthropicClient();
+    this.google = options.google ?? new OpenAiClient({ provider: "google" });
   }
 
   async createChatCompletion(
@@ -52,10 +55,12 @@ export class CloudRouterClient implements ChatRuntimeClient {
       model: decision.model,
     };
 
-    const response =
-      decision.provider === "anthropic"
-        ? await this.anthropic.createChatCompletion(surface, routedRequest, options)
-        : await this.openAi.createChatCompletion(surface, routedRequest, options);
+    const providerClient = decision.provider === "anthropic"
+      ? this.anthropic
+      : decision.provider === "google"
+        ? this.google
+        : this.openAi;
+    const response = await providerClient.createChatCompletion(surface, routedRequest, options);
 
     response.meta = {
       ...response.meta,
@@ -72,7 +77,7 @@ export class CloudRouterClient implements ChatRuntimeClient {
 
 function chooseProvider(request: ChatCompletionRequest): CloudRoutingDecision {
   const configured = getActiveCloudProvider();
-  if (configured === "openai" || configured === "anthropic") {
+  if (configured === "openai" || configured === "anthropic" || configured === "google") {
     assertProviderConfigured(configured);
     return {
       provider: configured,
@@ -85,32 +90,31 @@ function chooseProvider(request: ChatCompletionRequest): CloudRoutingDecision {
 
   const hasOpenAi = hasCloudProviderKey("openai");
   const hasAnthropic = hasCloudProviderKey("anthropic");
-  if (!hasOpenAi && !hasAnthropic) {
-    throw new Error("Missing cloud provider key. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.");
+  const hasGoogle = hasCloudProviderKey("google");
+  if (!hasOpenAi && !hasAnthropic && !hasGoogle) {
+    throw new Error("Missing cloud provider key. Set OPENAI_API_KEY, ANTHROPIC_API_KEY, or GOOGLE_API_KEY.");
   }
-  if (!hasOpenAi) {
+  const configuredProviders = [
+    hasOpenAi ? "openai" : null,
+    hasAnthropic ? "anthropic" : null,
+    hasGoogle ? "google" : null,
+  ].filter((provider): provider is ProviderName => Boolean(provider));
+  if (configuredProviders.length === 1) {
+    const provider = configuredProviders[0]!;
     return {
-      provider: "anthropic",
-      model: getCloudProviderConfig("anthropic").model,
+      provider,
+      model: getCloudProviderConfig(provider).model,
       intent: classifyIntent(request).intent,
-      reason: "Only Anthropic key is configured.",
-      mode: "availability",
-    };
-  }
-  if (!hasAnthropic) {
-    return {
-      provider: "openai",
-      model: getCloudProviderConfig("openai").model,
-      intent: classifyIntent(request).intent,
-      reason: "Only OpenAI key is configured.",
+      reason: `Only ${getCloudProviderConfig(provider).label} key is configured.`,
       mode: "availability",
     };
   }
 
   const classified = classifyIntent(request);
-  const provider = classified.intent === "code_work" || classified.intent === "tool_work"
-    ? "anthropic"
-    : "openai";
+  const wantsCode = classified.intent === "code_work" || classified.intent === "tool_work";
+  const provider = wantsCode
+    ? firstAvailable(["anthropic", "openai", "google"])
+    : firstAvailable(["openai", "google", "anthropic"]);
   return {
     provider,
     model: getCloudProviderConfig(provider).model,
@@ -118,6 +122,14 @@ function chooseProvider(request: ChatCompletionRequest): CloudRoutingDecision {
     reason: classified.reason,
     mode: "auto",
   };
+}
+
+function firstAvailable(preferences: ProviderName[]): ProviderName {
+  const selected = preferences.find((provider) => hasCloudProviderKey(provider));
+  if (!selected) {
+    throw new Error("Missing cloud provider key. Set OPENAI_API_KEY, ANTHROPIC_API_KEY, or GOOGLE_API_KEY.");
+  }
+  return selected;
 }
 
 function assertProviderConfigured(provider: ProviderName): void {

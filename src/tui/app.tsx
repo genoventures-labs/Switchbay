@@ -317,7 +317,7 @@ export function SwitchbayApp({
   }
 
   function selectRuntimeModel(model: RuntimeModelOption) {
-    const provider = model.provider === "openai" || model.provider === "anthropic"
+    const provider = model.provider === "openai" || model.provider === "anthropic" || model.provider === "google"
       ? model.provider
       : null;
     setRuntimeLane(model.lane);
@@ -326,7 +326,7 @@ export function SwitchbayApp({
       setActiveLocalProvider(provider);
       setLocalProvider(provider);
     }
-    if (model.provider === "openai" || model.provider === "anthropic") {
+    if (model.provider === "openai" || model.provider === "anthropic" || model.provider === "google") {
       setActiveCloudProvider(model.provider);
       setCloudProvider(model.provider);
     }
@@ -953,7 +953,7 @@ export function SwitchbayApp({
       }
       dispatch({
         type: "assistant/appended",
-        message: `Unknown lane \`${requested}\`. Use \`/lane cloud\`, \`/lane openai\`, \`/lane anthropic\`, \`/lane local\`, \`/lane ollama\`, \`/lane lmstudio\`, \`/lane mcp\`, \`/lane native-mcp\`, or \`/lane\` to toggle.`,
+        message: `Unknown lane \`${requested}\`. Use \`/lane cloud\`, \`/lane openai\`, \`/lane anthropic\`, \`/lane google\`, \`/lane local\`, \`/lane ollama\`, \`/lane lmstudio\`, \`/lane mcp\`, \`/lane native-mcp\`, or \`/lane\` to toggle.`,
       });
       setQuerySync("");
       return;

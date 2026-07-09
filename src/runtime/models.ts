@@ -52,6 +52,12 @@ const ANTHROPIC_PRESETS: RuntimeModelOption[] = [
   { id: "claude-haiku-4-5", label: "Claude Haiku 4.5", lane: "cloud", provider: "anthropic", source: "preset" },
 ];
 
+const GOOGLE_PRESETS: RuntimeModelOption[] = [
+  { id: "gemini-3.5-pro", label: "Gemini 3.5 Pro", lane: "cloud", provider: "google", source: "preset" },
+  { id: "gemini-3.5-flash", label: "Gemini 3.5 Flash", lane: "cloud", provider: "google", source: "preset" },
+  { id: "gemini-3.5-flash-lite", label: "Gemini 3.5 Flash-Lite", lane: "cloud", provider: "google", source: "preset" },
+];
+
 type LmStudioModelsResponse = {
   data?: Array<{
     id?: string;
@@ -77,11 +83,14 @@ export function getCloudModelPresets(): RuntimeModelOption[] {
 export function getCloudModelPresetsForLane(lane: Extract<RuntimeLane, "cloud" | "cloud-mcp">): RuntimeModelOption[] {
   const openAi = getCloudProviderConfig("openai");
   const anthropic = getCloudProviderConfig("anthropic");
+  const google = getCloudProviderConfig("google");
   return uniqueModels([
     envModelOption(openAi.model, "OpenAI configured default", lane, "openai"),
     envModelOption(anthropic.model, "Anthropic configured default", lane, "anthropic"),
+    envModelOption(google.model, "Google configured default", lane, "google"),
     ...OPENAI_PRESETS.map((model) => ({ ...model, lane })),
     ...ANTHROPIC_PRESETS.map((model) => ({ ...model, lane })),
+    ...GOOGLE_PRESETS.map((model) => ({ ...model, lane })),
   ]);
 }
 

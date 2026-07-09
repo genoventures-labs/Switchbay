@@ -3,7 +3,7 @@ import path from "node:path";
 import { DEFAULTS } from "../config/defaults";
 import { userConfigPath } from "../config/paths";
 
-export type CloudProviderId = "openai" | "anthropic";
+export type CloudProviderId = "openai" | "anthropic" | "google";
 export type CloudProviderMode = "auto" | CloudProviderId;
 
 export type CloudProviderConfig = {
@@ -38,6 +38,13 @@ const DEFAULT_CONFIG: CloudProvidersConfig = {
       apiKeyEnv: "ANTHROPIC_API_KEY",
       model: DEFAULTS.anthropicModel,
     },
+    google: {
+      id: "google",
+      label: "Google Gemini",
+      apiBase: DEFAULTS.googleBase,
+      apiKeyEnv: "GOOGLE_API_KEY",
+      model: DEFAULTS.googleModel,
+    },
   },
 };
 
@@ -53,6 +60,7 @@ export function normalizeCloudProvider(value?: string | null): CloudProviderMode
   if (normalized === "auto" || normalized === "router" || normalized === "cloud") return "auto";
   if (normalized === "openai" || normalized === "open-ai" || normalized === "gpt") return "openai";
   if (normalized === "anthropic" || normalized === "claude") return "anthropic";
+  if (normalized === "google" || normalized === "gemini" || normalized === "google-ai") return "google";
   return null;
 }
 
@@ -120,7 +128,7 @@ export function describeCloudProviders(): string {
     "",
     ...rows,
     "",
-    "Switch with `/lane openai`, `/lane anthropic`, or `switchbay cloud-provider set auto|openai|anthropic`.",
+    "Switch with `/lane openai`, `/lane anthropic`, `/lane google`, or `switchbay cloud-provider set auto|openai|anthropic|google`.",
   ].join("\n");
 }
 
@@ -132,6 +140,7 @@ function normalizeConfig(parsed: Partial<CloudProvidersConfig>): CloudProvidersC
   const providers = {
     openai: normalizeProvider(parsed.providers?.openai, DEFAULT_CONFIG.providers.openai),
     anthropic: normalizeProvider(parsed.providers?.anthropic, DEFAULT_CONFIG.providers.anthropic),
+    google: normalizeProvider(parsed.providers?.google, DEFAULT_CONFIG.providers.google),
   };
   const active = normalizeCloudProvider(parsed.active) ?? DEFAULT_CONFIG.active;
   return applyEnv({ active, providers });
@@ -143,7 +152,7 @@ function normalizeProvider(value: unknown, fallback: CloudProviderConfig): Cloud
   return {
     ...fallback,
     label: String(raw.label ?? fallback.label).trim() || fallback.label,
-    apiBase: normalizeBase(String(raw.apiBase ?? fallback.apiBase), fallback.apiBase),
+    apiBase: normalizeBase(fallback.id, String(raw.apiBase ?? fallback.apiBase), fallback.apiBase),
     apiKeyEnv: String(raw.apiKeyEnv ?? fallback.apiKeyEnv).trim() || fallback.apiKeyEnv,
     model: String(raw.model ?? fallback.model).trim() || fallback.model,
   };
@@ -154,27 +163,40 @@ function applyEnv(config: CloudProvidersConfig): CloudProvidersConfig {
   const openAiModel = Bun.env.SWITCHBAY_OPENAI_MODEL || Bun.env.OPENAI_MODEL;
   const anthropicBase = Bun.env.SWITCHBAY_ANTHROPIC_BASE || Bun.env.ANTHROPIC_BASE_URL;
   const anthropicModel = Bun.env.SWITCHBAY_ANTHROPIC_MODEL || Bun.env.ANTHROPIC_MODEL;
+  const googleBase = Bun.env.SWITCHBAY_GOOGLE_BASE || Bun.env.GOOGLE_BASE_URL || Bun.env.GEMINI_BASE_URL;
+  const googleModel = Bun.env.SWITCHBAY_GOOGLE_MODEL || Bun.env.GOOGLE_MODEL || Bun.env.GEMINI_MODEL;
   return {
     ...config,
     active: normalizeCloudProvider(Bun.env.SWITCHBAY_CLOUD_PROVIDER ?? Bun.env.SWITCHBAY_CLOUD_ROUTER) ?? config.active,
     providers: {
       openai: {
         ...config.providers.openai,
-        apiBase: openAiBase ? normalizeBase(openAiBase, config.providers.openai.apiBase) : config.providers.openai.apiBase,
+        apiBase: openAiBase ? normalizeBase("openai", openAiBase, config.providers.openai.apiBase) : config.providers.openai.apiBase,
         model: openAiModel?.trim() || config.providers.openai.model,
       },
       anthropic: {
         ...config.providers.anthropic,
-        apiBase: anthropicBase ? normalizeBase(anthropicBase, config.providers.anthropic.apiBase) : config.providers.anthropic.apiBase,
+        apiBase: anthropicBase ? normalizeBase("anthropic", anthropicBase, config.providers.anthropic.apiBase) : config.providers.anthropic.apiBase,
         model: anthropicModel?.trim() || config.providers.anthropic.model,
+      },
+      google: {
+        ...config.providers.google,
+        apiBase: googleBase ? normalizeBase("google", googleBase, config.providers.google.apiBase) : config.providers.google.apiBase,
+        model: googleModel?.trim() || config.providers.google.model,
       },
     },
   };
 }
 
-function normalizeBase(value: string, fallback: string): string {
+function normalizeBase(provider: CloudProviderId, value: string, fallback: string): string {
   const trimmed = value.trim();
   if (!trimmed) return fallback;
+  if (provider === "google") {
+    if (trimmed.endsWith("/openai")) return trimmed;
+    if (trimmed.endsWith("/openai/")) return trimmed.replace(/\/$/, "");
+    if (trimmed.endsWith("/v1beta")) return `${trimmed}/openai`;
+    return trimmed.replace(/\/$/, "");
+  }
   if (trimmed.endsWith("/v1")) return trimmed;
   return `${trimmed.replace(/\/$/, "")}/v1`;
 }

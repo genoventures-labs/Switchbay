@@ -1,24 +1,27 @@
 import {
   getDebugEmptyResponses,
 } from "../config/env";
-import { getCloudProviderApiKey, getCloudProviderConfig } from "./cloud-providers";
+import { getCloudProviderApiKey, getCloudProviderConfig, type CloudProviderId } from "./cloud-providers";
 import type { ChatCompletionRequest, ChatCompletionResponse } from "./types";
 
 type OpenAiClientOptions = {
   apiBase?: string;
   apiKey?: string;
   fetchImpl?: typeof fetch;
+  provider?: Extract<CloudProviderId, "openai" | "google">;
 };
 
 export class OpenAiClient {
   private readonly apiBase: string;
   private readonly apiKey?: string;
   private readonly fetchImpl: typeof fetch;
+  private readonly provider: Extract<CloudProviderId, "openai" | "google">;
 
   constructor(options: OpenAiClientOptions = {}) {
-    const config = getCloudProviderConfig("openai");
+    this.provider = options.provider ?? "openai";
+    const config = getCloudProviderConfig(this.provider);
     this.apiBase = options.apiBase ?? config.apiBase;
-    this.apiKey = options.apiKey ?? getCloudProviderApiKey("openai");
+    this.apiKey = options.apiKey ?? getCloudProviderApiKey(this.provider);
     this.fetchImpl = options.fetchImpl ?? fetch;
   }
 
@@ -28,7 +31,7 @@ export class OpenAiClient {
     options: { onToken?: (token: string) => void } = {},
   ): Promise<ChatCompletionResponse> {
     if (!this.apiKey) {
-      throw new Error("Missing OPENAI_API_KEY");
+      throw new Error(`Missing ${getCloudProviderConfig(this.provider).apiKeyEnv}`);
     }
 
     const useStream = typeof options.onToken === "function";
@@ -39,7 +42,7 @@ export class OpenAiClient {
         Authorization: `Bearer ${this.apiKey}`,
       },
       body: JSON.stringify({
-        model: request.model ?? getCloudProviderConfig("openai").model,
+        model: request.model ?? getCloudProviderConfig(this.provider).model,
         messages: request.messages,
         stream: useStream,
         ...(request.tools && request.tools.length > 0 ? { tools: request.tools } : {}),
@@ -49,7 +52,7 @@ export class OpenAiClient {
 
     if (!response.ok) {
       const body = await response.text().catch(() => "");
-      throw new Error(`OpenAI API error: ${response.status}${body ? ` - ${body}` : ""}`);
+      throw new Error(`${getCloudProviderConfig(this.provider).label} API error: ${response.status}${body ? ` - ${body}` : ""}`);
     }
 
     if (!useStream) {

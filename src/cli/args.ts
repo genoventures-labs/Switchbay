@@ -549,5 +549,7 @@ function isLaneAlias(value: string | null): boolean {
     value === "open-ai" ||
     value === "gpt" ||
     value === "anthropic" ||
-    value === "claude";
+    value === "claude" ||
+    value === "google" ||
+    value === "gemini";
 }

@@ -74,6 +74,12 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     category: "runtime",
+    command: "/lane google",
+    description: "Switch this TUI session to the Google Gemini cloud provider.",
+    example: "/lane google",
+  },
+  {
+    category: "runtime",
     command: "/lane cloud-mcp",
     description: "Use cloud models with Switchbay MCP bridge enabled.",
     example: "/lane cloud-mcp",

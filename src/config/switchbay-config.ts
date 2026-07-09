@@ -152,7 +152,7 @@ function normalizeSelectedModels(value: unknown): Partial<Record<RuntimeLane, Se
     const provider = String((raw as Record<string, unknown>).provider ?? "").trim();
     result[lane] = {
       id,
-      provider: provider === "openai" || provider === "anthropic" || provider === "lmstudio" || provider === "lmstudio-mcp" || provider === "ollama"
+      provider: provider === "openai" || provider === "anthropic" || provider === "google" || provider === "lmstudio" || provider === "lmstudio-mcp" || provider === "ollama"
         ? provider
         : undefined,
     };

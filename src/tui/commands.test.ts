@@ -9,6 +9,7 @@ test("command palette lists only implemented command families", () => {
   expect(commands).toContain("/lane cloud-mcp");
   expect(commands).toContain("/lane openai");
   expect(commands).toContain("/lane anthropic");
+  expect(commands).toContain("/lane google");
   expect(commands).toContain("/lane mcp");
   expect(commands).toContain("/lane ollama");
   expect(commands).toContain("/lane lmstudio");

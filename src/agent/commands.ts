@@ -698,9 +698,9 @@ const COMMAND_COACH: CommandCoachEntry[] = [
   },
   {
     title: "Switch cloud provider",
-    patterns: [/\b(openai|anthropic|claude|gpt)\b.*\b(provider|lane|cloud)\b/, /\bcloud provider\b/],
-    slash: "/lane openai or /lane anthropic",
-    cli: "switchbay cloud-provider set auto|openai|anthropic",
+    patterns: [/\b(openai|anthropic|claude|gpt|google|gemini)\b.*\b(provider|lane|cloud)\b/, /\bcloud provider\b/],
+    slash: "/lane openai, /lane anthropic, or /lane google",
+    cli: "switchbay cloud-provider set auto|openai|anthropic|google",
   },
   {
     title: "Pick or list models",
@@ -843,7 +843,7 @@ function describeRuntimeStatus(options: LocalCommandOptions): string {
     lane === "cloud" || lane === "cloud-mcp" ? `Cloud provider: ${getActiveCloudProvider()}` : null,
     `Model: ${selected?.id ?? "default"}`,
     "",
-    "Switch with `/lane`, `/lane openai`, `/lane anthropic`, `/lane ollama`, or `/model`.",
+    "Switch with `/lane`, `/lane openai`, `/lane anthropic`, `/lane google`, `/lane ollama`, or `/model`.",
   ];
   return lines.filter(Boolean).join("\n");
 }

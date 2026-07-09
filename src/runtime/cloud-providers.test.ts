@@ -15,6 +15,7 @@ const savedEnv = {
   SWITCHBAY_CONFIG_DIR: Bun.env.SWITCHBAY_CONFIG_DIR,
   SWITCHBAY_CLOUD_PROVIDER: Bun.env.SWITCHBAY_CLOUD_PROVIDER,
   SWITCHBAY_OPENAI_MODEL: Bun.env.SWITCHBAY_OPENAI_MODEL,
+  SWITCHBAY_GOOGLE_MODEL: Bun.env.SWITCHBAY_GOOGLE_MODEL,
 };
 
 let tempDir = "";
@@ -24,6 +25,7 @@ beforeEach(() => {
   Bun.env.SWITCHBAY_CONFIG_DIR = tempDir;
   delete Bun.env.SWITCHBAY_CLOUD_PROVIDER;
   delete Bun.env.SWITCHBAY_OPENAI_MODEL;
+  delete Bun.env.SWITCHBAY_GOOGLE_MODEL;
   invalidateCloudProvidersConfig();
 });
 
@@ -44,6 +46,8 @@ test("loads default cloud provider config from the user config dir", () => {
 
   expect(config.active).toBe("auto");
   expect(config.providers.openai.apiKeyEnv).toBe("OPENAI_API_KEY");
+  expect(config.providers.google.apiKeyEnv).toBe("GOOGLE_API_KEY");
+  expect(config.providers.google.apiBase).toBe("https://generativelanguage.googleapis.com/v1beta/openai");
   expect(cloudProvidersConfigPath()).toBe(path.join(tempDir, "cloud-providers.json"));
 });
 
@@ -56,7 +60,9 @@ test("persists the active cloud provider", () => {
 
 test("lets env override configured defaults", () => {
   Bun.env.SWITCHBAY_OPENAI_MODEL = "gpt-test-json";
+  Bun.env.SWITCHBAY_GOOGLE_MODEL = "gemini-test-json";
   invalidateCloudProvidersConfig();
 
   expect(getCloudProviderConfig("openai").model).toBe("gpt-test-json");
+  expect(getCloudProviderConfig("google").model).toBe("gemini-test-json");
 });

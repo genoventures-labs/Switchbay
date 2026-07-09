@@ -2,6 +2,7 @@ import React from "react";
 import { Box, Text } from "ink";
 import type { Agent } from "../../agent/agents";
 import type { ActivityEvent, SessionStatus, ThoughtFrame, TranscriptEntry } from "../../agent/turn-state";
+import type { DailyBoard } from "../../operator/daily-board";
 import type { WorkspaceSnapshot } from "../../session/workspace";
 import { TUI_COLORS } from "../theme";
 
@@ -11,6 +12,7 @@ type RightRailProps = {
   availableAgents?: Agent[];
   changedFiles: string[];
   collapsedReason?: string | null;
+  dailyBoard?: DailyBoard | null;
   mode: string;
   recentActivity: ActivityEvent[];
   runtimeBadge: string;
@@ -27,6 +29,7 @@ export function RightRail({
   availableAgents = [],
   changedFiles,
   collapsedReason = null,
+  dailyBoard = null,
   mode,
   recentActivity,
   runtimeBadge,
@@ -44,6 +47,7 @@ export function RightRail({
   const latestThoughts = thoughts.slice(0, 5);
   const dirty = workspace?.dirtyFiles.length ?? 0;
   const branch = workspace?.branch ?? "no branch";
+  const openTasks = dailyBoard?.items.filter((item) => item.status === "active") ?? [];
 
   return (
     <Box width={width} flexDirection="column" paddingLeft={1} gap={1}>
@@ -54,6 +58,17 @@ export function RightRail({
         {activeAgent ? <Line label="Agent" value={`${activeAgent.emoji} ${activeAgent.name}`} /> : null}
         {collapsedReason ? <Text color={TUI_COLORS.muted}>{collapsedReason}</Text> : null}
       </RailPanel>
+
+      {dailyBoard ? (
+        <RailPanel title="Today" minHeight={7}>
+          <Line label="Open" value={`${openTasks.length}/5`} accent={openTasks.length > 0} />
+          {openTasks.slice(0, 3).map((task) => (
+            <Text key={task.id} color={TUI_COLORS.text}>• {truncate(`${task.id}. ${task.text}`, width - 5)}</Text>
+          ))}
+          {!openTasks.length ? <Text color={TUI_COLORS.muted}>No tasks pinned.</Text> : null}
+          {openTasks.length > 3 ? <Text color={TUI_COLORS.muted}>... {openTasks.length - 3} more</Text> : null}
+        </RailPanel>
+      ) : null}
 
       <RailPanel title="Agent Feed" flexGrow={1}>
         {activeSteps.length ? (

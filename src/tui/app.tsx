@@ -54,7 +54,7 @@ import { loadToolboxInventory, type ToolboxSkill } from "../toolbox/hub";
 import { RightRail } from "./components/RightRail";
 import { saveTraceRecord } from "../trace/store";
 import { formatRouteTag } from "../runtime/route-display";
-import { addDailyTask, clearDailyBoard, completeDailyTask, describeDailyBoard, loadDailyBoard } from "../operator/daily-board";
+import { addDailyTask, clearDailyBoard, completeDailyTask, describeDailyBoard, loadDailyBoard, type DailyBoard } from "../operator/daily-board";
 import { buildStartupOverview } from "../operator/startup-overview";
 
 export type SwitchbayAppProps = {
@@ -152,6 +152,7 @@ export function SwitchbayApp({
   const [turnThoughts, setTurnThoughts] = useState<string[]>([]);
   const [alwaysApprovedShellCommands, setAlwaysApprovedShellCommands] = useState<Set<string>>(() => new Set());
   const [rightRailCollapsed, setRightRailCollapsed] = useState(false);
+  const [dailyBoard, setDailyBoard] = useState<DailyBoard>(() => loadDailyBoard());
   
   const didHydrateRef = useRef(false);
   const didShowStartupOverviewRef = useRef(false);
@@ -168,7 +169,9 @@ export function SwitchbayApp({
     })
   );
 
+  const operatorConfig = useMemo(() => getOperatorConfig(), []);
   const commandMatches = useMemo(() => getCommandMatches(query), [query]);
+  const refreshDailyBoard = () => setDailyBoard(loadDailyBoard());
   const commandToken = useMemo(() => {
     const match = query.match(/^\/(\S*)$/);
     return match ? match[1] ?? "" : null;
@@ -779,9 +782,8 @@ export function SwitchbayApp({
       return;
     }
 
-    const operator = getOperatorConfig();
     didShowStartupOverviewRef.current = true;
-    if (!operator.enabled || !operator.startupOverview) {
+    if (!operatorConfig.enabled || !operatorConfig.startupOverview) {
       return;
     }
 
@@ -794,7 +796,7 @@ export function SwitchbayApp({
         message: buildStartupOverview({
           workspace,
           runtimeBadge,
-          dailyBoard: operator.dailyBoard ? loadDailyBoard() : null,
+          dailyBoard: operatorConfig.dailyBoard ? dailyBoard : null,
           sessions,
         }),
       });
@@ -803,7 +805,7 @@ export function SwitchbayApp({
     return () => {
       canceled = true;
     };
-  }, [initialQuery, runtimeBadge, state.workspace]);
+  }, [dailyBoard, initialQuery, operatorConfig, runtimeBadge, state.workspace]);
 
   async function handleResumeSession(id: string) {
     const persisted = await loadPersistedSession(id);
@@ -1362,6 +1364,7 @@ export function SwitchbayApp({
             return;
           }
           const task = addDailyTask(text);
+          refreshDailyBoard();
           dispatch({
             type: "assistant/appended",
             message: `Added Daily Board task **${task.id}**: ${task.text}\n\n${describeDailyBoard()}`,
@@ -1383,6 +1386,7 @@ export function SwitchbayApp({
             setQuerySync("");
             return;
           }
+          refreshDailyBoard();
           dispatch({
             type: "assistant/appended",
             message: `Completed Daily Board task **${task.id}**: ${task.text}\n\n${describeDailyBoard()}`,
@@ -1393,6 +1397,7 @@ export function SwitchbayApp({
 
         if (action === "clear" || action === "reset") {
           const count = clearDailyBoard();
+          refreshDailyBoard();
           dispatch({
             type: "assistant/appended",
             message: `Cleared ${count} Daily Board task${count === 1 ? "" : "s"}.`,
@@ -2140,6 +2145,7 @@ export function SwitchbayApp({
           activeSteps={turnThoughts}
           availableAgents={availableAgents}
           changedFiles={state.changedFiles}
+          dailyBoard={operatorConfig.enabled && operatorConfig.dailyBoard ? dailyBoard : null}
           mode={mode}
           recentActivity={state.recentActivity}
           runtimeBadge={runtimeBadge}

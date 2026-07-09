@@ -992,8 +992,7 @@ test("conversational operator requests answer from local state", async () => {
     expect(added.assistantMessage).toContain("test brew");
 
     const agenda = await tryLocalCommand("Bay, what's on my agenda?", baseOptions);
-    expect(agenda.handled).toBe(true);
-    expect(agenda.assistantMessage).toContain("Daily Board");
+    expect(agenda.handled).toBe(false);
 
     const done = await tryLocalCommand("Bay, mark task 1 done", baseOptions);
     expect(done.handled).toBe(true);
@@ -1001,25 +1000,19 @@ test("conversational operator requests answer from local state", async () => {
     expect(done.assistantMessage).toContain("Completed Daily Board task");
 
     const lane = await tryLocalCommand("Bay, what lane am I using?", baseOptions);
-    expect(lane.handled).toBe(true);
-    expect(lane.assistantMessage).toContain("Lane: Cloud");
+    expect(lane.handled).toBe(false);
 
     const git = await tryLocalCommand("Bay, what's changed in git?", baseOptions);
-    expect(git.handled).toBe(true);
-    expect(git.assistantMessage).toContain("Dirty files: 1");
+    expect(git.handled).toBe(false);
 
     const dirtyRepoQuestion = await tryLocalCommand("Bay, what file is dirty in the repo? What's the changes?", baseOptions);
-    expect(dirtyRepoQuestion.handled).toBe(true);
-    expect(dirtyRepoQuestion.assistantMessage).toContain("Dirty files: 1");
-    expect(dirtyRepoQuestion.assistantMessage).not.toContain("No workspace matched");
+    expect(dirtyRepoQuestion.handled).toBe(false);
 
     const workspace = await tryLocalCommand("Bay, what workspace am I in?", baseOptions);
-    expect(workspace.handled).toBe(true);
-    expect(workspace.assistantMessage).toContain("Workspace cwd");
+    expect(workspace.handled).toBe(false);
 
     const mcp = await tryLocalCommand("Bay, is MCP on?", baseOptions);
-    expect(mcp.handled).toBe(true);
-    expect(mcp.assistantMessage).toContain("MCP");
+    expect(mcp.handled).toBe(false);
 
     const normalAsk = await tryLocalCommand("Bay, explain this TypeScript function", baseOptions);
     expect(normalAsk.handled).toBe(false);
@@ -1033,7 +1026,7 @@ test("conversational operator requests answer from local state", async () => {
   }
 });
 
-test("command coach answers known how-to prompts locally", async () => {
+test("natural help prompts go to the selected model instead of local command coach", async () => {
   const baseOptions = {
     client: {} as any,
     profile: "switchbay",
@@ -1045,22 +1038,16 @@ test("command coach answers known how-to prompts locally", async () => {
   };
 
   const ollama = await tryLocalCommand("Bay, how do I switch to Ollama?", baseOptions);
-  expect(ollama.handled).toBe(true);
-  expect(ollama.assistantMessage).toContain("Command Coach");
-  expect(ollama.assistantMessage).toContain("/lane ollama");
-  expect(ollama.assistantMessage).toContain("switchbay local-provider set ollama");
+  expect(ollama.handled).toBe(false);
 
   const engines = await tryLocalCommand("Bay, how do I sync engines?", baseOptions);
-  expect(engines.handled).toBe(true);
-  expect(engines.assistantMessage).toContain("switchbay engines sync");
+  expect(engines.handled).toBe(false);
 
   const plugins = await tryLocalCommand("What command lists plugins?", baseOptions);
-  expect(plugins.handled).toBe(true);
-  expect(plugins.assistantMessage).toContain("switchbay plugins list");
+  expect(plugins.handled).toBe(false);
 
   const agenda = await tryLocalCommand("Bay, what's the command for reminders?", baseOptions);
-  expect(agenda.handled).toBe(true);
-  expect(agenda.assistantMessage).toContain("/task add");
+  expect(agenda.handled).toBe(false);
 
   const generic = await tryLocalCommand("Bay, how do I explain this TypeScript function?", baseOptions);
   expect(generic.handled).toBe(false);

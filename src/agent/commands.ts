@@ -17,11 +17,7 @@ import type { PatchPreview } from "../tools/patch";
 import { runCommand } from "../tools/shell";
 import { findAgent, loadAllAgents } from "./agents";
 import { extractAssistantText } from "./loop";
-import { getRuntimeLane, getToolMode, type RuntimeLane, type ToolMode } from "../config/env";
-import { getRuntimeLaneLabel } from "../runtime/client";
-import { getActiveCloudProvider } from "../runtime/cloud-providers";
-import { getActiveLocalProvider } from "../runtime/local-providers";
-import { getSelectedRuntimeModel } from "../config/switchbay-config";
+import type { RuntimeLane, ToolMode } from "../config/env";
 import { addDailyTask, clearDailyBoard, completeDailyTask, describeDailyBoard } from "../operator/daily-board";
 import { describeEngines, loadEngineRegistry } from "../engines/registry";
 import { describeEngineBay, loadEngineBayInventory } from "../engines/hub";
@@ -727,15 +723,6 @@ async function handleConversationalOperatorIntent(
 ): Promise<LocalCommandResult> {
   const normalized = normalizeBayTalk(input);
 
-  const coached = matchCommandCoachIntent(normalized);
-  if (coached) {
-    return { handled: true, assistantMessage: localFirstMessage(coached) };
-  }
-
-  if (isAgendaQuestion(normalized)) {
-    return { handled: true, assistantMessage: localFirstMessage(describeDailyBoard()) };
-  }
-
   const reminder = parseReminderIntent(normalized);
   if (reminder) {
     try {
@@ -767,38 +754,6 @@ async function handleConversationalOperatorIntent(
     }
   }
 
-  if (isLaneQuestion(normalized)) {
-    return { handled: true, assistantMessage: localFirstMessage(describeRuntimeStatus(options)) };
-  }
-
-  if (isMcpQuestion(normalized)) {
-    const cwd = options.workspace?.cwd ?? process.cwd();
-    return { handled: true, assistantMessage: localFirstMessage(describeLmStudioMcpConfig(await loadLmStudioMcpConfig(cwd))) };
-  }
-
-  if (isGitQuestion(normalized)) {
-    return { handled: true, assistantMessage: localFirstMessage(describeGitState(options.workspace)) };
-  }
-
-  if (isWorkspaceQuestion(normalized)) {
-    const context = formatWorkspaceContext(options.workspace) ?? "No workspace snapshot loaded.";
-    return { handled: true, assistantMessage: localFirstMessage(`**Workspace**\n\n\`\`\`\n${context}\n\`\`\``) };
-  }
-
-  if (isRadarRequest(normalized)) {
-    return { handled: true, assistantMessage: localFirstMessage(await formatRadarForOptions(options)) };
-  }
-
-  if (isHandoffRequest(normalized)) {
-    return {
-      handled: true,
-      assistantMessage: localFirstMessage(await buildQuickHandoff({
-        cwd: options.workspace?.cwd ?? process.cwd(),
-        workspace: options.workspace,
-      })),
-    };
-  }
-
   return { handled: false };
 }
 
@@ -824,143 +779,6 @@ function localFirstMessage(message: string): string {
   return `Local-first:\n\n${message}`;
 }
 
-type CommandCoachEntry = {
-  patterns: RegExp[];
-  title: string;
-  slash?: string;
-  cli?: string;
-  note?: string;
-};
-
-const COMMAND_COACH: CommandCoachEntry[] = [
-  {
-    title: "Switch to Ollama",
-    patterns: [/\bollama\b/, /\blocal provider\b.*\bollama\b/],
-    slash: "/lane ollama",
-    cli: "switchbay local-provider set ollama",
-    note: "Use `/model ollama` to browse local Ollama models after switching.",
-  },
-  {
-    title: "Switch to LM Studio",
-    patterns: [/\blm\s*studio\b/, /\blmstudio\b/, /\blocal provider\b.*\blm\b/],
-    slash: "/lane lmstudio",
-    cli: "switchbay local-provider set lmstudio",
-  },
-  {
-    title: "Switch cloud provider",
-    patterns: [/\b(openai|anthropic|claude|gpt|google|gemini)\b.*\b(provider|lane|cloud)\b/, /\bcloud provider\b/],
-    slash: "/lane openai, /lane anthropic, or /lane google",
-    cli: "switchbay cloud-provider set auto|openai|anthropic|google",
-  },
-  {
-    title: "Pick or list models",
-    patterns: [/\b(model|models)\b.*\b(list|pick|select|switch|change|show)\b/, /\b(list|pick|select|switch|change|show)\b.*\b(model|models)\b/],
-    slash: "/model",
-    cli: "switchbay models --lane <cloud|local|ollama>",
-    note: "Pin one with `switchbay model <lane> <model-id>`.",
-  },
-  {
-    title: "Use the Daily Board",
-    patterns: [/\b(agenda|daily board|today'?s? board|task|tasks|reminder|reminders)\b/],
-    slash: "/agenda, /task add <text>, /task done <id>",
-    cli: 'switchbay agenda && switchbay task add "test brew"',
-  },
-  {
-    title: "Sync Engine Bay",
-    patterns: [/\b(engine|engines|engine bay)\b.*\b(sync|pull|update|refresh)\b/, /\b(sync|pull|update|refresh)\b.*\b(engine|engines|engine bay)\b/],
-    slash: "/engine-bay sync",
-    cli: "switchbay engines sync",
-  },
-  {
-    title: "Work with skills",
-    patterns: [/\b(skill|skills|toolbox)\b.*\b(list|sync|read|show|use)\b/, /\b(list|sync|read|show|use)\b.*\b(skill|skills|toolbox)\b/],
-    slash: "/skills",
-    cli: "switchbay skills list",
-    note: "Read one with `switchbay skills read <id>`.",
-  },
-  {
-    title: "Work with plugins",
-    patterns: [/\b(plugin|plugins)\b/],
-    slash: "/plugins or /create-plugin",
-    cli: "switchbay plugins list",
-    note: "Inspect one with `switchbay plugins inspect <id>`.",
-  },
-  {
-    title: "Use MCP",
-    patterns: [/\bmcp\b.*\b(on|off|enable|disable|status|catalog|init|create|configure)\b/, /\b(enable|disable|status|catalog|init|create|configure)\b.*\bmcp\b/],
-    slash: "/mcp on, /mcp off, /mcp catalog",
-    cli: "switchbay mcp status",
-  },
-  {
-    title: "Use Workspace Knowledge",
-    patterns: [/\b(knowledge|index|search)\b.*\b(refresh|rebuild|search|status|find)\b/, /\b(refresh|rebuild|search|status|find)\b.*\b(knowledge|index)\b/],
-    slash: "/index refresh or /search <query>",
-    cli: 'switchbay knowledge refresh && switchbay knowledge search "approval gates"',
-  },
-  {
-    title: "Use workspace memory",
-    patterns: [/\b(memory|remember|memories)\b.*\b(add|save|list|refresh|facts|show)\b/, /\b(add|save|list|refresh|facts|show)\b.*\b(memory|memories)\b/],
-    slash: "/remember <note> or /memory refresh",
-    cli: 'switchbay memory add "use Bun for tests"',
-  },
-  {
-    title: "Hop workspaces",
-    patterns: [/\b(workspace|repo|project)\b.*\b(hop|switch|add|list|travel)\b/, /\b(hop|switch|add|list|travel)\b.*\b(workspace|repo|project)\b/],
-    slash: "/workspace list, /workspace add <path>, /workspace hop <name>",
-    cli: 'switchbay "query" --hop <name>',
-  },
-  {
-    title: "Sessions and resume",
-    patterns: [/\b(session|sessions|resume)\b/],
-    slash: "/sessions or /resume",
-    cli: "switchbay --resume",
-  },
-  {
-    title: "Trace the latest turn",
-    patterns: [/\b(trace|receipt|latest turn)\b/],
-    slash: "/trace or /trace export",
-    cli: "switchbay trace",
-  },
-  {
-    title: "Run Friction Radar",
-    patterns: [/\b(radar|blockers?|friction|preflight)\b/],
-    slash: "/radar",
-    cli: "switchbay radar",
-    note: "Radar is read-only and checks local release friction.",
-  },
-  {
-    title: "Write a Quick Handoff",
-    patterns: [/\b(handoff|hand off|handover|wrap|next time)\b/],
-    slash: "/handoff",
-    cli: "switchbay handoff",
-  },
-];
-
-function matchCommandCoachIntent(normalized: string): string | null {
-  if (!/\b(how do i|how can i|what command|which command|show me the command|what's the command|help me)\b/.test(normalized)) {
-    return null;
-  }
-
-  const entry = COMMAND_COACH.find((candidate) =>
-    candidate.patterns.some((pattern) => pattern.test(normalized))
-  );
-  if (!entry) return null;
-
-  return [
-    `**Command Coach: ${entry.title}**`,
-    "",
-    entry.slash ? `TUI: \`${entry.slash}\`` : null,
-    entry.cli ? `CLI: \`${entry.cli}\`` : null,
-    entry.note ?? null,
-  ].filter(Boolean).join("\n");
-}
-
-function isAgendaQuestion(normalized: string): boolean {
-  if (/^(mark|complete|finish|done|add|remind)\b/.test(normalized)) return false;
-  return /\b(agenda|today'?s?\s+board|daily\s+board|tasks?|reminders?|on deck)\b/.test(normalized) &&
-    /\b(what|show|list|view|give|tell|agenda|tasks?|reminders?|on deck)\b/.test(normalized);
-}
-
 function parseReminderIntent(normalized: string): string | null {
   const match = normalized.match(/^(?:please\s+)?(?:remind me to|add(?: a)? task(?: to)?|task add|put(?: this)? on(?: my| the)?(?: agenda| board)?|add(?: this)? to(?: my| the)?(?: agenda| board))\s+(.+)$/i);
   return match?.[1]?.trim() || null;
@@ -971,69 +789,6 @@ function parseTaskDoneIntent(normalized: string): number | null {
     normalized.match(/^task\s+(\d+)\s+(?:done|complete|finished)$/i);
   const id = Number.parseInt(match?.[1] ?? "", 10);
   return Number.isInteger(id) && id > 0 ? id : null;
-}
-
-function isLaneQuestion(normalized: string): boolean {
-  return /\b(lane|model|provider|runtime)\b/.test(normalized) &&
-    /\b(what|which|show|current|using|active|status)\b/.test(normalized);
-}
-
-function isMcpQuestion(normalized: string): boolean {
-  return /\bmcp\b/.test(normalized) &&
-    /\b(what|show|status|configured|config|on|enabled|active)\b/.test(normalized);
-}
-
-function isWorkspaceQuestion(normalized: string): boolean {
-  return /\b(workspace|repo|repository|project|cwd|where am i)\b/.test(normalized) &&
-    /\b(what|which|show|current|where|status)\b/.test(normalized);
-}
-
-function isGitQuestion(normalized: string): boolean {
-  return /\b(git|changed|changes|dirty|branch|status|working tree)\b/.test(normalized) &&
-    /\b(what|show|status|changed|changes|dirty|branch)\b/.test(normalized);
-}
-
-function isRadarRequest(normalized: string): boolean {
-  return /\b(radar|blockers?|friction|release blockers?|preflight)\b/.test(normalized) &&
-    /\b(run|check|show|scan|what|any|status)\b/.test(normalized);
-}
-
-function isHandoffRequest(normalized: string): boolean {
-  return /\b(handoff|hand off|handover|wrap|summary for next time|next time)\b/.test(normalized) &&
-    /\b(write|make|create|give|show|summari[sz]e|draft)\b/.test(normalized);
-}
-
-function describeRuntimeStatus(options: LocalCommandOptions): string {
-  const lane = options.runtimeLane ?? getRuntimeLane();
-  const toolMode = options.toolMode ?? getToolMode();
-  const selected = getSelectedRuntimeModel(lane);
-  const lines = [
-    "**Runtime**",
-    "",
-    `Lane: ${getRuntimeLaneLabel(lane)}`,
-    `Tool mode: ${toolMode}`,
-    lane === "local" ? `Local provider: ${getActiveLocalProvider()}` : null,
-    lane === "cloud" || lane === "cloud-mcp" ? `Cloud provider: ${getActiveCloudProvider()}` : null,
-    `Model: ${selected?.id ?? "default"}`,
-    "",
-    "Switch with `/lane`, `/lane openai`, `/lane anthropic`, `/lane google`, `/lane ollama`, or `/model`.",
-  ];
-  return lines.filter(Boolean).join("\n");
-}
-
-function describeGitState(workspace: WorkspaceSnapshot | null): string {
-  if (!workspace) return "No workspace snapshot loaded.";
-  const dirty = workspace.dirtyFiles.length
-    ? workspace.dirtyFiles.slice(0, 12).map((file) => `- ${file}`).join("\n")
-    : "clean working tree";
-  return [
-    "**Git State**",
-    "",
-    `Branch: ${workspace.branch ?? "unknown"}`,
-    `Dirty files: ${workspace.dirtyFiles.length}`,
-    "",
-    dirty,
-  ].join("\n");
 }
 
 function parseConversationalCreationIntent(input: string): "agent" | "engine" | "mcp" | "rule" | "skill" | "plugin" | null {

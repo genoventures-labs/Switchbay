@@ -601,6 +601,11 @@ async function handleConversationalOperatorIntent(
 ): Promise<LocalCommandResult> {
   const normalized = normalizeBayTalk(input);
 
+  const coached = matchCommandCoachIntent(normalized);
+  if (coached) {
+    return { handled: true, assistantMessage: localFirstMessage(coached) };
+  }
+
   if (isAgendaQuestion(normalized)) {
     return { handled: true, assistantMessage: localFirstMessage(describeDailyBoard()) };
   }
@@ -667,6 +672,124 @@ function normalizeBayTalk(input: string): string {
 
 function localFirstMessage(message: string): string {
   return `Local-first:\n\n${message}`;
+}
+
+type CommandCoachEntry = {
+  patterns: RegExp[];
+  title: string;
+  slash?: string;
+  cli?: string;
+  note?: string;
+};
+
+const COMMAND_COACH: CommandCoachEntry[] = [
+  {
+    title: "Switch to Ollama",
+    patterns: [/\bollama\b/, /\blocal provider\b.*\bollama\b/],
+    slash: "/lane ollama",
+    cli: "switchbay local-provider set ollama",
+    note: "Use `/model ollama` to browse local Ollama models after switching.",
+  },
+  {
+    title: "Switch to LM Studio",
+    patterns: [/\blm\s*studio\b/, /\blmstudio\b/, /\blocal provider\b.*\blm\b/],
+    slash: "/lane lmstudio",
+    cli: "switchbay local-provider set lmstudio",
+  },
+  {
+    title: "Switch cloud provider",
+    patterns: [/\b(openai|anthropic|claude|gpt)\b.*\b(provider|lane|cloud)\b/, /\bcloud provider\b/],
+    slash: "/lane openai or /lane anthropic",
+    cli: "switchbay cloud-provider set auto|openai|anthropic",
+  },
+  {
+    title: "Pick or list models",
+    patterns: [/\b(model|models)\b.*\b(list|pick|select|switch|change|show)\b/, /\b(list|pick|select|switch|change|show)\b.*\b(model|models)\b/],
+    slash: "/model",
+    cli: "switchbay models --lane <cloud|local|ollama>",
+    note: "Pin one with `switchbay model <lane> <model-id>`.",
+  },
+  {
+    title: "Use the Daily Board",
+    patterns: [/\b(agenda|daily board|today'?s? board|task|tasks|reminder|reminders)\b/],
+    slash: "/agenda, /task add <text>, /task done <id>",
+    cli: 'switchbay agenda && switchbay task add "test brew"',
+  },
+  {
+    title: "Sync Engine Bay",
+    patterns: [/\b(engine|engines|engine bay)\b.*\b(sync|pull|update|refresh)\b/, /\b(sync|pull|update|refresh)\b.*\b(engine|engines|engine bay)\b/],
+    slash: "/engine-bay sync",
+    cli: "switchbay engines sync",
+  },
+  {
+    title: "Work with skills",
+    patterns: [/\b(skill|skills|toolbox)\b.*\b(list|sync|read|show|use)\b/, /\b(list|sync|read|show|use)\b.*\b(skill|skills|toolbox)\b/],
+    slash: "/skills",
+    cli: "switchbay skills list",
+    note: "Read one with `switchbay skills read <id>`.",
+  },
+  {
+    title: "Work with plugins",
+    patterns: [/\b(plugin|plugins)\b/],
+    slash: "/plugins or /create-plugin",
+    cli: "switchbay plugins list",
+    note: "Inspect one with `switchbay plugins inspect <id>`.",
+  },
+  {
+    title: "Use MCP",
+    patterns: [/\bmcp\b.*\b(on|off|enable|disable|status|catalog|init|create|configure)\b/, /\b(enable|disable|status|catalog|init|create|configure)\b.*\bmcp\b/],
+    slash: "/mcp on, /mcp off, /mcp catalog",
+    cli: "switchbay mcp status",
+  },
+  {
+    title: "Use Workspace Knowledge",
+    patterns: [/\b(knowledge|index|search)\b.*\b(refresh|rebuild|search|status|find)\b/, /\b(refresh|rebuild|search|status|find)\b.*\b(knowledge|index)\b/],
+    slash: "/index refresh or /search <query>",
+    cli: 'switchbay knowledge refresh && switchbay knowledge search "approval gates"',
+  },
+  {
+    title: "Use workspace memory",
+    patterns: [/\b(memory|remember|memories)\b.*\b(add|save|list|refresh|facts|show)\b/, /\b(add|save|list|refresh|facts|show)\b.*\b(memory|memories)\b/],
+    slash: "/remember <note> or /memory refresh",
+    cli: 'switchbay memory add "use Bun for tests"',
+  },
+  {
+    title: "Hop workspaces",
+    patterns: [/\b(workspace|repo|project)\b.*\b(hop|switch|add|list|travel)\b/, /\b(hop|switch|add|list|travel)\b.*\b(workspace|repo|project)\b/],
+    slash: "/workspace list, /workspace add <path>, /workspace hop <name>",
+    cli: 'switchbay "query" --hop <name>',
+  },
+  {
+    title: "Sessions and resume",
+    patterns: [/\b(session|sessions|resume)\b/],
+    slash: "/sessions or /resume",
+    cli: "switchbay --resume",
+  },
+  {
+    title: "Trace the latest turn",
+    patterns: [/\b(trace|receipt|latest turn)\b/],
+    slash: "/trace or /trace export",
+    cli: "switchbay trace",
+  },
+];
+
+function matchCommandCoachIntent(normalized: string): string | null {
+  if (!/\b(how do i|how can i|what command|which command|show me the command|what's the command|help me)\b/.test(normalized)) {
+    return null;
+  }
+
+  const entry = COMMAND_COACH.find((candidate) =>
+    candidate.patterns.some((pattern) => pattern.test(normalized))
+  );
+  if (!entry) return null;
+
+  return [
+    `**Command Coach: ${entry.title}**`,
+    "",
+    entry.slash ? `TUI: \`${entry.slash}\`` : null,
+    entry.cli ? `CLI: \`${entry.cli}\`` : null,
+    entry.note ?? null,
+  ].filter(Boolean).join("\n");
 }
 
 function isAgendaQuestion(normalized: string): boolean {

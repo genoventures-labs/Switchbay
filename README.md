@@ -181,7 +181,7 @@ export SWITCHBAY_STARTUP_OVERVIEW=off
 export SWITCHBAY_DAILY_BOARD=off
 ```
 
-Bay also handles obvious operator asks locally before calling a model, such as "Bay, what's on my agenda?", "Bay, what lane am I using?", "Bay, is MCP on?", and "Bay, what's changed in git?".
+Bay also handles obvious operator asks locally before calling a model, such as "Bay, what's on my agenda?", "Bay, what lane am I using?", "Bay, is MCP on?", "Bay, what's changed in git?", and "Bay, how do I switch to Ollama?".
 
 For the release-readiness pass, use [docs/1.0_SMOKE_CHECKLIST.md](docs/1.0_SMOKE_CHECKLIST.md).
 

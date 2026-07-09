@@ -1028,6 +1028,39 @@ test("conversational operator requests answer from local state", async () => {
   }
 });
 
+test("command coach answers known how-to prompts locally", async () => {
+  const baseOptions = {
+    client: {} as any,
+    profile: "switchbay",
+    sessionId: "test-session",
+    surface: "dev",
+    runtimeLane: "cloud" as const,
+    toolMode: "standard" as const,
+    workspace: null,
+  };
+
+  const ollama = await tryLocalCommand("Bay, how do I switch to Ollama?", baseOptions);
+  expect(ollama.handled).toBe(true);
+  expect(ollama.assistantMessage).toContain("Command Coach");
+  expect(ollama.assistantMessage).toContain("/lane ollama");
+  expect(ollama.assistantMessage).toContain("switchbay local-provider set ollama");
+
+  const engines = await tryLocalCommand("Bay, how do I sync engines?", baseOptions);
+  expect(engines.handled).toBe(true);
+  expect(engines.assistantMessage).toContain("switchbay engines sync");
+
+  const plugins = await tryLocalCommand("What command lists plugins?", baseOptions);
+  expect(plugins.handled).toBe(true);
+  expect(plugins.assistantMessage).toContain("switchbay plugins list");
+
+  const agenda = await tryLocalCommand("Bay, what's the command for reminders?", baseOptions);
+  expect(agenda.handled).toBe(true);
+  expect(agenda.assistantMessage).toContain("/task add");
+
+  const generic = await tryLocalCommand("Bay, how do I explain this TypeScript function?", baseOptions);
+  expect(generic.handled).toBe(false);
+});
+
 test("workspace slash commands show, add, and hop known workspaces", async () => {
   const originalCwd = process.cwd();
   const previousConfigDir = Bun.env.SWITCHBAY_CONFIG_DIR;

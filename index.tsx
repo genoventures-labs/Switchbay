@@ -18,7 +18,7 @@ import { createDefaultLmStudioMcpConfig, describeLmStudioMcpConfig, loadLmStudio
 import { describeTrustedMcpCatalog } from "./src/runtime/mcp-catalog";
 import { ANSI_COLORS as CLR } from "./src/tui/theme";
 import { describePlugins, loadPluginInventory, readPlugin } from "./src/plugins/registry";
-import { listRuntimeModels, pullLmStudioModel, type RuntimeModelOption } from "./src/runtime/models";
+import { listRuntimeModels, normalizeLmStudioPullModel, pullLmStudioModel, type RuntimeModelOption } from "./src/runtime/models";
 import { describeLocalProviders, getActiveLocalProvider, normalizeLocalProvider, setActiveLocalProvider, type LocalProviderId } from "./src/runtime/local-providers";
 import { formatRouteTag } from "./src/runtime/route-display";
 import { describeCloudProviders, normalizeCloudProvider, setActiveCloudProvider } from "./src/runtime/cloud-providers";
@@ -664,25 +664,96 @@ async function runModelPullCommand(rawLane: string | null, target: string | null
     }
     console.log(`Pulling ${target} through LM Studio...`);
     console.log(`LM Studio native API: ${getLmStudioNativeBase()}`);
-    const result = await pullLmStudioModel({ model: target, quantization });
-    if (result.requestedModel !== result.model) {
-      console.log(`Normalized target: ${result.model}`);
+    try {
+      const result = await pullLmStudioModel({ model: target, quantization });
+      if (result.requestedModel !== result.model) {
+        console.log(`Normalized target: ${result.model}`);
+      }
+      setSelectedRuntimeModel(lane, {
+        id: result.instanceId ?? result.model,
+        provider: lane === "local-mcp" ? "lmstudio-mcp" : "lmstudio",
+      });
+      console.log(`Downloaded: ${result.downloadStatus}${result.jobId ? ` (${result.jobId})` : ""}`);
+      console.log(`Loaded: ${result.loadStatus}${result.instanceId ? ` as ${result.instanceId}` : ""}`);
+      if (result.loadTimeSeconds !== undefined) {
+        console.log(`Load time: ${result.loadTimeSeconds}s`);
+      }
+      console.log(`Selected ${result.instanceId ?? result.model} for ${getRuntimeLaneLabel(lane)}.`);
+    } catch (error: any) {
+      if (!isLmStudioPullFallbackCandidate(error.message)) throw error;
+      const model = normalizeLmStudioPullModel(target);
+      console.error(error.message);
+      console.log("");
+      console.log("Trying LM Studio CLI fallback: `lms get`.");
+      console.log("This may prompt for download confirmation.");
+      await runLmStudioCliFallback(model, lane);
     }
-    setSelectedRuntimeModel(lane, {
-      id: result.instanceId ?? result.model,
-      provider: lane === "local-mcp" ? "lmstudio-mcp" : "lmstudio",
-    });
-    console.log(`Downloaded: ${result.downloadStatus}${result.jobId ? ` (${result.jobId})` : ""}`);
-    console.log(`Loaded: ${result.loadStatus}${result.instanceId ? ` as ${result.instanceId}` : ""}`);
-    if (result.loadTimeSeconds !== undefined) {
-      console.log(`Load time: ${result.loadTimeSeconds}s`);
-    }
-    console.log(`Selected ${result.instanceId ?? result.model} for ${getRuntimeLaneLabel(lane)}.`);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`switchbay model pull: ${msg}`);
     process.exit(1);
   }
+}
+
+function isLmStudioPullFallbackCandidate(message: string): boolean {
+  const lower = message.toLowerCase();
+  return lower.includes("unable to connect") ||
+    lower.includes("network/catalog download failure") ||
+    lower.includes("model is not in lm studio's catalog");
+}
+
+async function runLmStudioCliFallback(model: string, lane: ReturnType<typeof normalizeRuntimeLane>) {
+  if (!model) throw new Error("LM Studio CLI fallback needs a model id.");
+
+  await runInheritedCommand(["lms", "get", model]);
+
+  const host = lmStudioHostArg();
+  const loadCommand = host ? ["lms", "load", model, "--host", host] : ["lms", "load", model];
+  try {
+    await runInheritedCommand(loadCommand);
+  } catch (error: any) {
+    console.log("");
+    console.log(`Downloaded with lms, but automatic load did not complete: ${error.message}`);
+    console.log(`Try manually: ${loadCommand.map(shellQuote).join(" ")}`);
+  }
+
+  setSelectedRuntimeModel(lane, {
+    id: model,
+    provider: lane === "local-mcp" ? "lmstudio-mcp" : "lmstudio",
+  });
+  console.log(`Selected ${model} for ${getRuntimeLaneLabel(lane)}.`);
+}
+
+async function runInheritedCommand(command: string[]): Promise<void> {
+  try {
+    const proc = Bun.spawn(command, {
+      stdin: "inherit",
+      stdout: "inherit",
+      stderr: "inherit",
+    });
+    const exitCode = await proc.exited;
+    if (exitCode !== 0) {
+      throw new Error(`${command.map(shellQuote).join(" ")} exited with ${exitCode}`);
+    }
+  } catch (error: any) {
+    if (error?.code === "ENOENT" || /ENOENT|not found/i.test(error.message)) {
+      throw new Error("LM Studio CLI `lms` was not found. Open LM Studio once, then run `lms --help` to confirm it is installed.");
+    }
+    throw error;
+  }
+}
+
+function lmStudioHostArg(): string | null {
+  try {
+    const url = new URL(getLmStudioNativeBase());
+    return url.host;
+  } catch {
+    return null;
+  }
+}
+
+function shellQuote(value: string): string {
+  return /^[A-Za-z0-9_./:=@-]+$/.test(value) ? value : JSON.stringify(value);
 }
 
 async function runCliMode(options: any, resumeId: string | null) {

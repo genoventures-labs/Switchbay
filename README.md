@@ -162,7 +162,9 @@ Auto routing is visible by design. When Switchbay chooses a provider/model, comp
 Using: cloud/anthropic/claude-sonnet-4-5 · intent=code_work · mode=auto
 ```
 
-The router is deterministic and inspectable: structured/summary tasks favor OpenAI, code/tool-heavy work favors Anthropic, explicit lanes/providers override auto, and local lanes show the active local provider.
+The router is deterministic and inspectable: structured/summary tasks favor OpenAI, screenshot/image-link prompts favor OpenAI vision input, code/tool-heavy work favors Anthropic, explicit lanes/providers override auto, and local lanes show the active local provider.
+
+OpenAI image input works through direct image URLs, base64 data URLs, or local image file paths (`.png`, `.jpg`, `.jpeg`, `.webp`, `.gif`) mentioned in the prompt. In auto cloud routing, image references force the OpenAI provider; if another cloud provider is pinned, Switchbay tells you to switch to OpenAI instead of pretending the screenshot was read.
 
 Bay only creates MCP configs from Switchbay's trusted catalog: Playwright, filesystem, GitHub, memory, fetch, sequential-thinking, and Postgres. If a request is not in that catalog, Bay refuses to invent a server id and tells you how to proceed manually.
 
@@ -233,6 +235,8 @@ switchbay model openai gpt-5.5
 switchbay model add openai gpt-new-model --label "GPT New Model"
 switchbay --lane cloud --add-model gpt-new-model
 switchbay model google gemini-3.5-flash
+switchbay --lane openai "Read this screenshot: https://example.com/screen.png"
+switchbay --lane openai "Inspect ./screen.png and summarize the UI issue"
 switchbay cloud-provider set anthropic
 switchbay cloud-provider set google
 switchbay local-provider set ollama

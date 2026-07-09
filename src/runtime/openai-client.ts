@@ -2,6 +2,7 @@ import {
   getDebugEmptyResponses,
 } from "../config/env";
 import { getCloudProviderApiKey, getCloudProviderConfig, type CloudProviderId } from "./cloud-providers";
+import { prepareOpenAiVisionMessages } from "./image-inputs";
 import type { ChatCompletionRequest, ChatCompletionResponse } from "./types";
 
 type OpenAiClientOptions = {
@@ -35,6 +36,9 @@ export class OpenAiClient {
     }
 
     const useStream = typeof options.onToken === "function";
+    const messages = this.provider === "openai"
+      ? await prepareOpenAiVisionMessages(request.messages)
+      : request.messages;
     const response = await this.fetchImpl(`${this.apiBase}/chat/completions`, {
       method: "POST",
       headers: {
@@ -43,7 +47,7 @@ export class OpenAiClient {
       },
       body: JSON.stringify({
         model: request.model ?? getCloudProviderConfig(this.provider).model,
-        messages: request.messages,
+        messages,
         stream: useStream,
         ...(request.tools && request.tools.length > 0 ? { tools: request.tools } : {}),
         ...(request.tool_choice !== undefined ? { tool_choice: request.tool_choice } : {}),

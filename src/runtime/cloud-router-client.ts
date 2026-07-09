@@ -6,6 +6,7 @@ import {
 } from "./cloud-providers";
 import { AnthropicClient } from "./anthropic-client";
 import { OpenAiClient } from "./openai-client";
+import { containsImageReferenceText } from "./image-inputs";
 import type { ChatRuntimeClient } from "./client";
 import type { ChatCompletionRequest, ChatCompletionResponse, ChatMessage, WorkspaceFocus } from "./types";
 
@@ -17,7 +18,7 @@ type CloudRouterClientOptions = {
   google?: ChatRuntimeClient;
 };
 
-type RoutingIntent = "structured_output" | "code_work" | "tool_work" | "general";
+type RoutingIntent = "vision" | "structured_output" | "code_work" | "tool_work" | "general";
 
 type CloudRoutingDecision = {
   provider: ProviderName;
@@ -77,14 +78,29 @@ export class CloudRouterClient implements ChatRuntimeClient {
 
 function chooseProvider(request: ChatCompletionRequest): CloudRoutingDecision {
   const configured = getActiveCloudProvider();
+  const classified = classifyIntent(request);
   if (configured === "openai" || configured === "anthropic" || configured === "google") {
+    if (classified.intent === "vision" && configured !== "openai") {
+      throw new Error("Image URL vision is currently wired for OpenAI. Switch with `/lane openai` or `switchbay cloud-provider set openai`.");
+    }
     assertProviderConfigured(configured);
     return {
       provider: configured,
       model: getCloudProviderConfig(configured).model,
-      intent: classifyIntent(request).intent,
+      intent: classified.intent,
       reason: `Explicit cloud provider: ${configured}.`,
       mode: "explicit",
+    };
+  }
+
+  if (classified.intent === "vision") {
+    assertProviderConfigured("openai");
+    return {
+      provider: "openai",
+      model: getCloudProviderConfig("openai").model,
+      intent: classified.intent,
+      reason: classified.reason,
+      mode: "auto",
     };
   }
 
@@ -110,7 +126,6 @@ function chooseProvider(request: ChatCompletionRequest): CloudRoutingDecision {
     };
   }
 
-  const classified = classifyIntent(request);
   const wantsCode = classified.intent === "code_work" || classified.intent === "tool_work";
   const provider = wantsCode
     ? firstAvailable(["anthropic", "openai", "google"])
@@ -140,6 +155,10 @@ function assertProviderConfigured(provider: ProviderName): void {
 
 function classifyIntent(request: ChatCompletionRequest): { intent: RoutingIntent; reason: string } {
   const text = request.messages.map(messageText).join("\n").toLowerCase();
+
+  if (containsImageReferenceText(text)) {
+    return { intent: "vision", reason: "Image references favor OpenAI vision input." };
+  }
 
   if (/\b(json|schema|strict|format|classify|route|summari[sz]e|short|title)\b/.test(text)) {
     return { intent: "structured_output", reason: "Structured/summary keywords favor OpenAI." };

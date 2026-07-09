@@ -102,6 +102,24 @@ test("cloud router picks Anthropic for code work", async () => {
   expect(response.meta?.using).toContain("cloud/anthropic/");
 });
 
+test("cloud router picks OpenAI for image references", async () => {
+  Bun.env.OPENAI_API_KEY = "test-openai";
+  Bun.env.ANTHROPIC_API_KEY = "test-anthropic";
+  delete Bun.env.SWITCHBAY_CLOUD_PROVIDER;
+  const calls: string[] = [];
+  const router = new CloudRouterClient({
+    openAi: mockProvider("openai", calls),
+    anthropic: mockProvider("anthropic", calls),
+  });
+
+  const response = await router.createChatCompletion("dev", request("inspect this repo screenshot https://example.com/screen.png"));
+
+  expect(calls).toEqual(["openai"]);
+  expect(response.meta?.provider).toBe("openai");
+  expect(response.meta?.router_intent).toBe("vision");
+  expect(response.meta?.router_reason).toContain("Image references");
+});
+
 test("cloud router honors Google as an explicit provider", async () => {
   Bun.env.GOOGLE_API_KEY = "test-google";
   Bun.env.SWITCHBAY_CLOUD_PROVIDER = "google";

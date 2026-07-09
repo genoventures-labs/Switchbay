@@ -1,7 +1,6 @@
 import path from "node:path";
 import fs from "node:fs/promises";
-import { existsSync, readFileSync } from "node:fs";
-import { workspaceStorageDir } from "../config/paths";
+import { userConfigDir, workspaceStorageDir } from "../config/paths";
 import { pluginAssetPaths } from "../plugins/registry";
 
 export type BuiltinAgent = {
@@ -12,7 +11,31 @@ export type BuiltinAgent = {
   prompt: string;
 };
 
-export type Agent = BuiltinAgent & { custom?: boolean };
+export type AgentSource = "builtin" | "user" | "workspace" | "plugin";
+
+export type Agent = BuiltinAgent & {
+  custom?: boolean;
+  source?: AgentSource;
+  path?: string;
+};
+
+export type AgentScope = "user" | "workspace";
+
+export type AgentDefinitionAnswers = {
+  name: string;
+  specialty: string;
+  approach?: string;
+  rules?: string;
+  scope?: AgentScope;
+};
+
+export type AgentDraft = {
+  id: string;
+  name: string;
+  content: string;
+  savePath: string;
+  scope: AgentScope;
+};
 
 export const BUILTIN_AGENTS: BuiltinAgent[] = [
   {
@@ -112,36 +135,34 @@ const CUSTOM_AGENT_DIR = path.join(
   "agents",
 );
 
-export async function loadAllAgents(): Promise<Agent[]> {
-  const agents: Agent[] = [...BUILTIN_AGENTS];
+export function userAgentDir(): string {
+  return path.join(userConfigDir(), "agents");
+}
+
+export function workspaceAgentDir(cwd = process.cwd()): string {
+  return path.join(workspaceStorageDir(cwd), "agents");
+}
+
+export async function loadAllAgents(cwd = process.cwd()): Promise<Agent[]> {
+  const agents: Agent[] = BUILTIN_AGENTS.map((agent) => ({ ...agent, source: "builtin" }));
   const dirs = [
-    CUSTOM_AGENT_DIR,
-    path.join(workspaceStorageDir(), "agents"),
+    { dir: CUSTOM_AGENT_DIR, source: "user" as const },
+    { dir: userAgentDir(), source: "user" as const },
+    { dir: workspaceAgentDir(cwd), source: "workspace" as const },
   ];
 
-  for (const dir of dirs) {
+  for (const { dir, source } of dirs) {
     try {
       const entries = await fs.readdir(dir, { withFileTypes: true });
       for (const entry of entries) {
         if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
         try {
-          const content = await fs.readFile(path.join(dir, entry.name), "utf-8");
+          const filePath = path.join(dir, entry.name);
+          const content = await fs.readFile(filePath, "utf-8");
           const idFromFile = entry.name.replace(/\.md$/, "");
-          // Parse optional frontmatter: first line "# Name" + optional "description: ..."
-          const lines = content.split("\n");
-          const nameLine = lines[0]?.startsWith("#") ? lines[0].replace(/^#+\s*/, "").trim() : idFromFile;
-          const descLine = lines.find(l => l.startsWith("description:"))?.replace("description:", "").trim() ?? "";
-          const prompt = lines.filter(l => !l.startsWith("#") && !l.startsWith("description:")).join("\n").trim();
           // Skip if already a builtin with same id
           if (agents.some(a => a.id === idFromFile)) continue;
-          agents.push({
-            id: idFromFile,
-            name: nameLine,
-            emoji: "🤖",
-            description: descLine || `Custom agent: ${nameLine}`,
-            prompt,
-            custom: true,
-          });
+          agents.push(parseCustomAgent(content, idFromFile, source, filePath));
         } catch { /* skip malformed */ }
       }
     } catch { /* dir doesn't exist */ }
@@ -152,7 +173,7 @@ export async function loadAllAgents(): Promise<Agent[]> {
       const content = await fs.readFile(agentPath, "utf-8");
       const idFromFile = path.basename(agentPath).replace(/\.md$/, "");
       if (agents.some(a => a.id === idFromFile)) continue;
-      agents.push(parseCustomAgent(content, idFromFile));
+      agents.push(parseCustomAgent(content, idFromFile, "plugin", agentPath));
     } catch {
       // Skip malformed plugin agents.
     }
@@ -161,19 +182,97 @@ export async function loadAllAgents(): Promise<Agent[]> {
   return agents;
 }
 
-function parseCustomAgent(content: string, idFromFile: string): Agent {
+function parseCustomAgent(content: string, idFromFile: string, source: AgentSource = "user", filePath?: string): Agent {
   const lines = content.split("\n");
-  const nameLine = lines[0]?.startsWith("#") ? lines[0].replace(/^#+\s*/, "").trim() : idFromFile;
-  const descLine = lines.find(l => l.startsWith("description:"))?.replace("description:", "").trim() ?? "";
-  const prompt = lines.filter(l => !l.startsWith("#") && !l.startsWith("description:")).join("\n").trim();
+  const meta = new Map<string, string>();
+  for (const line of lines) {
+    const match = line.match(/^([a-zA-Z][\w-]*):\s*(.+)$/);
+    if (match?.[1] && match[2] && isAgentMetaKey(match[1])) {
+      meta.set(match[1].toLowerCase(), match[2].trim());
+    }
+  }
+  const nameLine = meta.get("name") ??
+    (lines[0]?.startsWith("#") ? lines[0].replace(/^#+\s*/, "").trim() : idFromFile);
+  const descLine = meta.get("description") ?? "";
+  const prompt = lines
+    .filter(l => !l.startsWith("#") && !isAgentMetaLine(l))
+    .join("\n")
+    .trim();
   return {
-    id: idFromFile,
+    id: meta.get("id") || idFromFile,
     name: nameLine,
-    emoji: "🤖",
+    emoji: meta.get("emoji") || "🤖",
     description: descLine || `Custom agent: ${nameLine}`,
     prompt,
     custom: true,
+    source,
+    path: filePath,
   };
+}
+
+function isAgentMetaLine(line: string): boolean {
+  const match = line.match(/^([a-zA-Z][\w-]*):\s*(.+)$/);
+  return Boolean(match?.[1] && isAgentMetaKey(match[1]));
+}
+
+function isAgentMetaKey(key: string): boolean {
+  return key === "id" || key === "name" || key === "emoji" || key === "description";
+}
+
+export function slugifyAgentId(name: string): string {
+  const slug = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 48);
+  return slug || "custom-agent";
+}
+
+export function buildAgentDefinition(answers: AgentDefinitionAnswers, cwd = process.cwd()): AgentDraft {
+  const name = answers.name.trim();
+  const specialty = answers.specialty.trim();
+  const id = slugifyAgentId(name);
+  const scope = answers.scope ?? "workspace";
+  const savePath = path.join(scope === "user" ? userAgentDir() : workspaceAgentDir(cwd), `${id}.md`);
+  const prompt = formatAgentPrompt({
+    name,
+    specialty,
+    approach: answers.approach?.trim() ?? "",
+    rules: answers.rules?.trim() ?? "",
+  });
+  const content = `# ${name}
+id: ${id}
+emoji: 🤖
+description: ${specialty.slice(0, 140)}
+
+${prompt}
+`;
+
+  return { id, name, content, savePath, scope };
+}
+
+export async function saveAgentDefinition(answers: AgentDefinitionAnswers, cwd = process.cwd()): Promise<AgentDraft> {
+  const draft = buildAgentDefinition(answers, cwd);
+  await fs.mkdir(path.dirname(draft.savePath), { recursive: true });
+  await fs.writeFile(draft.savePath, draft.content, "utf-8");
+  return draft;
+}
+
+function formatAgentPrompt(input: { name: string; specialty: string; approach: string; rules: string }): string {
+  const role = input.specialty || input.name;
+  const lines = [
+    `You are operating as a specialist for ${role}.`,
+    `Priorities: stay inside the ${input.name} role, improve task quality, surface tradeoffs early, and keep recommendations actionable.`,
+    input.approach
+      ? `Approach: ${input.approach}`
+      : "Approach: inspect the current context first, ask only when blocked, then move decisively.",
+    "Prefer: concrete repo-aware advice, focused edits, clear verification steps, and concise handoffs.",
+    "Always call out: missing context, risky assumptions, security or data-loss concerns, and test gaps.",
+    input.rules
+      ? `Hard rules: ${input.rules}`
+      : "Avoid: pretending to have capabilities or context that are not available in the session.",
+  ];
+  return lines.join("\n");
 }
 
 export function findAgent(id: string, agents: Agent[]): Agent | undefined {

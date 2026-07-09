@@ -28,6 +28,7 @@ import { buildQuickHandoff } from "./src/operator/handoff";
 import { getLmStudioNativeBase } from "./src/config/env";
 import { addCloudModel, inferCloudModelProvider } from "./src/runtime/cloud-model-catalog";
 import type { CloudProviderId } from "./src/runtime/cloud-providers";
+import { findAgent, loadAllAgents, saveAgentDefinition, type AgentScope } from "./src/agent/agents";
 
 // Ensure config is initialized on first boot
 loadSwitchbayConfig();
@@ -85,6 +86,11 @@ Context and memory:
   switchbay handoff                  Print a compact next-session handoff
 
 Extensions:
+  switchbay agents                   Show available specialist agents
+  switchbay agents list              List built-in, user, workspace, and plugin agents
+  switchbay agents read <id>         Print an agent definition
+  switchbay agent create --name <n> --specialty <role>
+  switchbay agent create "Name" "Role or domain"
   switchbay engines                  Show Engine Bay cache status
   switchbay engines sync             Pull the Switchbay-Engines GitHub repo
   switchbay engines list             List cached engine files and manifests
@@ -127,6 +133,21 @@ Options:
 
   if (options.subcommand === "plugins") {
     await runPluginCommand(options.pluginAction ?? "status", options.pluginId ?? null);
+    return;
+  }
+
+  if (options.subcommand === "agents") {
+    await runAgentsCommand(
+      options.agentAction ?? "status",
+      options.agentId ?? null,
+      {
+        name: options.agentName ?? null,
+        specialty: options.agentSpecialty ?? null,
+        approach: options.agentApproach ?? null,
+        rules: options.agentRules ?? null,
+        scope: options.agentScope ?? "workspace",
+      },
+    );
     return;
   }
 
@@ -377,6 +398,83 @@ async function runPluginCommand(action: "status" | "list" | "inspect", pluginId:
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`switchbay plugins: ${msg}`);
+    process.exit(1);
+  }
+}
+
+async function runAgentsCommand(
+  action: "status" | "list" | "create" | "read",
+  agentId: string | null,
+  draft: {
+    name: string | null;
+    specialty: string | null;
+    approach: string | null;
+    rules: string | null;
+    scope: AgentScope;
+  },
+) {
+  try {
+    const cwd = process.cwd();
+    if (action === "create") {
+      if (!draft.name?.trim() || !draft.specialty?.trim()) {
+        console.error("switchbay agents create: requires a name and specialty.");
+        console.error('Example: switchbay agent create --name "API Steward" --specialty "API design and integration checks"');
+        console.error('Example: switchbay agent create "API Steward" "API design and integration checks" --rules "Never expose secrets."');
+        process.exit(1);
+      }
+
+      const saved = await saveAgentDefinition({
+        name: draft.name,
+        specialty: draft.specialty,
+        approach: draft.approach ?? undefined,
+        rules: draft.rules ?? undefined,
+        scope: draft.scope,
+      }, cwd);
+      console.log(`Created agent ${saved.id}.`);
+      console.log(`Saved: ${saved.savePath}`);
+      console.log(`Activate in the TUI with: /agent ${saved.id}`);
+      return;
+    }
+
+    const agents = await loadAllAgents(cwd);
+    if (action === "read") {
+      if (!agentId) {
+        console.error("switchbay agents read: requires an agent id.");
+        process.exit(1);
+      }
+      const agent = findAgent(agentId, agents);
+      if (!agent) {
+        console.error(`switchbay agents: agent not found: ${agentId}`);
+        process.exit(1);
+      }
+      if (agent.path) {
+        const { readFile } = await import("node:fs/promises");
+        console.log(await readFile(agent.path, "utf-8"));
+        return;
+      }
+      console.log(`# ${agent.name}
+id: ${agent.id}
+emoji: ${agent.emoji}
+description: ${agent.description}
+
+${agent.prompt}
+`);
+      return;
+    }
+
+    const customCount = agents.filter((agent) => agent.custom).length;
+    if (action === "list") {
+      console.log(agents.map((agent) => `${agent.id} [${agent.source ?? "builtin"}] - ${agent.name}: ${agent.description}`).join("\n"));
+      return;
+    }
+
+    console.log(`Agents: ${agents.length} available (${customCount} custom).`);
+    console.log("List: switchbay agents list");
+    console.log("Read: switchbay agents read <id>");
+    console.log('Create: switchbay agent create --name "API Steward" --specialty "API design and integration checks"');
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`switchbay agents: ${msg}`);
     process.exit(1);
   }
 }

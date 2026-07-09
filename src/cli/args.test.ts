@@ -111,6 +111,46 @@ test("parses Plugins helper commands", () => {
   expect(inspect.pluginId).toBe("repo-ops");
 });
 
+test("parses Agents helper commands", () => {
+  const status = parseCliArgs(["bun", "index.tsx", "agents"]);
+  expect(status.subcommand).toBe("agents");
+  expect(status.agentAction).toBe("status");
+
+  const list = parseCliArgs(["bun", "index.tsx", "agents", "list"]);
+  expect(list.agentAction).toBe("list");
+
+  const read = parseCliArgs(["bun", "index.tsx", "agent", "read", "api-steward"]);
+  expect(read.subcommand).toBe("agents");
+  expect(read.agentAction).toBe("read");
+  expect(read.agentId).toBe("api-steward");
+
+  const create = parseCliArgs([
+    "bun",
+    "index.tsx",
+    "agent",
+    "create",
+    "--name",
+    "API Steward",
+    "--specialty",
+    "API design and integration checks",
+    "--approach",
+    "Be direct.",
+    "--rules",
+    "Never expose secrets.",
+    "--user",
+  ]);
+  expect(create.agentAction).toBe("create");
+  expect(create.agentName).toBe("API Steward");
+  expect(create.agentSpecialty).toBe("API design and integration checks");
+  expect(create.agentApproach).toBe("Be direct.");
+  expect(create.agentRules).toBe("Never expose secrets.");
+  expect(create.agentScope).toBe("user");
+
+  const positional = parseCliArgs(["bun", "index.tsx", "agent", "create", "Repo Coach", "repo review and handoffs"]);
+  expect(positional.agentName).toBe("Repo Coach");
+  expect(positional.agentSpecialty).toBe("repo review and handoffs");
+});
+
 test("parses model helper commands", () => {
   const models = parseCliArgs(["bun", "index.tsx", "models", "--lane", "local"]);
   expect(models.subcommand).toBe("models");

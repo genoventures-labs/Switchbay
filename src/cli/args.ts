@@ -10,12 +10,19 @@ export type CliOptions = {
   resume: string | boolean; // string (id/index) or true (latest)
   newSession: boolean;
   purge: string | null;
-  subcommand: "run" | "update" | "version" | "help" | "engines" | "skills" | "toolbox" | "plugins" | "memory" | "knowledge" | "trace" | "radar" | "handoff" | "mcp" | "models" | "model" | "local-provider" | "cloud-provider" | "agenda" | "task";
+  subcommand: "run" | "update" | "version" | "help" | "engines" | "skills" | "toolbox" | "plugins" | "agents" | "memory" | "knowledge" | "trace" | "radar" | "handoff" | "mcp" | "models" | "model" | "local-provider" | "cloud-provider" | "agenda" | "task";
   engineAction: "status" | "sync" | "list" | "templates";
   toolboxAction: "status" | "sync" | "list" | "templates" | "read";
   toolboxSkill: string | null;
   pluginAction?: "status" | "list" | "inspect";
   pluginId?: string | null;
+  agentAction?: "status" | "list" | "create" | "read";
+  agentId?: string | null;
+  agentName?: string | null;
+  agentSpecialty?: string | null;
+  agentApproach?: string | null;
+  agentRules?: string | null;
+  agentScope?: "user" | "workspace";
   memoryAction: "status" | "refresh" | "list" | "facts" | "add";
   memoryNote: string | null;
   knowledgeAction: "status" | "refresh" | "search";
@@ -175,6 +182,40 @@ export function parseCliArgs(argv: string[]): CliOptions {
         toolboxSkill: null,
         pluginAction,
         pluginId: pluginAction === "inspect" ? args[i + 2] ?? null : null,
+        memoryAction: "status",
+        memoryNote: null,
+        knowledgeAction: "status",
+        knowledgeQuery: null,
+        traceAction: "last",
+        mcpAction: "status",
+        modelTarget: null,
+        modelLane: null,
+      };
+    } else if (arg === "agents" || arg === "agent") {
+      const parsedAgent = parseAgentCommand(args.slice(i + 1));
+      return {
+        surface,
+        profile,
+        mode,
+        lane,
+        initialQuery: "",
+        hop,
+        resume,
+        newSession,
+        purge,
+        subcommand: "agents",
+        engineAction: "status",
+        toolboxAction: "status",
+        toolboxSkill: null,
+        pluginAction: "status",
+        pluginId: null,
+        agentAction: parsedAgent.action,
+        agentId: parsedAgent.id,
+        agentName: parsedAgent.name,
+        agentSpecialty: parsedAgent.specialty,
+        agentApproach: parsedAgent.approach,
+        agentRules: parsedAgent.rules,
+        agentScope: parsedAgent.scope,
         memoryAction: "status",
         memoryNote: null,
         knowledgeAction: "status",
@@ -553,11 +594,66 @@ type ParsedModelCommand = {
   label: string | null;
 };
 
+type ParsedAgentCommand = {
+  action: "status" | "list" | "create" | "read";
+  id: string | null;
+  name: string | null;
+  specialty: string | null;
+  approach: string | null;
+  rules: string | null;
+  scope: "user" | "workspace";
+};
+
 type ParsedTaskCommand = {
   action: "status" | "add" | "done" | "clear";
   text: string | null;
   id: number | null;
 };
+
+function parseAgentCommand(args: string[]): ParsedAgentCommand {
+  const rest: string[] = [];
+  let name: string | null = null;
+  let specialty: string | null = null;
+  let approach: string | null = null;
+  let rules: string | null = null;
+  let scope: "user" | "workspace" = "workspace";
+
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === "--name" || arg === "-n") {
+      name = args[++i] ?? null;
+    } else if (arg === "--specialty" || arg === "--role" || arg === "-s") {
+      specialty = args[++i] ?? null;
+    } else if (arg === "--approach" || arg === "--style") {
+      approach = args[++i] ?? null;
+    } else if (arg === "--rules" || arg === "--guardrails") {
+      rules = args[++i] ?? null;
+    } else if (arg === "--scope") {
+      const next = args[++i];
+      scope = next === "user" || next === "global" ? "user" : "workspace";
+    } else if (arg === "--user" || arg === "--global") {
+      scope = "user";
+    } else if (arg === "--workspace" || arg === "--local") {
+      scope = "workspace";
+    } else {
+      rest.push(arg!);
+    }
+  }
+
+  const action = rest[0] === "create" || rest[0] === "new"
+    ? "create"
+    : rest[0] === "read" || rest[0] === "show" || rest[0] === "inspect"
+      ? "read"
+      : rest[0] === "list" || rest[0] === "ls"
+        ? "list"
+        : "status";
+
+  const id = action === "read" ? rest[1] ?? null : null;
+  if (action === "create" && !name && rest[1]) name = rest[1];
+  if (action === "create" && !specialty && rest.length > 2) specialty = rest.slice(2).join(" ");
+
+  return { action, id, name, specialty, approach, rules, scope };
+}
 
 function parseTaskCommand(args: string[]): ParsedTaskCommand {
   const action = args[0];

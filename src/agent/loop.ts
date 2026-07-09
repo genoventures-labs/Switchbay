@@ -24,6 +24,7 @@ import {
   loadAllAgents,
   findAgent,
   agentSystemPrompt,
+  buildAgentDefinition,
 } from "./agents";
 import { buildToolboxPromptBlock } from "../toolbox/hub";
 import { buildMemoryPromptBlock } from "../memory/store";
@@ -129,52 +130,15 @@ export async function generateAgentDefinition(
   surface: string,
   answers: { name: string; specialty: string; approach: string; rules: string },
 ): Promise<PendingAgentDraft> {
-  const id = answers.name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 40);
-
-  const prompt = `You are writing an agent definition file. Agents inject a focused system prompt into a coding assistant session to give it a specialist mindset.
-
-Create a concise, dense agent definition for:
-- Name: ${answers.name}
-- Core expertise: ${answers.specialty}
-${answers.approach ? `- Communication style / approach: ${answers.approach}` : ""}
-${answers.rules ? `- Hard rules (must flag / must never do): ${answers.rules}` : ""}
-
-Write the agent's system prompt injection. It should:
-1. Start with "You are operating as a [role]."
-2. State priorities clearly (3-5 bullet points or "Priorities: ..." lines)
-3. State preferences ("Prefer: ...")
-4. State what to always flag or call out ("Always call out: ...")
-5. State hard constraints if any ("Avoid: ..." or "Never: ...")
-
-Be dense and direct. No filler. Max 200 words. Output ONLY the system prompt text — no markdown headers, no preamble, no explanation.`;
-
-  const resp = await client.createChatCompletion(surface, {
-    model: undefined,
-    messages: [
-      {
-        role: "system",
-        content: "You write tight, actionable system prompt injections for AI coding agents. Output only the prompt text.",
-      },
-      { role: "user", content: prompt },
-    ],
+  void client;
+  void surface;
+  return buildAgentDefinition({
+    name: answers.name,
+    specialty: answers.specialty,
+    approach: answers.approach,
+    rules: answers.rules,
+    scope: "workspace",
   });
-
-  const generatedPrompt = extractAssistantText(resp);
-  if (!generatedPrompt) throw new Error("The model returned no content.");
-
-  const savePath = join(workspaceStorageDir(process.cwd()), "agents", `${id}.md`);
-
-  const fileContent = `# ${answers.name}
-description: ${answers.specialty.slice(0, 100)}
-
-${generatedPrompt}
-`;
-
-  return { id, name: answers.name, content: fileContent, savePath };
 }
 
 export async function generateSkillDefinition(

@@ -45,7 +45,7 @@ export function Transcript({
       {entries.length === 0 && !streamingText ? (
         <WelcomeBoard
           appName="Switchbay"
-          version="1.5.5"
+          version="1.5.6"
           lane={lane}
           cwd={process.cwd()}
           terminalWidth={terminalWidth}

@@ -1446,9 +1446,15 @@ export function SwitchbayApp({
       conversation: state.conversation,
       lastChangedFile: state.changedFiles[state.changedFiles.length - 1] ?? null,
       activeAgentId: state.activeAgentId,
+      runtimeLane,
+      toolMode,
     });
     if (localCommand.handled) {
       dispatch({ type: "local-command/submitted", input: value });
+
+      if (localCommand.dailyBoardChanged) {
+        refreshDailyBoard();
+      }
 
       if (localCommand.workspace) {
         dispatch({ type: "workspace/updated", workspace: localCommand.workspace });

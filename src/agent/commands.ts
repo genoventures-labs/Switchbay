@@ -17,6 +17,12 @@ import type { PatchPreview } from "../tools/patch";
 import { runCommand } from "../tools/shell";
 import { findAgent, loadAllAgents } from "./agents";
 import { extractAssistantText } from "./loop";
+import { getRuntimeLane, getToolMode, type RuntimeLane, type ToolMode } from "../config/env";
+import { getRuntimeLaneLabel } from "../runtime/client";
+import { getActiveCloudProvider } from "../runtime/cloud-providers";
+import { getActiveLocalProvider } from "../runtime/local-providers";
+import { getSelectedRuntimeModel } from "../config/switchbay-config";
+import { addDailyTask, clearDailyBoard, completeDailyTask, describeDailyBoard } from "../operator/daily-board";
 import { describeEngines, loadEngineRegistry } from "../engines/registry";
 import { describeEngineBay, loadEngineBayInventory } from "../engines/hub";
 import { describeToolbox, loadToolboxInventory, readToolboxSkill } from "../toolbox/hub";
@@ -52,6 +58,7 @@ export type LocalCommandResult = {
   clearTranscript?: boolean;
   compactedConversation?: ChatMessage[];
   activateAgent?: string | null;
+  dailyBoardChanged?: boolean;
   openAgentPicker?: boolean;
   openCreateAgent?: boolean;
   openCreateEngine?: boolean;
@@ -75,6 +82,8 @@ export type LocalCommandOptions = {
   profile: string;
   sessionId: string;
   surface: string;
+  runtimeLane?: RuntimeLane;
+  toolMode?: ToolMode;
   workspace: WorkspaceSnapshot | null;
 };
 
@@ -105,11 +114,23 @@ export async function tryLocalCommand(
     if (creationIntent === "rule") return { handled: true, openCreateRule: true };
     if (creationIntent === "skill") return { handled: true, openCreateSkill: true };
     if (creationIntent === "plugin") return { handled: true, openCreatePlugin: true };
+
+    const operatorIntent = await handleConversationalOperatorIntent(trimmed, options);
+    if (operatorIntent.handled) return operatorIntent;
+
     return { handled: false };
   }
 
   if (trimmed === "/clear") {
     return { handled: true, clearTranscript: true };
+  }
+
+  if (trimmed === "/agenda" || trimmed === "/today" || trimmed === "/tasks") {
+    return { handled: true, assistantMessage: describeDailyBoard() };
+  }
+
+  if (trimmed === "/task" || trimmed.startsWith("/task ")) {
+    return handleDailyTaskCommand(trimmed);
   }
 
   if (trimmed === "/workspace" || trimmed.startsWith("/workspace ") || trimmed === "/workspaces" || trimmed.startsWith("/workspaces ")) {
@@ -383,6 +404,53 @@ async function handleTraceCommand(
   }
 }
 
+function handleDailyTaskCommand(trimmed: string): LocalCommandResult {
+  const rest = trimmed.slice("/task".length).trim();
+  const [action, ...args] = rest.split(/\s+/).filter(Boolean);
+
+  try {
+    if (!action || action === "status" || action === "list") {
+      return { handled: true, assistantMessage: describeDailyBoard() };
+    }
+
+    if (action === "add" || action === "remember" || action === "remind") {
+      const text = args.join(" ").trim();
+      if (!text) return { handled: true, assistantMessage: "Usage: `/task add <text>`" };
+      const task = addDailyTask(text);
+      return {
+        handled: true,
+        dailyBoardChanged: true,
+        assistantMessage: `Added Daily Board task **${task.id}**: ${task.text}\n\n${describeDailyBoard()}`,
+      };
+    }
+
+    if (action === "done" || action === "complete" || action === "finish") {
+      const id = Number.parseInt(args[0] ?? "", 10);
+      if (!Number.isInteger(id) || id <= 0) return { handled: true, assistantMessage: "Usage: `/task done <id>`" };
+      const task = completeDailyTask(id);
+      if (!task) return { handled: true, assistantMessage: `I don't see task **${id}** on today's board.` };
+      return {
+        handled: true,
+        dailyBoardChanged: true,
+        assistantMessage: `Completed Daily Board task **${task.id}**: ${task.text}\n\n${describeDailyBoard()}`,
+      };
+    }
+
+    if (action === "clear" || action === "reset") {
+      const count = clearDailyBoard();
+      return {
+        handled: true,
+        dailyBoardChanged: true,
+        assistantMessage: `Cleared ${count} Daily Board task${count === 1 ? "" : "s"}.`,
+      };
+    }
+
+    return { handled: true, assistantMessage: "Usage: `/task [add <text>|done <id>|clear]`" };
+  } catch (e: any) {
+    return { handled: true, assistantMessage: `Daily Board: ${e.message}` };
+  }
+}
+
 async function handleKnowledgeCommand(
   trimmed: string,
   options: LocalCommandOptions,
@@ -525,6 +593,151 @@ function parseConversationalWorkspaceHopIntent(input: string): string | null {
   }
 
   return null;
+}
+
+async function handleConversationalOperatorIntent(
+  input: string,
+  options: LocalCommandOptions,
+): Promise<LocalCommandResult> {
+  const normalized = normalizeBayTalk(input);
+
+  if (isAgendaQuestion(normalized)) {
+    return { handled: true, assistantMessage: localFirstMessage(describeDailyBoard()) };
+  }
+
+  const reminder = parseReminderIntent(normalized);
+  if (reminder) {
+    try {
+      const task = addDailyTask(reminder);
+      return {
+        handled: true,
+        dailyBoardChanged: true,
+        assistantMessage: localFirstMessage(`Added Daily Board task **${task.id}**: ${task.text}\n\n${describeDailyBoard()}`),
+      };
+    } catch (e: any) {
+      return { handled: true, assistantMessage: localFirstMessage(`Daily Board: ${e.message}`) };
+    }
+  }
+
+  const doneId = parseTaskDoneIntent(normalized);
+  if (doneId) {
+    try {
+      const task = completeDailyTask(doneId);
+      if (!task) {
+        return { handled: true, assistantMessage: localFirstMessage(`I don't see task **${doneId}** on today's board.`) };
+      }
+      return {
+        handled: true,
+        dailyBoardChanged: true,
+        assistantMessage: localFirstMessage(`Completed Daily Board task **${task.id}**: ${task.text}\n\n${describeDailyBoard()}`),
+      };
+    } catch (e: any) {
+      return { handled: true, assistantMessage: localFirstMessage(`Daily Board: ${e.message}`) };
+    }
+  }
+
+  if (isLaneQuestion(normalized)) {
+    return { handled: true, assistantMessage: localFirstMessage(describeRuntimeStatus(options)) };
+  }
+
+  if (isMcpQuestion(normalized)) {
+    const cwd = options.workspace?.cwd ?? process.cwd();
+    return { handled: true, assistantMessage: localFirstMessage(describeLmStudioMcpConfig(await loadLmStudioMcpConfig(cwd))) };
+  }
+
+  if (isWorkspaceQuestion(normalized)) {
+    const context = formatWorkspaceContext(options.workspace) ?? "No workspace snapshot loaded.";
+    return { handled: true, assistantMessage: localFirstMessage(`**Workspace**\n\n\`\`\`\n${context}\n\`\`\``) };
+  }
+
+  if (isGitQuestion(normalized)) {
+    return { handled: true, assistantMessage: localFirstMessage(describeGitState(options.workspace)) };
+  }
+
+  return { handled: false };
+}
+
+function normalizeBayTalk(input: string): string {
+  return input
+    .toLowerCase()
+    .replace(/^[,\s]*(hey|yo|ok|okay|so)?\s*(bay|switchbay)[,\s:;-]*/i, "")
+    .replace(/[.!?]+$/g, "")
+    .trim();
+}
+
+function localFirstMessage(message: string): string {
+  return `Local-first:\n\n${message}`;
+}
+
+function isAgendaQuestion(normalized: string): boolean {
+  if (/^(mark|complete|finish|done|add|remind)\b/.test(normalized)) return false;
+  return /\b(agenda|today'?s?\s+board|daily\s+board|tasks?|reminders?|on deck)\b/.test(normalized) &&
+    /\b(what|show|list|view|give|tell|agenda|tasks?|reminders?|on deck)\b/.test(normalized);
+}
+
+function parseReminderIntent(normalized: string): string | null {
+  const match = normalized.match(/^(?:please\s+)?(?:remind me to|add(?: a)? task(?: to)?|task add|put(?: this)? on(?: my| the)?(?: agenda| board)?|add(?: this)? to(?: my| the)?(?: agenda| board))\s+(.+)$/i);
+  return match?.[1]?.trim() || null;
+}
+
+function parseTaskDoneIntent(normalized: string): number | null {
+  const match = normalized.match(/^(?:mark|complete|finish|done)(?: task)?\s+(\d+)(?:\s+(?:done|complete|finished))?$/i) ??
+    normalized.match(/^task\s+(\d+)\s+(?:done|complete|finished)$/i);
+  const id = Number.parseInt(match?.[1] ?? "", 10);
+  return Number.isInteger(id) && id > 0 ? id : null;
+}
+
+function isLaneQuestion(normalized: string): boolean {
+  return /\b(lane|model|provider|runtime)\b/.test(normalized) &&
+    /\b(what|which|show|current|using|active|status)\b/.test(normalized);
+}
+
+function isMcpQuestion(normalized: string): boolean {
+  return /\bmcp\b/.test(normalized) &&
+    /\b(what|show|status|configured|config|on|enabled|active)\b/.test(normalized);
+}
+
+function isWorkspaceQuestion(normalized: string): boolean {
+  return /\b(workspace|repo|repository|project|cwd|where am i)\b/.test(normalized) &&
+    /\b(what|which|show|current|where|status)\b/.test(normalized);
+}
+
+function isGitQuestion(normalized: string): boolean {
+  return /\b(git|changed|changes|dirty|branch|status|working tree)\b/.test(normalized) &&
+    /\b(what|show|status|changed|changes|dirty|branch)\b/.test(normalized);
+}
+
+function describeRuntimeStatus(options: LocalCommandOptions): string {
+  const lane = options.runtimeLane ?? getRuntimeLane();
+  const toolMode = options.toolMode ?? getToolMode();
+  const selected = getSelectedRuntimeModel(lane);
+  const lines = [
+    "**Runtime**",
+    "",
+    `Lane: ${getRuntimeLaneLabel(lane)}`,
+    `Tool mode: ${toolMode}`,
+    lane === "local" ? `Local provider: ${getActiveLocalProvider()}` : null,
+    lane === "cloud" || lane === "cloud-mcp" ? `Cloud provider: ${getActiveCloudProvider()}` : null,
+    `Model: ${selected?.id ?? "default"}`,
+    "",
+    "Switch with `/lane`, `/lane openai`, `/lane anthropic`, `/lane ollama`, or `/model`.",
+  ];
+  return lines.filter(Boolean).join("\n");
+}
+
+function describeGitState(workspace: WorkspaceSnapshot | null): string {
+  if (!workspace) return "No workspace snapshot loaded.";
+  const dirty = workspace.dirtyFiles.length
+    ? workspace.dirtyFiles.slice(0, 12).map((file) => `- ${file}`).join("\n")
+    : "clean working tree";
+  return [
+    "**Git State**",
+    "",
+    `Branch: ${workspace.branch ?? "unknown"}`,
+    `Dirty files: ${workspace.dirtyFiles.length}`,
+    "",
+    dirty,
+  ].join("\n");
 }
 
 function parseConversationalCreationIntent(input: string): "agent" | "engine" | "mcp" | "rule" | "skill" | "plugin" | null {

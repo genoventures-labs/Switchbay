@@ -962,6 +962,72 @@ test("conversational creation requests open builders", async () => {
   expect(normalAsk.handled).toBe(false);
 });
 
+test("conversational operator requests answer from local state", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "switchbay-operator-intent-"));
+  const previousConfigDir = Bun.env.SWITCHBAY_CONFIG_DIR;
+  Bun.env.SWITCHBAY_CONFIG_DIR = join(cwd, "user-config");
+
+  const baseOptions = {
+    client: {} as any,
+    profile: "switchbay",
+    sessionId: "test-session",
+    surface: "dev",
+    runtimeLane: "cloud" as const,
+    toolMode: "standard" as const,
+    workspace: {
+      cwd,
+      repoRoot: cwd,
+      branch: "main",
+      dirtyFiles: [" M src/demo.ts"],
+      recentFiles: [],
+      diff: { hasChanges: true, stat: "src/demo.ts | 1 +" },
+    },
+  };
+
+  try {
+    const added = await tryLocalCommand("Bay, remind me to test brew", baseOptions);
+    expect(added.handled).toBe(true);
+    expect(added.dailyBoardChanged).toBe(true);
+    expect(added.assistantMessage).toContain("Local-first");
+    expect(added.assistantMessage).toContain("test brew");
+
+    const agenda = await tryLocalCommand("Bay, what's on my agenda?", baseOptions);
+    expect(agenda.handled).toBe(true);
+    expect(agenda.assistantMessage).toContain("Daily Board");
+
+    const done = await tryLocalCommand("Bay, mark task 1 done", baseOptions);
+    expect(done.handled).toBe(true);
+    expect(done.dailyBoardChanged).toBe(true);
+    expect(done.assistantMessage).toContain("Completed Daily Board task");
+
+    const lane = await tryLocalCommand("Bay, what lane am I using?", baseOptions);
+    expect(lane.handled).toBe(true);
+    expect(lane.assistantMessage).toContain("Lane: Cloud");
+
+    const git = await tryLocalCommand("Bay, what's changed in git?", baseOptions);
+    expect(git.handled).toBe(true);
+    expect(git.assistantMessage).toContain("Dirty files: 1");
+
+    const workspace = await tryLocalCommand("Bay, what workspace am I in?", baseOptions);
+    expect(workspace.handled).toBe(true);
+    expect(workspace.assistantMessage).toContain("Workspace cwd");
+
+    const mcp = await tryLocalCommand("Bay, is MCP on?", baseOptions);
+    expect(mcp.handled).toBe(true);
+    expect(mcp.assistantMessage).toContain("MCP");
+
+    const normalAsk = await tryLocalCommand("Bay, explain this TypeScript function", baseOptions);
+    expect(normalAsk.handled).toBe(false);
+  } finally {
+    if (previousConfigDir === undefined) {
+      delete Bun.env.SWITCHBAY_CONFIG_DIR;
+    } else {
+      Bun.env.SWITCHBAY_CONFIG_DIR = previousConfigDir;
+    }
+    invalidateConfigCache();
+  }
+});
+
 test("workspace slash commands show, add, and hop known workspaces", async () => {
   const originalCwd = process.cwd();
   const previousConfigDir = Bun.env.SWITCHBAY_CONFIG_DIR;

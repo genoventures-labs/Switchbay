@@ -8,6 +8,7 @@ import { getSelectedRuntimeModel, loadSwitchbayConfig, setSelectedRuntimeModel }
 import { fuzzyMatchLocations, travelTo } from "./src/tools/travel";
 import { listSessions, purgeSessions, loadPersistedSession, savePersistedSession } from "./src/session/persistence";
 import { buildTurn, executeTurn, extractAssistantText, refreshWorkspace, synthesizeAssistantFallback } from "./src/agent/loop";
+import { tryLocalCommand } from "./src/agent/commands";
 import { describeEngineBay, loadEngineBayInventory, syncEngineBayRepo } from "./src/engines/hub";
 import { describeToolbox, loadToolboxInventory, readToolboxSkill } from "./src/toolbox/hub";
 import { addMemoryNote, describeMemory, listMemoryNotes, readMemoryFacts, refreshMemory } from "./src/memory/store";
@@ -661,6 +662,28 @@ async function runCliMode(options: any, resumeId: string | null) {
       resolvedProfile: policy.runtimeProfile,
       surface: options.surface,
     });
+  }
+
+  const localCommand = await tryLocalCommand(options.initialQuery, {
+    client,
+    profile: state.resolvedProfile,
+    sessionId: state.sessionId,
+    surface: state.surface,
+    workspace,
+    conversation: state.conversation,
+    lastChangedFile: state.changedFiles[state.changedFiles.length - 1] ?? null,
+    activeAgentId: state.activeAgentId,
+    runtimeLane,
+    toolMode,
+  });
+  if (localCommand.handled && localCommand.assistantMessage) {
+    process.stdout.write(`\n${CLR.accent}⏺${CLR.reset} ${CLR.text}${CLR.bold}Switchbay${CLR.reset}\n`);
+    process.stdout.write(`  ${CLR.muted}└ ${CLR.reset}${localCommand.assistantMessage}\n\n`);
+    state.conversation.push({ role: "user", content: options.initialQuery });
+    state.conversation.push({ role: "assistant", content: localCommand.assistantMessage });
+    state.updatedAt = Date.now();
+    await savePersistedSession(state);
+    return;
   }
 
   const turn = await buildTurn({

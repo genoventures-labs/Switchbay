@@ -22,8 +22,10 @@ export type CliOptions = {
   knowledgeQuery: string | null;
   traceAction: "last" | "export";
   mcpAction: "status" | "init" | "catalog";
+  modelAction?: "show" | "set" | "pull";
   modelTarget: string | null;
   modelLane: string | null;
+  modelQuantization?: string | null;
 };
 
 export function parseCliArgs(argv: string[]): CliOptions {
@@ -305,8 +307,10 @@ export function parseCliArgs(argv: string[]): CliOptions {
         knowledgeQuery: null,
         traceAction: "last",
         mcpAction: "status",
+        modelAction: parsedModel.action,
         modelTarget: parsedModel.target,
         modelLane: parsedModel.commandLane,
+        modelQuantization: parsedModel.quantization,
       };
     } else if (arg === "update") {
       console.log("Run this to update Switchbay from source:\n");
@@ -349,24 +353,39 @@ export function parseCliArgs(argv: string[]): CliOptions {
   };
 }
 
-function parseModelCommand(args: string[]): { commandLane: string | null; flagLane: string | null; target: string | null } {
+type ParsedModelCommand = {
+  action: "show" | "set" | "pull";
+  commandLane: string | null;
+  flagLane: string | null;
+  target: string | null;
+  quantization: string | null;
+};
+
+function parseModelCommand(args: string[]): ParsedModelCommand {
   const rest: string[] = [];
   let flagLane: string | null = null;
+  let quantization: string | null = null;
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--lane") {
       flagLane = args[++i] ?? null;
+    } else if (args[i] === "--quant" || args[i] === "--quantization" || args[i] === "-q") {
+      quantization = args[++i] ?? null;
     } else {
       rest.push(args[i]!);
     }
   }
 
-  const first = rest[0] ?? null;
-  const second = rest[1] ?? null;
+  const action = rest[0] === "pull" ? "pull" : rest.length ? "set" : "show";
+  const actionRest = action === "pull" ? rest.slice(1) : rest;
+  const first = actionRest[0] ?? null;
+  const second = actionRest[1] ?? null;
   const firstIsLane = isLaneAlias(first);
   return {
+    action,
     commandLane: firstIsLane ? first : null,
     flagLane,
     target: firstIsLane ? second : first,
+    quantization,
   };
 }
 

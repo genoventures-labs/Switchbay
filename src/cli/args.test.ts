@@ -108,6 +108,13 @@ test("parses model helper commands", () => {
   expect(setFlagLane.subcommand).toBe("model");
   expect(setFlagLane.lane).toBe("cloud-mcp");
   expect(setFlagLane.modelTarget).toBe("claude-sonnet-4-5");
+
+  const pullLocal = parseCliArgs(["bun", "index.tsx", "model", "pull", "local", "ibm/granite-4-micro", "--quant", "Q4_K_M"]);
+  expect(pullLocal.subcommand).toBe("model");
+  expect(pullLocal.modelAction).toBe("pull");
+  expect(pullLocal.modelLane).toBe("local");
+  expect(pullLocal.modelTarget).toBe("ibm/granite-4-micro");
+  expect(pullLocal.modelQuantization).toBe("Q4_K_M");
 });
 
 test("parses Trace helper commands", () => {

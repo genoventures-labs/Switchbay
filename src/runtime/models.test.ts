@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { getCloudModelPresets, listRuntimeModels, listLmStudioModels } from "./models";
+import { getCloudModelPresets, listRuntimeModels, listLmStudioModels, pullLmStudioModel } from "./models";
 
 const savedEnv = {
   SWITCHBAY_LANE: Bun.env.SWITCHBAY_LANE,
@@ -139,4 +139,56 @@ test("prefers native LM Studio model keys when available", async () => {
   expect(urls).toEqual(["http://192.168.1.50:1234/api/v1/models"]);
   expect(result.models.map((model) => model.id)).toEqual(["qwen/qwen3-4b-2507"]);
   expect(result.models[0]?.label).toBe("Qwen3 4B MLX");
+});
+
+test("pulls an LM Studio model by downloading, polling, and loading", async () => {
+  Bun.env.SWITCHBAY_LMSTUDIO_BASE = "http://192.168.1.50:1234/v1";
+  Bun.env.SWITCHBAY_LMSTUDIO_API_KEY = "lm-key";
+  const requests: Array<{ url: string; method: string; body?: unknown; authorization?: string }> = [];
+
+  const result = await pullLmStudioModel({
+    model: "ibm/granite-4-micro",
+    quantization: "Q4_K_M",
+    pollDelayMs: 0,
+    fetchImpl: async (url, init) => {
+      requests.push({
+        url: String(url),
+        method: init?.method ?? "GET",
+        body: init?.body ? JSON.parse(String(init.body)) : undefined,
+        authorization: (init?.headers as Record<string, string>)?.Authorization,
+      });
+
+      if (String(url).endsWith("/models/download")) {
+        return Response.json({ job_id: "job_123", status: "downloading" });
+      }
+      if (String(url).endsWith("/models/download/status/job_123")) {
+        return Response.json({ job_id: "job_123", status: "completed" });
+      }
+      if (String(url).endsWith("/models/load")) {
+        return Response.json({
+          status: "loaded",
+          instance_id: "ibm/granite-4-micro",
+          load_time_seconds: 3.2,
+        });
+      }
+      return new Response("not found", { status: 404 });
+    },
+  });
+
+  expect(result).toEqual({
+    model: "ibm/granite-4-micro",
+    downloadStatus: "completed",
+    jobId: "job_123",
+    loadStatus: "loaded",
+    instanceId: "ibm/granite-4-micro",
+    loadTimeSeconds: 3.2,
+  });
+  expect(requests.map((request) => `${request.method} ${request.url}`)).toEqual([
+    "POST http://192.168.1.50:1234/api/v1/models/download",
+    "GET http://192.168.1.50:1234/api/v1/models/download/status/job_123",
+    "POST http://192.168.1.50:1234/api/v1/models/load",
+  ]);
+  expect(requests[0]?.body).toEqual({ model: "ibm/granite-4-micro", quantization: "Q4_K_M" });
+  expect(requests[2]?.body).toEqual({ model: "ibm/granite-4-micro", echo_load_config: true });
+  expect(requests.every((request) => request.authorization === "Bearer lm-key")).toBe(true);
 });

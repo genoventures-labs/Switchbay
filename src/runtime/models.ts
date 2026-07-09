@@ -23,6 +23,23 @@ export type RuntimeModelList = {
   notice?: string;
 };
 
+export type LmStudioPullOptions = {
+  model: string;
+  quantization?: string | null;
+  fetchImpl?: FetchLike;
+  pollDelayMs?: number;
+  maxPolls?: number;
+};
+
+export type LmStudioPullResult = {
+  model: string;
+  downloadStatus: string;
+  jobId?: string;
+  loadStatus: string;
+  instanceId?: string;
+  loadTimeSeconds?: number;
+};
+
 const OPENAI_PRESETS: RuntimeModelOption[] = [
   { id: "gpt-5.5", label: "GPT-5.5", lane: "cloud", provider: "openai", source: "preset" },
   { id: "gpt-5.4-mini", label: "GPT-5.4 mini", lane: "cloud", provider: "openai", source: "preset" },
@@ -135,6 +152,51 @@ export async function listLmStudioModels(
   }
 }
 
+export async function pullLmStudioModel(options: LmStudioPullOptions): Promise<LmStudioPullResult> {
+  const model = options.model.trim();
+  if (!model) throw new Error("LM Studio model id or Hugging Face URL is required.");
+
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const nativeBase = getLmStudioNativeBase();
+  const headers = lmStudioJsonHeaders();
+  const downloadPayload: Record<string, unknown> = { model };
+  const quantization = options.quantization?.trim();
+  if (quantization) downloadPayload.quantization = quantization;
+
+  const started = await postLmStudioJson(`${nativeBase}/models/download`, downloadPayload, headers, fetchImpl);
+  const jobId = typeof started.job_id === "string" ? started.job_id : undefined;
+  let downloadStatus = String(started.status ?? "unknown");
+
+  if (jobId && (downloadStatus === "downloading" || downloadStatus === "paused")) {
+    const maxPolls = options.maxPolls ?? 180;
+    const pollDelayMs = options.pollDelayMs ?? 2000;
+    for (let i = 0; i < maxPolls; i++) {
+      if (pollDelayMs > 0) await Bun.sleep(pollDelayMs);
+      const status = await getLmStudioJson(`${nativeBase}/models/download/status/${encodeURIComponent(jobId)}`, headers, fetchImpl);
+      downloadStatus = String(status.status ?? downloadStatus);
+      if (downloadStatus === "completed" || downloadStatus === "failed") break;
+    }
+  }
+
+  if (downloadStatus !== "completed" && downloadStatus !== "already_downloaded") {
+    throw new Error(`LM Studio download did not complete. Status: ${downloadStatus}${jobId ? ` (${jobId})` : ""}.`);
+  }
+
+  const loaded = await postLmStudioJson(`${nativeBase}/models/load`, {
+    model,
+    echo_load_config: true,
+  }, headers, fetchImpl);
+
+  return {
+    model,
+    downloadStatus,
+    jobId,
+    loadStatus: String(loaded.status ?? "unknown"),
+    instanceId: typeof loaded.instance_id === "string" ? loaded.instance_id : undefined,
+    loadTimeSeconds: typeof loaded.load_time_seconds === "number" ? loaded.load_time_seconds : undefined,
+  };
+}
+
 async function listLmStudioNativeModels(
   nativeBase: string,
   lane: Extract<RuntimeLane, "local" | "local-mcp">,
@@ -204,6 +266,68 @@ function formatLmStudioModelFetchError(
     `LM Studio model fetch returned ${status}, but not JSON.`,
     trimmed ? `Server said: ${trimmed.slice(0, 120)}` : "",
   ].filter(Boolean).join(" ");
+}
+
+function lmStudioJsonHeaders(): Record<string, string> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const apiKey = getLmStudioApiKey();
+  if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+  return headers;
+}
+
+async function postLmStudioJson(
+  url: string,
+  payload: Record<string, unknown>,
+  headers: Record<string, string>,
+  fetchImpl: FetchLike,
+): Promise<Record<string, unknown>> {
+  const response = await fetchImpl(url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(payload),
+  });
+  return parseLmStudioJsonResponse(url, response);
+}
+
+async function getLmStudioJson(
+  url: string,
+  headers: Record<string, string>,
+  fetchImpl: FetchLike,
+): Promise<Record<string, unknown>> {
+  const response = await fetchImpl(url, { headers });
+  return parseLmStudioJsonResponse(url, response);
+}
+
+async function parseLmStudioJsonResponse(url: string, response: Response): Promise<Record<string, unknown>> {
+  const body = await response.text().catch(() => "");
+  let parsed: unknown = {};
+  if (body.trim()) {
+    try {
+      parsed = JSON.parse(body);
+    } catch {
+      parsed = { message: body.trim() };
+    }
+  }
+
+  if (!response.ok) {
+    const message = extractLmStudioError(parsed) || body.trim() || response.statusText;
+    throw new Error(`LM Studio API error ${response.status} at ${url}: ${message}`);
+  }
+
+  return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+    ? parsed as Record<string, unknown>
+    : {};
+}
+
+function extractLmStudioError(parsed: unknown): string | null {
+  if (!parsed || typeof parsed !== "object") return null;
+  const error = (parsed as Record<string, unknown>).error;
+  if (error && typeof error === "object") {
+    const message = (error as Record<string, unknown>).message;
+    if (typeof message === "string") return message;
+  }
+  const message = (parsed as Record<string, unknown>).message;
+  return typeof message === "string" ? message : null;
 }
 
 function envModelOption(

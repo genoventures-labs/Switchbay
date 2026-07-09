@@ -17,7 +17,7 @@ import { createDefaultLmStudioMcpConfig, describeLmStudioMcpConfig, loadLmStudio
 import { describeTrustedMcpCatalog } from "./src/runtime/mcp-catalog";
 import { ANSI_COLORS as CLR } from "./src/tui/theme";
 import { describePlugins, loadPluginInventory, readPlugin } from "./src/plugins/registry";
-import { listRuntimeModels, type RuntimeModelOption } from "./src/runtime/models";
+import { listRuntimeModels, pullLmStudioModel, type RuntimeModelOption } from "./src/runtime/models";
 
 // Ensure config is initialized on first boot
 loadSwitchbayConfig();
@@ -45,6 +45,7 @@ Models and lanes:
   switchbay model                    Show the active lane model
   switchbay model <id>               Pin a model for the active lane
   switchbay model <lane> <id>        Pin a model for a specific lane
+  switchbay model pull <id|url>      Download, load, and pin an LM Studio model
   switchbay mcp                      Show Switchbay MCP bridge config
   switchbay mcp init                 Create ~/.switchbay/lmstudio.mcp.json
   switchbay mcp catalog              List trusted MCP config options
@@ -133,7 +134,7 @@ Options:
   }
 
   if (options.subcommand === "model") {
-    await runModelCommand(options.lane, options.modelLane, options.modelTarget);
+    await runModelCommand(options.lane, options.modelLane, options.modelTarget, options.modelAction ?? "show", options.modelQuantization ?? null);
     return;
   }
 
@@ -441,8 +442,19 @@ async function runModelsCommand(rawLane: string | null) {
   }
 }
 
-async function runModelCommand(rawLane: string | null, rawModelLane: string | null, target: string | null) {
+async function runModelCommand(
+  rawLane: string | null,
+  rawModelLane: string | null,
+  target: string | null,
+  action: "show" | "set" | "pull",
+  quantization: string | null,
+) {
   const lane = normalizeRuntimeLane(rawModelLane ?? rawLane);
+  if (action === "pull") {
+    await runModelPullCommand(rawModelLane ?? rawLane, target, quantization);
+    return;
+  }
+
   if (!target) {
     const selected = getSelectedRuntimeModel(lane);
     console.log(`${getRuntimeLaneLabel(lane)} model: ${selected?.id ?? "default"}`);
@@ -472,6 +484,39 @@ async function runModelCommand(rawLane: string | null, rawModelLane: string | nu
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`switchbay model: ${msg}`);
+    process.exit(1);
+  }
+}
+
+async function runModelPullCommand(rawLane: string | null, target: string | null, quantization: string | null) {
+  const lane = normalizeRuntimeLane(rawLane ?? "local");
+  if (lane !== "local" && lane !== "local-mcp") {
+    console.error("switchbay model pull: LM Studio pulls require the local lane. Use `switchbay model pull <model>` or `switchbay model pull local <model>`.");
+    process.exit(1);
+  }
+  if (!target?.trim()) {
+    console.error("switchbay model pull: requires a model catalog id or Hugging Face URL.");
+    console.error("Example: switchbay model pull ibm/granite-4-micro");
+    console.error("Example: switchbay model pull https://huggingface.co/lmstudio-community/gpt-oss-20b-GGUF --quant Q4_K_M");
+    process.exit(1);
+  }
+
+  try {
+    console.log(`Pulling ${target} through LM Studio...`);
+    const result = await pullLmStudioModel({ model: target, quantization });
+    setSelectedRuntimeModel(lane, {
+      id: result.instanceId ?? result.model,
+      provider: lane === "local-mcp" ? "lmstudio-mcp" : "lmstudio",
+    });
+    console.log(`Downloaded: ${result.downloadStatus}${result.jobId ? ` (${result.jobId})` : ""}`);
+    console.log(`Loaded: ${result.loadStatus}${result.instanceId ? ` as ${result.instanceId}` : ""}`);
+    if (result.loadTimeSeconds !== undefined) {
+      console.log(`Load time: ${result.loadTimeSeconds}s`);
+    }
+    console.log(`Selected ${result.instanceId ?? result.model} for ${getRuntimeLaneLabel(lane)}.`);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`switchbay model pull: ${msg}`);
     process.exit(1);
   }
 }

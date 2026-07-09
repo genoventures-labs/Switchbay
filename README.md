@@ -176,6 +176,10 @@ CLI helpers:
 switchbay --help
 switchbay version
 switchbay update
+switchbay models --lane local
+switchbay model local qwen/qwen3-4b-2507
+switchbay model pull ibm/granite-4-micro
+switchbay model pull https://huggingface.co/lmstudio-community/gpt-oss-20b-GGUF --quant Q4_K_M
 switchbay engines sync
 switchbay skills list
 switchbay plugins

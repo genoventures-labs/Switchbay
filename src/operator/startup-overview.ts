@@ -14,9 +14,11 @@ export type StartupOverviewInput = {
   runtimeBadge: string;
   dailyBoard?: DailyBoard | null;
   sessions?: StartupOverviewSession[];
+  now?: Date;
 };
 
 export function buildStartupOverview(input: StartupOverviewInput): string {
+  const now = input.now ?? new Date();
   const activeTasks = input.dailyBoard?.items.filter((item) => item.status === "active") ?? [];
   const latestSession = input.sessions?.[0] ?? null;
   const workspaceName = input.workspace
@@ -31,7 +33,7 @@ export function buildStartupOverview(input: StartupOverviewInput): string {
     : null;
 
   return [
-    "Morning. Here's the board.",
+    `${timeGreeting(now)}. It's ${formatOverviewDate(now)}.`,
     "",
     input.dailyBoard ? `Today: ${activeTasks.length}/${DAILY_ACTIVE_LIMIT} open${nextTask ? ` · next: ${nextTask}` : ""}` : null,
     `Workspace: ${workspaceName}${branch} · ${dirtyText}`,
@@ -41,4 +43,20 @@ export function buildStartupOverview(input: StartupOverviewInput): string {
       ? nextTask ? "Try `/agenda` when you want the full board." : "Add a task with `/task add <text>` when something needs to stay visible."
       : null,
   ].filter(Boolean).join("\n");
+}
+
+function timeGreeting(now: Date): string {
+  const hour = now.getHours();
+  if (hour >= 5 && hour < 12) return "Good morning";
+  if (hour >= 12 && hour < 17) return "Good afternoon";
+  if (hour >= 17 && hour < 22) return "Good evening";
+  return "Late night board check";
+}
+
+function formatOverviewDate(now: Date): string {
+  return new Intl.DateTimeFormat(undefined, {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  }).format(now);
 }

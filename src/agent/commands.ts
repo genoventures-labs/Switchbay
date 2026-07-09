@@ -727,6 +727,11 @@ async function handleConversationalOperatorIntent(
 ): Promise<LocalCommandResult> {
   const normalized = normalizeBayTalk(input);
 
+  const coached = matchSwitchbayControlIntent(normalized);
+  if (coached) {
+    return { handled: true, assistantMessage: localFirstMessage(coached) };
+  }
+
   const reminder = parseReminderIntent(normalized);
   if (reminder) {
     try {
@@ -781,6 +786,128 @@ function normalizeBayTalk(input: string): string {
 
 function localFirstMessage(message: string): string {
   return `Local-first:\n\n${message}`;
+}
+
+type CommandCoachEntry = {
+  patterns: RegExp[];
+  title: string;
+  slash?: string;
+  cli?: string;
+  note?: string;
+};
+
+const SWITCHBAY_CONTROL_COACH: CommandCoachEntry[] = [
+  {
+    title: "Switch to Ollama",
+    patterns: [/\bollama\b/, /\blocal provider\b.*\bollama\b/],
+    slash: "/lane ollama",
+    cli: "switchbay local-provider set ollama",
+    note: "Use `/model` or `switchbay models --lane ollama` to browse Ollama models.",
+  },
+  {
+    title: "Switch to LM Studio",
+    patterns: [/\blm\s*studio\b/, /\blmstudio\b/],
+    slash: "/lane lmstudio",
+    cli: "switchbay local-provider set lmstudio",
+  },
+  {
+    title: "Switch Cloud Provider",
+    patterns: [/\b(openai|anthropic|claude|google|gemini)\b.*\b(provider|lane|cloud)\b/, /\bcloud provider\b/],
+    slash: "/lane openai, /lane anthropic, or /lane google",
+    cli: "switchbay cloud-provider set auto|openai|anthropic|google",
+  },
+  {
+    title: "Models Drawer",
+    patterns: [/\b(model|models)\b.*\b(drawer|list|pick|select|switch|change|show)\b/, /\b(drawer|list|pick|select|switch|change|show)\b.*\b(model|models)\b/],
+    slash: "/model",
+    cli: "switchbay models --lane <cloud|local|ollama>",
+    note: "Pin one with `switchbay model <lane> <model-id>`.",
+  },
+  {
+    title: "Agents Drawer",
+    patterns: [/\b(agent|agents)\b.*\b(drawer|list|show|create|make)\b/, /\b(drawer|list|show|create|make)\b.*\b(agent|agents)\b/],
+    slash: "/agents or /create-agent",
+    cli: "switchbay agents list",
+  },
+  {
+    title: "Skills Drawer",
+    patterns: [/\b(skill|skills)\b.*\b(drawer|list|sync|read|show)\b/, /\b(drawer|list|sync|read|show)\b.*\b(skill|skills)\b/],
+    slash: "/skills or /create-skill",
+    cli: "switchbay skills list",
+  },
+  {
+    title: "Engine Bay",
+    patterns: [/\b(engine|engines|engine bay)\b.*\b(drawer|sync|pull|update|list|templates)\b/, /\b(drawer|sync|pull|update|list|templates)\b.*\b(engine|engines|engine bay)\b/],
+    slash: "/engines or /engine-bay sync",
+    cli: "switchbay engines sync",
+  },
+  {
+    title: "Plugins",
+    patterns: [/\b(plugin|plugins)\b.*\b(command|cli|slash|drawer|list|inspect|create|make)\b/, /\b(command|cli|slash|drawer|list|inspect|create|make|lists?)\b.*\b(plugin|plugins)\b/],
+    slash: "/plugins or /create-plugin",
+    cli: "switchbay plugins list",
+  },
+  {
+    title: "Daily Board",
+    patterns: [/\b(agenda|daily board|task|tasks|reminder|reminders)\b.*\b(command|cli|slash|drawer|list|show|add|done)\b/, /\b(command|cli|slash|drawer|list|show|add|done)\b.*\b(agenda|daily board|task|tasks|reminder|reminders)\b/],
+    slash: "/agenda, /task add <text>, /task done <id>",
+    cli: 'switchbay agenda && switchbay task add "test brew"',
+  },
+  {
+    title: "Workspace Controls",
+    patterns: [/\b(workspace|workspaces)\b.*\b(command|cli|slash|list|add|hop|switch)\b/, /\b(command|cli|slash|list|add|hop|switch)\b.*\b(workspace|workspaces)\b/],
+    slash: "/workspace list, /workspace add <path>, /workspace hop <name>",
+    cli: 'switchbay "query" --hop <name>',
+  },
+  {
+    title: "MCP Controls",
+    patterns: [/\bmcp\b.*\b(command|cli|slash|status|catalog|init|create|on|off)\b/, /\b(command|cli|slash|status|catalog|init|create|on|off)\b.*\bmcp\b/],
+    slash: "/mcp on, /mcp off, /mcp catalog",
+    cli: "switchbay mcp status",
+  },
+  {
+    title: "Memory Controls",
+    patterns: [/\b(memory|remember|memories)\b.*\b(command|cli|slash|add|save|list|refresh|facts|show)\b/, /\b(command|cli|slash|add|save|list|refresh|facts|show)\b.*\b(memory|memories)\b/],
+    slash: "/remember <note> or /memory refresh",
+    cli: 'switchbay memory add "use Bun for tests"',
+  },
+  {
+    title: "Knowledge Index",
+    patterns: [/\b(knowledge|index|search)\b.*\b(command|cli|slash|refresh|rebuild|search|status|find)\b/, /\b(command|cli|slash|refresh|rebuild|search|status|find)\b.*\b(knowledge|index)\b/],
+    slash: "/index refresh or /search <query>",
+    cli: 'switchbay knowledge refresh && switchbay knowledge search "approval gates"',
+  },
+  {
+    title: "Trace Ledger",
+    patterns: [/\b(trace|receipt|latest turn)\b.*\b(command|cli|slash|show|export)\b/, /\b(command|cli|slash|show|export)\b.*\b(trace|receipt|latest turn)\b/],
+    slash: "/trace or /trace export",
+    cli: "switchbay trace",
+  },
+  {
+    title: "Operator Handoff",
+    patterns: [/\b(handoff|hand off|handover|wrap)\b.*\b(command|cli|slash|show|write|create)\b/, /\b(command|cli|slash|show|write|create)\b.*\b(handoff|hand off|handover|wrap)\b/],
+    slash: "/handoff",
+    cli: "switchbay handoff",
+  },
+];
+
+function matchSwitchbayControlIntent(normalized: string): string | null {
+  if (!/\b(how do i|how can i|what command|which command|show me the command|what's the command|command|cli|slash|drawer)\b/.test(normalized)) {
+    return null;
+  }
+
+  const entry = SWITCHBAY_CONTROL_COACH.find((candidate) =>
+    candidate.patterns.some((pattern) => pattern.test(normalized))
+  );
+  if (!entry) return null;
+
+  return [
+    `**Switchbay Control: ${entry.title}**`,
+    "",
+    entry.slash ? `TUI: \`${entry.slash}\`` : null,
+    entry.cli ? `CLI: \`${entry.cli}\`` : null,
+    entry.note ?? null,
+  ].filter(Boolean).join("\n");
 }
 
 function parseReminderIntent(normalized: string): string | null {

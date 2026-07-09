@@ -1026,7 +1026,7 @@ test("conversational operator requests answer from local state", async () => {
   }
 });
 
-test("natural help prompts go to the selected model instead of local command coach", async () => {
+test("Switchbay CLI and drawer help prompts are deterministic", async () => {
   const baseOptions = {
     client: {} as any,
     profile: "switchbay",
@@ -1038,19 +1038,32 @@ test("natural help prompts go to the selected model instead of local command coa
   };
 
   const ollama = await tryLocalCommand("Bay, how do I switch to Ollama?", baseOptions);
-  expect(ollama.handled).toBe(false);
+  expect(ollama.handled).toBe(true);
+  expect(ollama.assistantMessage).toContain("Switchbay Control");
+  expect(ollama.assistantMessage).toContain("/lane ollama");
+  expect(ollama.assistantMessage).toContain("switchbay local-provider set ollama");
 
   const engines = await tryLocalCommand("Bay, how do I sync engines?", baseOptions);
-  expect(engines.handled).toBe(false);
+  expect(engines.handled).toBe(true);
+  expect(engines.assistantMessage).toContain("switchbay engines sync");
 
   const plugins = await tryLocalCommand("What command lists plugins?", baseOptions);
-  expect(plugins.handled).toBe(false);
+  expect(plugins.handled).toBe(true);
+  expect(plugins.assistantMessage).toContain("switchbay plugins list");
 
   const agenda = await tryLocalCommand("Bay, what's the command for reminders?", baseOptions);
-  expect(agenda.handled).toBe(false);
+  expect(agenda.handled).toBe(true);
+  expect(agenda.assistantMessage).toContain("/task add");
+
+  const modelDrawer = await tryLocalCommand("Bay, open the model drawer", baseOptions);
+  expect(modelDrawer.handled).toBe(true);
+  expect(modelDrawer.assistantMessage).toContain("/model");
 
   const generic = await tryLocalCommand("Bay, how do I explain this TypeScript function?", baseOptions);
   expect(generic.handled).toBe(false);
+
+  const workQuestion = await tryLocalCommand("Bay, what file is dirty in the repo? What's the changes?", baseOptions);
+  expect(workQuestion.handled).toBe(false);
 });
 
 test("workspace slash commands show, add, and hop known workspaces", async () => {

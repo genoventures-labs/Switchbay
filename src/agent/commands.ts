@@ -673,7 +673,10 @@ function looksLikeWorkspaceReference(rawQuery: string, query: string): boolean {
   const lower = query.toLowerCase();
   if (!query) return false;
   if (["git", "repo", "repository", "workspace", "project", "status", "scratch"].includes(lower)) return false;
+  if (/^(?:the\s+)?(?:repo|repository|workspace|project)\b/i.test(raw)) return false;
   if (/^(repo|repository|workspace|project)\s+/i.test(raw)) return false;
+  if (/[?]/.test(raw)) return false;
+  if (/\b(?:what|which|dirty|changed|changes|status)\b/i.test(raw) && !raw.startsWith(`"`) && !raw.startsWith(`'`)) return false;
   return raw.startsWith(`"`) ||
     raw.startsWith(`'`) ||
     raw.includes("/") ||
@@ -773,13 +776,13 @@ async function handleConversationalOperatorIntent(
     return { handled: true, assistantMessage: localFirstMessage(describeLmStudioMcpConfig(await loadLmStudioMcpConfig(cwd))) };
   }
 
+  if (isGitQuestion(normalized)) {
+    return { handled: true, assistantMessage: localFirstMessage(describeGitState(options.workspace)) };
+  }
+
   if (isWorkspaceQuestion(normalized)) {
     const context = formatWorkspaceContext(options.workspace) ?? "No workspace snapshot loaded.";
     return { handled: true, assistantMessage: localFirstMessage(`**Workspace**\n\n\`\`\`\n${context}\n\`\`\``) };
-  }
-
-  if (isGitQuestion(normalized)) {
-    return { handled: true, assistantMessage: localFirstMessage(describeGitState(options.workspace)) };
   }
 
   if (isRadarRequest(normalized)) {

@@ -1008,6 +1008,11 @@ test("conversational operator requests answer from local state", async () => {
     expect(git.handled).toBe(true);
     expect(git.assistantMessage).toContain("Dirty files: 1");
 
+    const dirtyRepoQuestion = await tryLocalCommand("Bay, what file is dirty in the repo? What's the changes?", baseOptions);
+    expect(dirtyRepoQuestion.handled).toBe(true);
+    expect(dirtyRepoQuestion.assistantMessage).toContain("Dirty files: 1");
+    expect(dirtyRepoQuestion.assistantMessage).not.toContain("No workspace matched");
+
     const workspace = await tryLocalCommand("Bay, what workspace am I in?", baseOptions);
     expect(workspace.handled).toBe(true);
     expect(workspace.assistantMessage).toContain("Workspace cwd");

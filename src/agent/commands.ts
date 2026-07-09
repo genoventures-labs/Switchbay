@@ -48,6 +48,8 @@ import { describePlugins, readPlugin } from "../plugins/registry";
 import { addWhitelistedLocation, resolveLocationInput } from "../config/switchbay-config";
 import { fuzzyMatchLocations, listTravelLocations, travelTo } from "../tools/travel";
 import { formatWorkspaceContext } from "../session/workspace";
+import { formatFrictionRadar, runFrictionRadar } from "../operator/radar";
+import { buildQuickHandoff } from "../operator/handoff";
 
 export type LocalCommandResult = {
   handled: boolean;
@@ -338,6 +340,23 @@ export async function tryLocalCommand(
 
   if (trimmed === "/trace" || trimmed.startsWith("/trace ")) {
     return handleTraceCommand(trimmed, options);
+  }
+
+  if (trimmed === "/radar") {
+    return {
+      handled: true,
+      assistantMessage: await formatRadarForOptions(options),
+    };
+  }
+
+  if (trimmed === "/handoff") {
+    return {
+      handled: true,
+      assistantMessage: await buildQuickHandoff({
+        cwd: options.workspace?.cwd ?? process.cwd(),
+        workspace: options.workspace,
+      }),
+    };
   }
 
   if (trimmed.startsWith("/forget ") || trimmed === "/forget") {
@@ -659,7 +678,31 @@ async function handleConversationalOperatorIntent(
     return { handled: true, assistantMessage: localFirstMessage(describeGitState(options.workspace)) };
   }
 
+  if (isRadarRequest(normalized)) {
+    return { handled: true, assistantMessage: localFirstMessage(await formatRadarForOptions(options)) };
+  }
+
+  if (isHandoffRequest(normalized)) {
+    return {
+      handled: true,
+      assistantMessage: localFirstMessage(await buildQuickHandoff({
+        cwd: options.workspace?.cwd ?? process.cwd(),
+        workspace: options.workspace,
+      })),
+    };
+  }
+
   return { handled: false };
+}
+
+async function formatRadarForOptions(options: LocalCommandOptions): Promise<string> {
+  const signals = await runFrictionRadar({
+    cwd: options.workspace?.cwd ?? process.cwd(),
+    runtimeLane: options.runtimeLane,
+    toolMode: options.toolMode,
+    workspace: options.workspace,
+  });
+  return formatFrictionRadar(signals);
 }
 
 function normalizeBayTalk(input: string): string {
@@ -771,6 +814,19 @@ const COMMAND_COACH: CommandCoachEntry[] = [
     slash: "/trace or /trace export",
     cli: "switchbay trace",
   },
+  {
+    title: "Run Friction Radar",
+    patterns: [/\b(radar|blockers?|friction|preflight)\b/],
+    slash: "/radar",
+    cli: "switchbay radar",
+    note: "Radar is read-only and checks local release friction.",
+  },
+  {
+    title: "Write a Quick Handoff",
+    patterns: [/\b(handoff|hand off|handover|wrap|next time)\b/],
+    slash: "/handoff",
+    cli: "switchbay handoff",
+  },
 ];
 
 function matchCommandCoachIntent(normalized: string): string | null {
@@ -828,6 +884,16 @@ function isWorkspaceQuestion(normalized: string): boolean {
 function isGitQuestion(normalized: string): boolean {
   return /\b(git|changed|changes|dirty|branch|status|working tree)\b/.test(normalized) &&
     /\b(what|show|status|changed|changes|dirty|branch)\b/.test(normalized);
+}
+
+function isRadarRequest(normalized: string): boolean {
+  return /\b(radar|blockers?|friction|release blockers?|preflight)\b/.test(normalized) &&
+    /\b(run|check|show|scan|what|any|status)\b/.test(normalized);
+}
+
+function isHandoffRequest(normalized: string): boolean {
+  return /\b(handoff|hand off|handover|wrap|summary for next time|next time)\b/.test(normalized) &&
+    /\b(write|make|create|give|show|summari[sz]e|draft)\b/.test(normalized);
 }
 
 function describeRuntimeStatus(options: LocalCommandOptions): string {

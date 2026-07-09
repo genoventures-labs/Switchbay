@@ -183,7 +183,7 @@ export SWITCHBAY_STARTUP_OVERVIEW=off
 export SWITCHBAY_DAILY_BOARD=off
 ```
 
-Bay also handles obvious operator asks locally before calling a model, such as "Bay, what's on my agenda?", "Bay, what lane am I using?", "Bay, is MCP on?", "Bay, what's changed in git?", and "Bay, how do I switch to Ollama?".
+Bay also handles obvious operator asks locally before calling a model, such as "Bay, what's on my agenda?", "Bay, what lane am I using?", "Bay, is MCP on?", "Bay, what's changed in git?", "Bay, run radar", "Bay, write a handoff for next time", and "Bay, how do I switch to Ollama?".
 
 For the release-readiness pass, use [docs/1.0_SMOKE_CHECKLIST.md](docs/1.0_SMOKE_CHECKLIST.md).
 
@@ -395,6 +395,8 @@ Trace Ledger is Switchbay's local flight recorder. Completed model turns write J
 ```bash
 switchbay trace
 switchbay trace export
+switchbay radar
+switchbay handoff
 ```
 
 Inside the TUI:

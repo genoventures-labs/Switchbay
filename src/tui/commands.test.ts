@@ -32,6 +32,8 @@ test("command palette lists only implemented command families", () => {
   expect(commands).toContain("/search");
   expect(commands).toContain("/trace");
   expect(commands).toContain("/trace export");
+  expect(commands).toContain("/radar");
+  expect(commands).toContain("/handoff");
   expect(commands).toContain("/quickstarts");
   expect(commands).toContain("/rules");
   expect(commands).toContain("/create-rule");

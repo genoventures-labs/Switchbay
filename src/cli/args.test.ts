@@ -194,6 +194,14 @@ test("parses Trace helper commands", () => {
   expect(exportTrace.traceAction).toBe("export");
 });
 
+test("parses operator helper commands", () => {
+  const radar = parseCliArgs(["bun", "index.tsx", "radar"]);
+  expect(radar.subcommand).toBe("radar");
+
+  const handoff = parseCliArgs(["bun", "index.tsx", "handoff"]);
+  expect(handoff.subcommand).toBe("handoff");
+});
+
 test("normalizes cloud MCP runtime lane aliases", () => {
   expect(normalizeRuntimeLane("mcp")).toBe("cloud-mcp");
   expect(normalizeRuntimeLane("cloud-mcp")).toBe("cloud-mcp");
@@ -203,4 +211,5 @@ test("normalizes cloud MCP runtime lane aliases", () => {
   expect(normalizeRuntimeLane("ollama")).toBe("local");
   expect(normalizeRuntimeLane("openai")).toBe("cloud");
   expect(normalizeRuntimeLane("claude")).toBe("cloud");
+  expect(normalizeRuntimeLane("gemini")).toBe("cloud");
 });

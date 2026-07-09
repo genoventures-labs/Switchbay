@@ -296,6 +296,18 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     category: "context",
+    command: "/radar",
+    description: "Run read-only local friction checks.",
+    example: "/radar",
+  },
+  {
+    category: "context",
+    command: "/handoff",
+    description: "Write a compact handoff for the next session.",
+    example: "/handoff",
+  },
+  {
+    category: "context",
     command: "/quickstarts",
     description: "List quick-start guides Bay reads before matching tool/lane work.",
     example: "/quickstarts",

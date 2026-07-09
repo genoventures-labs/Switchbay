@@ -23,6 +23,8 @@ import { describeLocalProviders, getActiveLocalProvider, normalizeLocalProvider,
 import { formatRouteTag } from "./src/runtime/route-display";
 import { describeCloudProviders, normalizeCloudProvider, setActiveCloudProvider } from "./src/runtime/cloud-providers";
 import { addDailyTask, clearDailyBoard, completeDailyTask, describeDailyBoard } from "./src/operator/daily-board";
+import { formatFrictionRadar, runFrictionRadar } from "./src/operator/radar";
+import { buildQuickHandoff } from "./src/operator/handoff";
 
 // Ensure config is initialized on first boot
 loadSwitchbayConfig();
@@ -74,6 +76,8 @@ Context and memory:
   switchbay knowledge search <query> Search sourced workspace snippets
   switchbay trace                    Show latest turn trace
   switchbay trace export             Print latest trace file path
+  switchbay radar                    Run read-only local friction checks
+  switchbay handoff                  Print a compact next-session handoff
 
 Extensions:
   switchbay engines                  Show Engine Bay cache status
@@ -143,6 +147,16 @@ Options:
 
   if (options.subcommand === "trace") {
     await runTraceCommand(options.traceAction);
+    return;
+  }
+
+  if (options.subcommand === "radar") {
+    await runRadarCommand(options.lane);
+    return;
+  }
+
+  if (options.subcommand === "handoff") {
+    await runHandoffCommand();
     return;
   }
 
@@ -479,6 +493,32 @@ async function runTraceCommand(action: "last" | "export") {
   }
 }
 
+async function runRadarCommand(rawLane: string | null) {
+  try {
+    const lane = normalizeRuntimeLane(rawLane);
+    const signals = await runFrictionRadar({
+      cwd: process.cwd(),
+      runtimeLane: lane,
+      toolMode: getToolMode(),
+    });
+    console.log(formatFrictionRadar(signals));
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`switchbay radar: ${msg}`);
+    process.exit(1);
+  }
+}
+
+async function runHandoffCommand() {
+  try {
+    console.log(await buildQuickHandoff({ cwd: process.cwd() }));
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`switchbay handoff: ${msg}`);
+    process.exit(1);
+  }
+}
+
 async function runMcpCommand(action: "status" | "init" | "catalog") {
   try {
     const cwd = process.cwd();
@@ -519,7 +559,7 @@ async function runCloudProviderCommand(action: "status" | "set", target: string 
   if (action === "set") {
     const provider = normalizeCloudProvider(target);
     if (!provider) {
-      console.error("switchbay cloud-provider: set requires `auto`, `openai`, or `anthropic`.");
+      console.error("switchbay cloud-provider: set requires `auto`, `openai`, `anthropic`, or `google`.");
       process.exit(1);
     }
     setActiveCloudProvider(provider);

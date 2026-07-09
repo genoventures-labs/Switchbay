@@ -10,7 +10,7 @@ export type CliOptions = {
   resume: string | boolean; // string (id/index) or true (latest)
   newSession: boolean;
   purge: string | null;
-  subcommand: "run" | "update" | "version" | "help" | "engines" | "skills" | "toolbox" | "plugins" | "memory" | "knowledge" | "trace" | "mcp" | "models" | "model" | "local-provider" | "cloud-provider" | "agenda" | "task";
+  subcommand: "run" | "update" | "version" | "help" | "engines" | "skills" | "toolbox" | "plugins" | "memory" | "knowledge" | "trace" | "radar" | "handoff" | "mcp" | "models" | "model" | "local-provider" | "cloud-provider" | "agenda" | "task";
   engineAction: "status" | "sync" | "list" | "templates";
   toolboxAction: "status" | "sync" | "list" | "templates" | "read";
   toolboxSkill: string | null;
@@ -287,6 +287,54 @@ export function parseCliArgs(argv: string[]): CliOptions {
         knowledgeAction: "status",
         knowledgeQuery: null,
         traceAction,
+        mcpAction: "status",
+        modelTarget: null,
+        modelLane: null,
+      };
+    } else if (arg === "radar" || arg === "preflight") {
+      return {
+        surface,
+        profile,
+        mode,
+        lane,
+        initialQuery: "",
+        hop,
+        resume,
+        newSession,
+        purge,
+        subcommand: "radar",
+        engineAction: "status",
+        toolboxAction: "status",
+        toolboxSkill: null,
+        memoryAction: "status",
+        memoryNote: null,
+        knowledgeAction: "status",
+        knowledgeQuery: null,
+        traceAction: "last",
+        mcpAction: "status",
+        modelTarget: null,
+        modelLane: null,
+      };
+    } else if (arg === "handoff" || arg === "wrap") {
+      return {
+        surface,
+        profile,
+        mode,
+        lane,
+        initialQuery: "",
+        hop,
+        resume,
+        newSession,
+        purge,
+        subcommand: "handoff",
+        engineAction: "status",
+        toolboxAction: "status",
+        toolboxSkill: null,
+        memoryAction: "status",
+        memoryNote: null,
+        knowledgeAction: "status",
+        knowledgeQuery: null,
+        traceAction: "last",
         mcpAction: "status",
         modelTarget: null,
         modelLane: null,

@@ -33,12 +33,35 @@ Usage:
   switchbay                          Launch the TUI (interactive mode)
   switchbay "query"                  One-shot request
   switchbay "query" --hop <name>     Launch in a different workspace
+
+Sessions:
   switchbay --resume                 Resume the last session
   switchbay --resume <id|index>      Resume a specific session by ID or index
   switchbay --new                    Start a fresh session
   switchbay --purge <duration>       Clean up old sessions (e.g. 1d, 1w)
-  switchbay update                   Print update instructions
-  switchbay version                  Print version
+
+Models and lanes:
+  switchbay models                   List models for the active lane
+  switchbay model                    Show the active lane model
+  switchbay model <id>               Pin a model for the active lane
+  switchbay model <lane> <id>        Pin a model for a specific lane
+  switchbay mcp                      Show Switchbay MCP bridge config
+  switchbay mcp init                 Create ~/.switchbay/lmstudio.mcp.json
+  switchbay mcp catalog              List trusted MCP config options
+
+Context and memory:
+  switchbay memory                   Show workspace memory status
+  switchbay memory add <note>        Add a workspace memory note
+  switchbay memory refresh           Refresh operational memory
+  switchbay memory list              List memory notes
+  switchbay memory facts             List structured memory facts
+  switchbay knowledge                Show workspace knowledge index status
+  switchbay knowledge refresh        Build/rebuild the local workspace knowledge map
+  switchbay knowledge search <query> Search sourced workspace snippets
+  switchbay trace                    Show latest turn trace
+  switchbay trace export             Print latest trace file path
+
+Extensions:
   switchbay engines                  Show Engine Bay cache status
   switchbay engines sync             Pull the Switchbay-Engines GitHub repo
   switchbay engines list             List cached engine files and manifests
@@ -51,23 +74,10 @@ Usage:
   switchbay plugins                  Show workspace plugin status
   switchbay plugins list             List installed workspace plugins
   switchbay plugins inspect <id>     Print a plugin manifest and assets
-  switchbay memory                   Show workspace memory status
-  switchbay memory add <note>        Add a workspace memory note
-  switchbay memory refresh           Refresh operational memory
-  switchbay memory list              List memory notes
-  switchbay memory facts             List structured memory facts
-  switchbay knowledge                Show workspace knowledge index status
-  switchbay knowledge refresh        Build/rebuild the local workspace knowledge map
-  switchbay knowledge search <query> Search sourced workspace snippets
-  switchbay trace                    Show latest turn trace
-  switchbay trace export             Print latest trace file path
-  switchbay mcp                      Show Switchbay MCP bridge config
-  switchbay mcp init                 Create ~/.switchbay/lmstudio.mcp.json
-  switchbay mcp catalog              List trusted MCP config options
-  switchbay models                   List models for the active lane
-  switchbay model                    Show the active lane model
-  switchbay model <id>               Pin a model for the active lane
-  switchbay model <lane> <id>        Pin a model for a specific lane
+
+Maintenance:
+  switchbay update                   Print update instructions
+  switchbay version                  Print version
 
 Options:
   -s, --surface <type>   Surface context (default: dev)

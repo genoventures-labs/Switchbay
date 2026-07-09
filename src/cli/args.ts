@@ -225,11 +225,14 @@ export function parseCliArgs(argv: string[]): CliOptions {
         modelTarget: null,
         modelLane: null,
       };
-    } else if (arg === "memory") {
+    } else if (arg === "memory" || arg === "memories" || arg === "remember") {
       const action = args[i + 1];
       const memoryAction = action === "refresh" || action === "list" || action === "facts" || action === "status" || action === "add" || action === "remember"
         ? action === "remember" ? "add" : action
+        : arg === "memories" ? "list"
+        : arg === "remember" ? "add"
         : "status";
+      const noteStart = arg === "remember" ? i + 1 : i + 2;
       return {
         surface,
         profile,
@@ -245,7 +248,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
         toolboxAction: "status",
         toolboxSkill: null,
         memoryAction,
-        memoryNote: memoryAction === "add" ? args.slice(i + 2).join(" ") || null : null,
+        memoryNote: memoryAction === "add" ? args.slice(noteStart).join(" ") || null : null,
         knowledgeAction: "status",
         knowledgeQuery: null,
         traceAction: "last",

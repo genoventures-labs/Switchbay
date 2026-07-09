@@ -61,6 +61,15 @@ test("parses Memory helper add commands", () => {
   expect(remember.subcommand).toBe("memory");
   expect(remember.memoryAction).toBe("add");
   expect(remember.memoryNote).toBe("prefer local workspaces");
+
+  const memories = parseCliArgs(["bun", "index.tsx", "memories", "list"]);
+  expect(memories.subcommand).toBe("memory");
+  expect(memories.memoryAction).toBe("list");
+
+  const rememberAlias = parseCliArgs(["bun", "index.tsx", "remember", "ship", "the", "tap"]);
+  expect(rememberAlias.subcommand).toBe("memory");
+  expect(rememberAlias.memoryAction).toBe("add");
+  expect(rememberAlias.memoryNote).toBe("ship the tap");
 });
 
 test("parses Daily Board helper commands", () => {

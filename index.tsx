@@ -76,6 +76,7 @@ Context and memory:
   switchbay memory add <note>        Add a workspace memory note
   switchbay memory refresh           Refresh operational memory
   switchbay memory list              List memory notes
+  switchbay memories list            Alias for memory notes
   switchbay memory facts             List structured memory facts
   switchbay knowledge                Show workspace knowledge index status
   switchbay knowledge refresh        Build/rebuild the local workspace knowledge map

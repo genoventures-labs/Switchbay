@@ -359,6 +359,7 @@ Commands:
 switchbay memory
 switchbay memory refresh
 switchbay memory list
+switchbay memories list
 switchbay memory facts
 ```
 

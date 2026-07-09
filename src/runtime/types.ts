@@ -50,6 +50,10 @@ export type ChatCompletionResponse = {
   meta?: {
     provider?: string;
     model?: string;
+    router_intent?: string;
+    router_reason?: string;
+    router_mode?: string;
+    using?: string;
     done_reason?: string;
     lmstudio_tool_calls?: string[];
     sass_factor?: number;

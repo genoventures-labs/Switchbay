@@ -19,6 +19,7 @@ import { ANSI_COLORS as CLR } from "./src/tui/theme";
 import { describePlugins, loadPluginInventory, readPlugin } from "./src/plugins/registry";
 import { listRuntimeModels, pullLmStudioModel, type RuntimeModelOption } from "./src/runtime/models";
 import { describeLocalProviders, getActiveLocalProvider, normalizeLocalProvider, setActiveLocalProvider, type LocalProviderId } from "./src/runtime/local-providers";
+import { formatRouteTag } from "./src/runtime/route-display";
 
 // Ensure config is initialized on first boot
 loadSwitchbayConfig();
@@ -607,8 +608,10 @@ async function runCliMode(options: any, resumeId: string | null) {
     const content =
       extractAssistantText(executedTurn.response) ||
       synthesizeAssistantFallback(options.initialQuery, executedTurn.toolExecutions, workspace);
+    const routeTag = formatRouteTag(executedTurn.response);
     if (content) {
       process.stdout.write(`\n${CLR.accent}⏺${CLR.reset} ${CLR.text}${CLR.bold}Switchbay${CLR.reset}\n`);
+      if (routeTag) process.stdout.write(`  ${CLR.muted}└ ${CLR.reset}${routeTag}\n`);
       process.stdout.write(`  ${CLR.muted}└ ${CLR.reset}${content}\n\n`);
       await saveTraceRecord({
         assistantContent: content,

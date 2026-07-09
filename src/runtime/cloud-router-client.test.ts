@@ -56,6 +56,8 @@ test("cloud router honors an explicit provider", async () => {
 
   expect(calls).toEqual(["anthropic"]);
   expect(response.meta?.provider).toBe("anthropic");
+  expect(response.meta?.router_mode).toBe("explicit");
+  expect(response.meta?.using).toContain("cloud/anthropic/");
 });
 
 test("cloud router picks OpenAI for structured summaries", async () => {
@@ -72,6 +74,9 @@ test("cloud router picks OpenAI for structured summaries", async () => {
 
   expect(calls).toEqual(["openai"]);
   expect(response.meta?.provider).toBe("openai");
+  expect(response.meta?.router_intent).toBe("structured_output");
+  expect(response.meta?.router_mode).toBe("auto");
+  expect(response.meta?.using).toContain("cloud/openai/");
 });
 
 test("cloud router picks Anthropic for code work", async () => {
@@ -88,4 +93,7 @@ test("cloud router picks Anthropic for code work", async () => {
 
   expect(calls).toEqual(["anthropic"]);
   expect(response.meta?.provider).toBe("anthropic");
+  expect(response.meta?.router_intent).toBe("code_work");
+  expect(response.meta?.router_mode).toBe("auto");
+  expect(response.meta?.using).toContain("cloud/anthropic/");
 });

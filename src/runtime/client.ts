@@ -34,20 +34,45 @@ export function createRuntimeClient(
 ): ChatRuntimeClient {
   const model = options.model?.trim() || undefined;
   let client: ChatRuntimeClient;
+  let using: string | null = null;
+  let routerIntent: string | null = null;
+  let routerReason: string | null = null;
+  let routerMode: string | null = null;
   if (lane === "local") {
     const localProvider = options.localProvider ?? getActiveLocalProvider();
     client = localProvider === "ollama" ? new OllamaClient() : new LmStudioClient();
+    const config = getLocalProviderConfig(localProvider);
+    using = `local/${localProvider}/${model ?? config.model ?? "default"}`;
+    routerIntent = "local_provider";
+    routerReason = `Local provider selected: ${config.label}.`;
+    routerMode = options.localProvider ? "explicit" : "configured";
   } else if (lane === "local-mcp") {
     client = new LmStudioMcpClient();
+    using = `local-mcp/lmstudio/${model ?? "configured"}`;
+    routerIntent = "native_mcp";
+    routerReason = "LM Studio native MCP lane selected.";
+    routerMode = "explicit";
   } else if (options.provider === "openai") {
     client = new OpenAiClient();
+    using = `cloud/openai/${model ?? "configured"}`;
+    routerIntent = "explicit_provider";
+    routerReason = "Explicit OpenAI provider selected.";
+    routerMode = "explicit";
   } else if (options.provider === "anthropic") {
     client = new AnthropicClient();
+    using = `cloud/anthropic/${model ?? "configured"}`;
+    routerIntent = "explicit_provider";
+    routerReason = "Explicit Anthropic provider selected.";
+    routerMode = "explicit";
   } else {
     client = new CloudRouterClient();
   }
 
-  return model ? new ModelOverrideClient(client, model) : client;
+  const withModel = model ? new ModelOverrideClient(client, model) : client;
+
+  return using
+    ? new RuntimeRouteTagClient(withModel, { using, routerIntent, routerReason, routerMode })
+    : withModel;
 }
 
 export function getRuntimeLaneLabel(lane: RuntimeLane = getRuntimeLane()): string {
@@ -72,5 +97,33 @@ class ModelOverrideClient implements ChatRuntimeClient {
       ...request,
       model: request.model ?? this.model,
     }, options);
+  }
+}
+
+class RuntimeRouteTagClient implements ChatRuntimeClient {
+  constructor(
+    private readonly inner: ChatRuntimeClient,
+    private readonly route: {
+      using: string;
+      routerIntent: string | null;
+      routerReason: string | null;
+      routerMode: string | null;
+    },
+  ) {}
+
+  async createChatCompletion(
+    surface: string,
+    request: ChatCompletionRequest,
+    options?: Parameters<ChatRuntimeClient["createChatCompletion"]>[2],
+  ): Promise<ChatCompletionResponse> {
+    const response = await this.inner.createChatCompletion(surface, request, options);
+    response.meta = {
+      ...response.meta,
+      using: response.meta?.using ?? this.route.using,
+      router_intent: response.meta?.router_intent ?? this.route.routerIntent ?? undefined,
+      router_reason: response.meta?.router_reason ?? this.route.routerReason ?? undefined,
+      router_mode: response.meta?.router_mode ?? this.route.routerMode ?? undefined,
+    };
+    return response;
   }
 }

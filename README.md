@@ -137,6 +137,14 @@ Add only trusted MCP ids that actually exist in your setup, such as `"mcp/playwr
 
 Inside the TUI, use `/lane` to cycle Cloud and the active local provider, `/lane ollama` to use Ollama, `/lane lmstudio` to use LM Studio, `/mcp on` to enable Switchbay's MCP bridge under the active model lane, `/mcp off` to disable it, and `/lane native-mcp` only when testing LM Studio's native MCP API. Cloud models use built-in OpenAI/Anthropic presets; local models are fetched from the active provider in `~/.switchbay/local-providers.json`. Use `/mcp init` for an empty starter config, `/mcp catalog` to list trusted MCP options, or `/create-mcp` for the conversational MCP config builder.
 
+Auto routing is visible by design. When Switchbay chooses a provider/model, completed turns show a tag like:
+
+```text
+Using: cloud/anthropic/claude-sonnet-4-5 · intent=code_work · mode=auto
+```
+
+The router is deterministic and inspectable: structured/summary tasks favor OpenAI, code/tool-heavy work favors Anthropic, explicit lanes/providers override auto, and local lanes show the active local provider.
+
 Bay only creates MCP configs from Switchbay's trusted catalog: Playwright, filesystem, GitHub, memory, fetch, sequential-thinking, and Postgres. If a request is not in that catalog, Bay refuses to invent a server id and tells you how to proceed manually.
 
 Per command:

@@ -51,6 +51,7 @@ import { SkillDrawer } from "./components/SkillDrawer";
 import { loadToolboxInventory, type ToolboxSkill } from "../toolbox/hub";
 import { RightRail } from "./components/RightRail";
 import { saveTraceRecord } from "../trace/store";
+import { formatRouteTag } from "../runtime/route-display";
 
 export type SwitchbayAppProps = {
   client: ChatRuntimeClient;
@@ -1561,6 +1562,10 @@ export function SwitchbayApp({
         onTokens,
       });
       const response = executedTurn.response;
+      const routeTag = formatRouteTag(response);
+      if (routeTag) {
+        dispatch({ type: "assistant/appended", message: routeTag });
+      }
       let autoApprovedShellContent: string | null = null;
       let autoApprovedShellFailed = false;
 

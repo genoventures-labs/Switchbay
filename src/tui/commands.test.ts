@@ -8,6 +8,8 @@ test("command palette lists only implemented command families", () => {
   expect(commands).toContain("/lane");
   expect(commands).toContain("/lane cloud-mcp");
   expect(commands).toContain("/lane mcp");
+  expect(commands).toContain("/lane ollama");
+  expect(commands).toContain("/lane lmstudio");
   expect(commands).toContain("/lane native-mcp");
   expect(commands).toContain("/model");
   expect(commands).toContain("/model cloud-mcp");
@@ -70,6 +72,7 @@ test("command palette searches commands, examples, descriptions, and categories"
   expect(getCommandMatches("/mcp").map((item) => item.command)).toContain("/mcp on");
   expect(getCommandMatches("/cloud-mcp").map((item) => item.command)).toContain("/lane cloud-mcp");
   expect(getCommandMatches("/cloud-mcp").map((item) => item.command)).toContain("/model cloud-mcp");
+  expect(getCommandMatches("/ollama").map((item) => item.command)).toContain("/lane ollama");
   expect(getCommandMatches("/engine").map((item) => item.command)).toContain("/engines");
   expect(getCommandMatches("/engine").map((item) => item.command)).toContain("/create-engine");
   expect(getCommandMatches("/hub").map((item) => item.command)).toContain("/engine-bay");

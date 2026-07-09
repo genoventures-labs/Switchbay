@@ -115,6 +115,22 @@ test("parses model helper commands", () => {
   expect(pullLocal.modelLane).toBe("local");
   expect(pullLocal.modelTarget).toBe("ibm/granite-4-micro");
   expect(pullLocal.modelQuantization).toBe("Q4_K_M");
+
+  const pullOllama = parseCliArgs(["bun", "index.tsx", "model", "pull", "ollama", "llama3.2"]);
+  expect(pullOllama.modelAction).toBe("pull");
+  expect(pullOllama.modelLane).toBe("ollama");
+  expect(pullOllama.modelTarget).toBe("llama3.2");
+});
+
+test("parses local provider helper commands", () => {
+  const status = parseCliArgs(["bun", "index.tsx", "local-provider"]);
+  expect(status.subcommand).toBe("local-provider");
+  expect(status.localProviderAction).toBe("status");
+
+  const set = parseCliArgs(["bun", "index.tsx", "local-provider", "set", "ollama"]);
+  expect(set.subcommand).toBe("local-provider");
+  expect(set.localProviderAction).toBe("set");
+  expect(set.localProviderTarget).toBe("ollama");
 });
 
 test("parses Trace helper commands", () => {
@@ -133,4 +149,5 @@ test("normalizes cloud MCP runtime lane aliases", () => {
   expect(normalizeRuntimeLane("cloudmcp")).toBe("cloud-mcp");
   expect(normalizeRuntimeLane("cmcp")).toBe("cloud-mcp");
   expect(normalizeRuntimeLane("native-mcp")).toBe("local-mcp");
+  expect(normalizeRuntimeLane("ollama")).toBe("local");
 });

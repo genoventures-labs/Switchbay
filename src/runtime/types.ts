@@ -49,6 +49,8 @@ export type ChatCompletionResponse = {
   _rawText?: string;
   meta?: {
     provider?: string;
+    model?: string;
+    done_reason?: string;
     lmstudio_tool_calls?: string[];
     sass_factor?: number;
   };

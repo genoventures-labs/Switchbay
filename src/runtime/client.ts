@@ -3,6 +3,8 @@ import { AnthropicClient } from "./anthropic-client";
 import { CloudRouterClient } from "./cloud-router-client";
 import { LmStudioClient } from "./lmstudio-client";
 import { LmStudioMcpClient } from "./lmstudio-mcp-client";
+import { getActiveLocalProvider, getLocalProviderConfig, type LocalProviderId } from "./local-providers";
+import { OllamaClient } from "./ollama-client";
 import { OpenAiClient } from "./openai-client";
 import type { ChatCompletionRequest, ChatCompletionResponse, WorkspaceFocus } from "./types";
 
@@ -23,6 +25,7 @@ export type ChatRuntimeClient = {
 export type RuntimeClientOptions = {
   model?: string | null;
   provider?: Exclude<CloudProvider, "auto"> | null;
+  localProvider?: LocalProviderId | null;
 };
 
 export function createRuntimeClient(
@@ -32,7 +35,8 @@ export function createRuntimeClient(
   const model = options.model?.trim() || undefined;
   let client: ChatRuntimeClient;
   if (lane === "local") {
-    client = new LmStudioClient();
+    const localProvider = options.localProvider ?? getActiveLocalProvider();
+    client = localProvider === "ollama" ? new OllamaClient() : new LmStudioClient();
   } else if (lane === "local-mcp") {
     client = new LmStudioMcpClient();
   } else if (options.provider === "openai") {
@@ -48,7 +52,7 @@ export function createRuntimeClient(
 
 export function getRuntimeLaneLabel(lane: RuntimeLane = getRuntimeLane()): string {
   if (lane === "cloud-mcp") return "Cloud + MCP Bridge";
-  if (lane === "local") return "LM Studio";
+  if (lane === "local") return getLocalProviderConfig().label;
   if (lane === "local-mcp") return "LM Studio Native MCP";
   return "Cloud";
 }

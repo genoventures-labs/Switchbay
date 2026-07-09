@@ -51,7 +51,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   {
     category: "runtime",
     command: "/lane",
-    description: "Cycle model lane between Cloud and LM Studio.",
+    description: "Cycle model lane between Cloud and the active local provider.",
     example: "/lane",
   },
   {
@@ -69,8 +69,20 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   {
     category: "runtime",
     command: "/lane local",
-    description: "Switch this TUI session to the local LM Studio lane.",
+    description: "Switch this TUI session to the active local provider lane.",
     example: "/lane local",
+  },
+  {
+    category: "runtime",
+    command: "/lane ollama",
+    description: "Switch this TUI session to the local Ollama provider.",
+    example: "/lane ollama",
+  },
+  {
+    category: "runtime",
+    command: "/lane lmstudio",
+    description: "Switch this TUI session to the local LM Studio provider.",
+    example: "/lane lmstudio",
   },
   {
     category: "runtime",

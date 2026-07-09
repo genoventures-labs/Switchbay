@@ -21,7 +21,7 @@ export type SwitchbayConfig = {
 
 export type SelectedRuntimeModel = {
   id: string;
-  provider?: Exclude<CloudProvider, "auto"> | "lmstudio" | "lmstudio-mcp";
+  provider?: Exclude<CloudProvider, "auto"> | "lmstudio" | "lmstudio-mcp" | "ollama";
 };
 
 const DEFAULTS: SwitchbayConfig = {
@@ -134,7 +134,7 @@ function normalizeSelectedModels(value: unknown): Partial<Record<RuntimeLane, Se
     const provider = String((raw as Record<string, unknown>).provider ?? "").trim();
     result[lane] = {
       id,
-      provider: provider === "openai" || provider === "anthropic" || provider === "lmstudio" || provider === "lmstudio-mcp"
+      provider: provider === "openai" || provider === "anthropic" || provider === "lmstudio" || provider === "lmstudio-mcp" || provider === "ollama"
         ? provider
         : undefined,
     };

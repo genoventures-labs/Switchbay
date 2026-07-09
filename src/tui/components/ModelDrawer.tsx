@@ -79,7 +79,9 @@ export function ModelDrawer({
               {selected ? (
                 <Box paddingLeft={2}>
                   <Text color={TUI_COLORS.muted}>
-                    {item.lane === "local"
+                    {item.provider === "ollama"
+                      ? "Ollama local lane"
+                      : item.lane === "local"
                       ? "LM Studio local lane"
                       : item.lane === "local-mcp"
                         ? "LM Studio native MCP lane"

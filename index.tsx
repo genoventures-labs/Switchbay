@@ -18,6 +18,7 @@ import { describeTrustedMcpCatalog } from "./src/runtime/mcp-catalog";
 import { ANSI_COLORS as CLR } from "./src/tui/theme";
 import { describePlugins, loadPluginInventory, readPlugin } from "./src/plugins/registry";
 import { listRuntimeModels, pullLmStudioModel, type RuntimeModelOption } from "./src/runtime/models";
+import { describeLocalProviders, getActiveLocalProvider, normalizeLocalProvider, setActiveLocalProvider, type LocalProviderId } from "./src/runtime/local-providers";
 
 // Ensure config is initialized on first boot
 loadSwitchbayConfig();
@@ -45,7 +46,9 @@ Models and lanes:
   switchbay model                    Show the active lane model
   switchbay model <id>               Pin a model for the active lane
   switchbay model <lane> <id>        Pin a model for a specific lane
-  switchbay model pull <id|url>      Download, load, and pin an LM Studio model
+  switchbay model pull <id|url>      Pull/load a model through the active local provider
+  switchbay local-provider           Show local provider config
+  switchbay local-provider set <id>  Switch local provider: lmstudio | ollama
   switchbay mcp                      Show Switchbay MCP bridge config
   switchbay mcp init                 Create ~/.switchbay/lmstudio.mcp.json
   switchbay mcp catalog              List trusted MCP config options
@@ -138,6 +141,11 @@ Options:
     return;
   }
 
+  if (options.subcommand === "local-provider") {
+    await runLocalProviderCommand(options.localProviderAction ?? "status", options.localProviderTarget ?? null);
+    return;
+  }
+
   if (options.subcommand !== "run") return;
 
   if (options.purge) {
@@ -193,8 +201,9 @@ Options:
 
   // TUI Mode: No query, launch interactive app
   const lane = normalizeRuntimeLane(options.lane);
+  const localProvider = normalizeLocalProvider(options.lane);
   const selected = getSelectedRuntimeModel(lane);
-  const client = createRuntimeClient(lane, selected ? { model: selected.id, provider: normalizeClientProvider(selected.provider) } : {});
+  const client = createRuntimeClient(lane, selected ? { model: selected.id, provider: normalizeClientProvider(selected.provider), localProvider } : { localProvider });
   render(
     <SwitchbayApp
       client={client}
@@ -422,11 +431,26 @@ async function runMcpCommand(action: "status" | "init" | "catalog") {
   }
 }
 
+async function runLocalProviderCommand(action: "status" | "set", target: string | null) {
+  if (action === "set") {
+    const provider = normalizeLocalProvider(target);
+    if (!provider) {
+      console.error("switchbay local-provider: set requires `lmstudio` or `ollama`.");
+      process.exit(1);
+    }
+    setActiveLocalProvider(provider);
+    console.log(`Local provider set to ${provider}.`);
+    return;
+  }
+  console.log(describeLocalProviders());
+}
+
 async function runModelsCommand(rawLane: string | null) {
   const lane = normalizeRuntimeLane(rawLane);
+  const localProvider = normalizeLocalProvider(rawLane) ?? undefined;
   try {
     const selected = getSelectedRuntimeModel(lane);
-    const result = await listRuntimeModels(lane);
+    const result = await listRuntimeModels(lane, localProvider);
     const rows = result.models.map((model) => formatModelRow(model, selected?.id === model.id));
     console.log(`${getRuntimeLaneLabel(lane)} models`);
     console.log(rows.length ? rows.join("\n") : "No models found.");
@@ -490,6 +514,7 @@ async function runModelCommand(
 
 async function runModelPullCommand(rawLane: string | null, target: string | null, quantization: string | null) {
   const lane = normalizeRuntimeLane(rawLane ?? "local");
+  const localProvider = normalizeLocalProvider(rawLane) ?? getActiveLocalProvider();
   if (lane !== "local" && lane !== "local-mcp") {
     console.error("switchbay model pull: LM Studio pulls require the local lane. Use `switchbay model pull <model>` or `switchbay model pull local <model>`.");
     process.exit(1);
@@ -502,6 +527,16 @@ async function runModelPullCommand(rawLane: string | null, target: string | null
   }
 
   try {
+    if (localProvider === "ollama") {
+      console.log(`Pulling ${target} through Ollama...`);
+      const { pullOllamaModel } = await import("./src/runtime/models");
+      const result = await pullOllamaModel({ model: target });
+      setSelectedRuntimeModel("local", { id: result.model, provider: "ollama" });
+      setActiveLocalProvider("ollama");
+      console.log(`Pulled: ${result.status}`);
+      console.log(`Selected ${result.model} for Ollama.`);
+      return;
+    }
     console.log(`Pulling ${target} through LM Studio...`);
     const result = await pullLmStudioModel({ model: target, quantization });
     setSelectedRuntimeModel(lane, {
@@ -524,8 +559,9 @@ async function runModelPullCommand(rawLane: string | null, target: string | null
 async function runCliMode(options: any, resumeId: string | null) {
   const runtimeLane = normalizeRuntimeLane(options.lane);
   const toolMode = getToolMode();
+  const localProvider = normalizeLocalProvider(options.lane);
   const selected = getSelectedRuntimeModel(runtimeLane);
-  const client = createRuntimeClient(runtimeLane, selected ? { model: selected.id, provider: normalizeClientProvider(selected.provider) } : {});
+  const client = createRuntimeClient(runtimeLane, selected ? { model: selected.id, provider: normalizeClientProvider(selected.provider), localProvider } : { localProvider });
   const workspace = await refreshWorkspace();
   
   let state = await loadPersistedSession(resumeId === "latest" ? undefined : resumeId || undefined);

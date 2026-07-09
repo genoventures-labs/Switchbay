@@ -26,7 +26,7 @@ export function normalizeRuntimeLane(value?: string | null): RuntimeLane {
   if (lane === "native-mcp" || lane === "local-mcp" || lane === "lm-mcp" || lane === "lmstudio-mcp") {
     return "local-mcp";
   }
-  if (lane === "local" || lane === "lm" || lane === "lmstudio") {
+  if (lane === "local" || lane === "lm" || lane === "lmstudio" || lane === "lm-studio" || lane === "ollama") {
     return "local";
   }
   return "cloud";

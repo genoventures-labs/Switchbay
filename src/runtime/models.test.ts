@@ -1,5 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
-import { getCloudModelPresets, listRuntimeModels, listLmStudioModels, pullLmStudioModel } from "./models";
+import { getCloudModelPresets, listRuntimeModels, listLmStudioModels, listOllamaModels, pullLmStudioModel, pullOllamaModel } from "./models";
+import { invalidateLocalProvidersConfig } from "./local-providers";
 
 const savedEnv = {
   SWITCHBAY_LANE: Bun.env.SWITCHBAY_LANE,
@@ -7,6 +8,9 @@ const savedEnv = {
   SWITCHBAY_LMSTUDIO_BASE: Bun.env.SWITCHBAY_LMSTUDIO_BASE,
   SWITCHBAY_LMSTUDIO_API_KEY: Bun.env.SWITCHBAY_LMSTUDIO_API_KEY,
   SWITCHBAY_LMSTUDIO_MODEL: Bun.env.SWITCHBAY_LMSTUDIO_MODEL,
+  SWITCHBAY_LOCAL_PROVIDER: Bun.env.SWITCHBAY_LOCAL_PROVIDER,
+  SWITCHBAY_OLLAMA_BASE: Bun.env.SWITCHBAY_OLLAMA_BASE,
+  SWITCHBAY_OLLAMA_MODEL: Bun.env.SWITCHBAY_OLLAMA_MODEL,
 };
 
 afterEach(() => {
@@ -17,6 +21,7 @@ afterEach(() => {
       Bun.env[key] = value;
     }
   }
+  invalidateLocalProvidersConfig();
 });
 
 test("cloud presets include the current OpenAI main, mini, and nano models", () => {
@@ -191,4 +196,48 @@ test("pulls an LM Studio model by downloading, polling, and loading", async () =
   expect(requests[0]?.body).toEqual({ model: "ibm/granite-4-micro", quantization: "Q4_K_M" });
   expect(requests[2]?.body).toEqual({ model: "ibm/granite-4-micro", echo_load_config: true });
   expect(requests.every((request) => request.authorization === "Bearer lm-key")).toBe(true);
+});
+
+test("lists Ollama models from the active local provider", async () => {
+  Bun.env.SWITCHBAY_LOCAL_PROVIDER = "ollama";
+  Bun.env.SWITCHBAY_OLLAMA_BASE = "http://localhost:11434/api";
+  invalidateLocalProvidersConfig();
+
+  const listed = await listOllamaModels(async (url) => {
+    expect(String(url)).toBe("http://localhost:11434/api/tags");
+    return Response.json({
+      models: [
+        { name: "llama3.2:latest", details: { parameter_size: "3.2B", quantization_level: "Q4_K_M" } },
+      ],
+    });
+  });
+
+  expect(listed.models).toEqual([
+    {
+      id: "llama3.2:latest",
+      label: "llama3.2:latest (3.2B Q4_K_M)",
+      lane: "local",
+      provider: "ollama",
+      source: "ollama",
+    },
+  ]);
+});
+
+test("pulls an Ollama model through the configured API", async () => {
+  Bun.env.SWITCHBAY_OLLAMA_BASE = "http://localhost:11434";
+  invalidateLocalProvidersConfig();
+  const requests: Array<{ url: string; body: unknown }> = [];
+
+  const result = await pullOllamaModel({
+    model: "llama3.2",
+    fetchImpl: async (url, init) => {
+      requests.push({ url: String(url), body: JSON.parse(String(init?.body)) });
+      return Response.json({ status: "success" });
+    },
+  });
+
+  expect(result).toEqual({ model: "llama3.2", status: "success" });
+  expect(requests).toEqual([
+    { url: "http://localhost:11434/api/pull", body: { model: "llama3.2", stream: false } },
+  ]);
 });

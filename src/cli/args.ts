@@ -10,7 +10,7 @@ export type CliOptions = {
   resume: string | boolean; // string (id/index) or true (latest)
   newSession: boolean;
   purge: string | null;
-  subcommand: "run" | "update" | "version" | "help" | "engines" | "skills" | "toolbox" | "plugins" | "memory" | "knowledge" | "trace" | "mcp" | "models" | "model";
+  subcommand: "run" | "update" | "version" | "help" | "engines" | "skills" | "toolbox" | "plugins" | "memory" | "knowledge" | "trace" | "mcp" | "models" | "model" | "local-provider";
   engineAction: "status" | "sync" | "list" | "templates";
   toolboxAction: "status" | "sync" | "list" | "templates" | "read";
   toolboxSkill: string | null;
@@ -22,6 +22,8 @@ export type CliOptions = {
   knowledgeQuery: string | null;
   traceAction: "last" | "export";
   mcpAction: "status" | "init" | "catalog";
+  localProviderAction?: "status" | "set";
+  localProviderTarget?: string | null;
   modelAction?: "show" | "set" | "pull";
   modelTarget: string | null;
   modelLane: string | null;
@@ -260,6 +262,34 @@ export function parseCliArgs(argv: string[]): CliOptions {
         modelTarget: null,
         modelLane: null,
       };
+    } else if (arg === "local-provider" || arg === "local-providers" || arg === "provider") {
+      const action = args[i + 1];
+      const localProviderAction = action === "set" ? "set" : "status";
+      return {
+        surface,
+        profile,
+        mode,
+        lane,
+        initialQuery: "",
+        hop,
+        resume,
+        newSession,
+        purge,
+        subcommand: "local-provider",
+        engineAction: "status",
+        toolboxAction: "status",
+        toolboxSkill: null,
+        memoryAction: "status",
+        memoryNote: null,
+        knowledgeAction: "status",
+        knowledgeQuery: null,
+        traceAction: "last",
+        mcpAction: "status",
+        localProviderAction,
+        localProviderTarget: localProviderAction === "set" ? args[i + 2] ?? null : null,
+        modelTarget: null,
+        modelLane: null,
+      };
     } else if (arg === "models") {
       const commandLane = readLaneFlag(args.slice(i + 1));
       return {
@@ -402,5 +432,7 @@ function isLaneAlias(value: string | null): boolean {
     value === "local-mcp" ||
     value === "native-mcp" ||
     value === "lm" ||
-    value === "lmstudio";
+    value === "lmstudio" ||
+    value === "lm-studio" ||
+    value === "ollama";
 }

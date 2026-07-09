@@ -28,7 +28,7 @@ Switchbay gives you one fast shell for everyday agentic development:
 - Create files, edit files, run commands, execute tests, and build locally.
 - Move between specialist agents for backend, UI, security, debugging, architecture, docs, and review.
 - Resume sessions, pin context, save local memories, and keep work visible in the terminal.
-- Route between cloud models and local LM Studio models without changing the workflow.
+- Route between cloud models and swappable local providers such as LM Studio and Ollama without changing the workflow.
 - Enable Switchbay's MCP bridge for cloud or local models that should use configured tool workflows.
 - Add swappable engines from local manifests or the GitHub-backed Engine Bay.
 - Give agents reusable skills for review, debugging, planning, testing, API checks, UI polish, and releases.
@@ -41,7 +41,7 @@ Switchbay is built for solo builders, senior developers, technical founders, and
 Most AI coding tools make one model, hosted service, or private backend feel like the product. Switchbay treats intelligence as a set of lanes.
 
 - Use cloud models for deeper reasoning, code review, architecture, and complex implementation.
-- Use local LM Studio models for smaller utility work, offline-friendly tasks, private machine-close work, and quick summaries.
+- Use local LM Studio or Ollama models for smaller utility work, offline-friendly tasks, private machine-close work, and quick summaries.
 - Enable Switchbay's MCP bridge when cloud or local models should use configured tool intent through Switchbay's own local tool bridge.
 - Keep approvals practical: broad-impact, destructive, privileged, publishing, refunding, and deploy-style actions still gate.
 - Keep the workbench useful even if a provider, hosted API, VPS, or local model setup changes.
@@ -89,6 +89,15 @@ export SWITCHBAY_LMSTUDIO_API_KEY=... # generate in LM Studio when MCP/tool acce
 export SWITCHBAY_LMSTUDIO_MODEL=qwen2.5-7b-instruct
 ```
 
+Local Ollama provider:
+
+```bash
+export SWITCHBAY_LANE=local
+export SWITCHBAY_LOCAL_PROVIDER=ollama
+export SWITCHBAY_OLLAMA_BASE=http://localhost:11434/api
+export SWITCHBAY_OLLAMA_MODEL=llama3.2
+```
+
 Switchbay MCP bridge:
 
 ```bash
@@ -126,7 +135,7 @@ Then create or tune `~/.switchbay/lmstudio.mcp.json`:
 
 Add only trusted MCP ids that actually exist in your setup, such as `"mcp/playwright"` after Playwright is installed/enabled.
 
-Inside the TUI, use `/lane` to cycle Cloud and LM Studio model lanes, `/mcp on` to enable Switchbay's MCP bridge under the active model lane, `/mcp off` to disable it, and `/lane native-mcp` only when testing LM Studio's native MCP API. Cloud models use built-in OpenAI/Anthropic presets; LM Studio models are fetched from `SWITCHBAY_LMSTUDIO_BASE`. Use `/mcp init` for an empty starter config, `/mcp catalog` to list trusted MCP options, or `/create-mcp` for the conversational MCP config builder.
+Inside the TUI, use `/lane` to cycle Cloud and the active local provider, `/lane ollama` to use Ollama, `/lane lmstudio` to use LM Studio, `/mcp on` to enable Switchbay's MCP bridge under the active model lane, `/mcp off` to disable it, and `/lane native-mcp` only when testing LM Studio's native MCP API. Cloud models use built-in OpenAI/Anthropic presets; local models are fetched from the active provider in `~/.switchbay/local-providers.json`. Use `/mcp init` for an empty starter config, `/mcp catalog` to list trusted MCP options, or `/create-mcp` for the conversational MCP config builder.
 
 Bay only creates MCP configs from Switchbay's trusted catalog: Playwright, filesystem, GitHub, memory, fetch, sequential-thinking, and Postgres. If a request is not in that catalog, Bay refuses to invent a server id and tells you how to proceed manually.
 
@@ -177,7 +186,9 @@ switchbay --help
 switchbay version
 switchbay update
 switchbay models --lane local
+switchbay models --lane ollama
 switchbay model local qwen/qwen3-4b-2507
+switchbay local-provider set ollama
 switchbay model pull ibm/granite-4-micro
 switchbay model pull https://huggingface.co/lmstudio-community/gpt-oss-20b-GGUF --quant Q4_K_M
 switchbay engines sync

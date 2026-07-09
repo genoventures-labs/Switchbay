@@ -7,15 +7,16 @@ import {
   type CloudProvider,
   type RuntimeLane,
 } from "../config/env";
+import { getActiveLocalProvider, getLocalProviderConfig } from "./local-providers";
 
-export type RuntimeModelProvider = Exclude<CloudProvider, "auto"> | "lmstudio" | "lmstudio-mcp";
+export type RuntimeModelProvider = Exclude<CloudProvider, "auto"> | "lmstudio" | "lmstudio-mcp" | "ollama";
 
 export type RuntimeModelOption = {
   id: string;
   label: string;
   lane: RuntimeLane;
   provider: RuntimeModelProvider;
-  source: "preset" | "env" | "lmstudio";
+  source: "preset" | "env" | "lmstudio" | "ollama";
 };
 
 export type RuntimeModelList = {
@@ -83,12 +84,61 @@ export function getCloudModelPresetsForLane(lane: Extract<RuntimeLane, "cloud" |
   ]);
 }
 
-export async function listRuntimeModels(lane: RuntimeLane): Promise<RuntimeModelList> {
+export async function listRuntimeModels(lane: RuntimeLane, localProvider = getActiveLocalProvider()): Promise<RuntimeModelList> {
   if (lane === "cloud" || lane === "cloud-mcp") {
     return { models: getCloudModelPresetsForLane(lane) };
   }
 
+  if (lane === "local" && localProvider === "ollama") {
+    return listOllamaModels();
+  }
+
   return listLmStudioModels(undefined, lane);
+}
+
+type OllamaTagsResponse = {
+  models?: Array<{
+    name?: string;
+    model?: string;
+    details?: {
+      parameter_size?: string;
+      quantization_level?: string;
+    };
+  }>;
+};
+
+export async function listOllamaModels(fetchImpl: FetchLike = fetch): Promise<RuntimeModelList> {
+  const config = getLocalProviderConfig("ollama");
+  try {
+    const response = await fetchImpl(`${config.apiBase}/tags`);
+    const body = await response.text().catch(() => "");
+    if (!response.ok) {
+      return { models: [], notice: `Ollama model fetch returned ${response.status}: ${body.trim() || response.statusText}` };
+    }
+    const parsed = JSON.parse(body) as OllamaTagsResponse;
+    const models: RuntimeModelOption[] = (parsed.models ?? [])
+      .flatMap((model) => {
+        const id = (model.model ?? model.name ?? "").trim();
+        if (!id) return [];
+        const details = [
+          model.details?.parameter_size,
+          model.details?.quantization_level,
+        ].filter(Boolean).join(" ");
+        return [{
+          id,
+          label: details ? `${id} (${details})` : id,
+          lane: "local" as const,
+          provider: "ollama" as const,
+          source: "ollama" as const,
+        }];
+      });
+    return {
+      models: uniqueModels(models),
+      notice: models.length ? undefined : `Ollama returned no models from ${config.apiBase}/tags. Pull one with \`switchbay model pull ollama <model>\`.`,
+    };
+  } catch (error: any) {
+    return { models: [], notice: `Could not reach Ollama at ${config.apiBase}: ${error.message}` };
+  }
 }
 
 export async function listLmStudioModels(
@@ -96,7 +146,7 @@ export async function listLmStudioModels(
   lane: Extract<RuntimeLane, "local" | "local-mcp"> = "local",
 ): Promise<RuntimeModelList> {
   const provider: RuntimeModelProvider = lane === "local-mcp" ? "lmstudio-mcp" : "lmstudio";
-  const apiBase = getLmStudioBase();
+  const apiBase = getLocalProviderConfig("lmstudio").apiBase || getLmStudioBase();
   const nativeBase = getLmStudioNativeBase();
   const headers: Record<string, string> = {};
   const apiKey = getLmStudioApiKey();
@@ -195,6 +245,28 @@ export async function pullLmStudioModel(options: LmStudioPullOptions): Promise<L
     instanceId: typeof loaded.instance_id === "string" ? loaded.instance_id : undefined,
     loadTimeSeconds: typeof loaded.load_time_seconds === "number" ? loaded.load_time_seconds : undefined,
   };
+}
+
+export async function pullOllamaModel(options: { model: string; fetchImpl?: FetchLike }): Promise<{ model: string; status: string }> {
+  const model = options.model.trim();
+  if (!model) throw new Error("Ollama model name is required.");
+  const config = getLocalProviderConfig("ollama");
+  const response = await (options.fetchImpl ?? fetch)(`${config.apiBase}/pull`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model, stream: false }),
+  });
+  const body = await response.text().catch(() => "");
+  let status = "";
+  try {
+    status = String((JSON.parse(body) as { status?: string }).status ?? "");
+  } catch {
+    status = body.trim();
+  }
+  if (!response.ok) {
+    throw new Error(`Ollama API error ${response.status}: ${status || response.statusText}`);
+  }
+  return { model, status: status || "success" };
 }
 
 async function listLmStudioNativeModels(

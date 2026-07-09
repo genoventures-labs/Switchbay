@@ -4,6 +4,7 @@ import {
   getLmStudioApiKey,
   getLmStudioBase,
 } from "../config/env";
+import { getLocalProviderConfig } from "./local-providers";
 import type {
   ChatCompletionRequest,
   ChatCompletionResponse,
@@ -21,7 +22,8 @@ export class LmStudioClient {
   private readonly fetchImpl: typeof fetch;
 
   constructor(options: LmStudioClientOptions = {}) {
-    this.apiBase = options.apiBase ?? getLmStudioBase();
+    const config = getLocalProviderConfig("lmstudio");
+    this.apiBase = options.apiBase ?? config.apiBase ?? getLmStudioBase();
     this.apiKey = options.apiKey ?? getLmStudioApiKey();
     this.fetchImpl = options.fetchImpl ?? fetch;
   }
@@ -46,7 +48,7 @@ export class LmStudioClient {
       method: "POST",
       headers,
       body: JSON.stringify({
-        model: request.model ?? getDefaultModel(),
+        model: request.model ?? getLocalProviderConfig("lmstudio").model ?? getDefaultModel(),
         messages: request.messages,
         stream: useStream,
         ...(request.tools && request.tools.length > 0 ? { tools: request.tools } : {}),

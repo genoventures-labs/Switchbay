@@ -46,6 +46,7 @@ import { runCommand, runShellString } from "../tools/shell";
 import { loadEngineRegistry, type EngineManifest } from "../engines/registry";
 import { ModelDrawer } from "./components/ModelDrawer";
 import { listRuntimeModels, type RuntimeModelOption } from "../runtime/models";
+import { getActiveLocalProvider, normalizeLocalProvider, setActiveLocalProvider, type LocalProviderId } from "../runtime/local-providers";
 import { SkillDrawer } from "./components/SkillDrawer";
 import { loadToolboxInventory, type ToolboxSkill } from "../toolbox/hub";
 import { RightRail } from "./components/RightRail";
@@ -76,10 +77,11 @@ export function SwitchbayApp({
 }: SwitchbayAppProps) {
   const initialLane = lane ?? "cloud";
   const [runtimeLane, setRuntimeLane] = useState<RuntimeLane>(initialLane);
+  const [localProvider, setLocalProvider] = useState<LocalProviderId>(() => getActiveLocalProvider());
   const [toolMode, setToolMode] = useState<ToolMode>(() =>
     initialLane === "cloud-mcp" ? "switchbay-mcp" : getToolMode()
   );
-  const [runtimeClient, setRuntimeClient] = useState<ChatRuntimeClient>(() => client ?? createRuntimeClient(initialLane));
+  const [runtimeClient, setRuntimeClient] = useState<ChatRuntimeClient>(() => client ?? createRuntimeClient(initialLane, { localProvider }));
   const { stdout } = useStdout();
   const [dimensions, setDimensions] = useState({
     columns: stdout?.columns ?? 120,
@@ -239,7 +241,7 @@ export function SwitchbayApp({
     setSelectedMentionIndex(0);
   }
 
-  function switchRuntimeLane(nextLane?: RuntimeLane) {
+  function switchRuntimeLane(nextLane?: RuntimeLane, nextLocalProvider?: LocalProviderId) {
     const resolved = nextLane ?? (
       runtimeLane === "cloud"
         ? "local"
@@ -249,11 +251,16 @@ export function SwitchbayApp({
             ? "local"
             : "cloud"
     );
+    const resolvedLocalProvider = nextLocalProvider ?? localProvider;
+    if (nextLocalProvider) {
+      setActiveLocalProvider(nextLocalProvider);
+      setLocalProvider(nextLocalProvider);
+    }
     setRuntimeLane(resolved);
     if (resolved === "cloud-mcp") setToolMode("switchbay-mcp");
     if (resolved === "local-mcp") setToolMode("standard");
     setActiveRuntimeModel(null);
-    setRuntimeClient(createRuntimeClient(resolved));
+    setRuntimeClient(createRuntimeClient(resolved, { localProvider: resolvedLocalProvider }));
     dispatch({
       type: "assistant/appended",
       message: `Runtime lane switched to **${getRuntimeLaneLabel(resolved)}**.`,
@@ -273,13 +280,13 @@ export function SwitchbayApp({
     setQuerySync("");
   }
 
-  async function openModelDrawer(targetLane: RuntimeLane = runtimeLane) {
+  async function openModelDrawer(targetLane: RuntimeLane = runtimeLane, providerOverride: LocalProviderId = localProvider) {
     setComposerMode("model_picker");
     setSelectedModelIndex(0);
     setAvailableModels([]);
-    setModelDrawerNotice(targetLane === "local" || targetLane === "local-mcp" ? "Checking LM Studio models..." : null);
+    setModelDrawerNotice(targetLane === "local" || targetLane === "local-mcp" ? "Checking local models..." : null);
     try {
-      const result = await listRuntimeModels(targetLane);
+      const result = await listRuntimeModels(targetLane, providerOverride);
       setAvailableModels(result.models);
       setModelDrawerNotice(result.notice ?? null);
       const activeIndex = result.models.findIndex((model) =>
@@ -296,10 +303,15 @@ export function SwitchbayApp({
       ? model.provider
       : null;
     setRuntimeLane(model.lane);
+    if (model.provider === "ollama" || model.provider === "lmstudio") {
+      const provider = model.provider === "ollama" ? "ollama" : "lmstudio";
+      setActiveLocalProvider(provider);
+      setLocalProvider(provider);
+    }
     if (model.lane === "cloud-mcp") setToolMode("switchbay-mcp");
     if (model.lane === "local-mcp") setToolMode("standard");
     setActiveRuntimeModel(model);
-    setRuntimeClient(createRuntimeClient(model.lane, { model: model.id, provider }));
+    setRuntimeClient(createRuntimeClient(model.lane, { model: model.id, provider, localProvider: model.provider === "ollama" ? "ollama" : model.provider === "lmstudio" ? "lmstudio" : localProvider }));
     setComposerMode("default");
     setQuerySync("");
     dispatch({
@@ -862,8 +874,16 @@ export function SwitchbayApp({
         switchRuntimeLane("cloud");
         return;
       }
-      if (requested === "local" || requested === "lm" || requested === "lmstudio") {
+      if (requested === "local") {
         switchRuntimeLane("local");
+        return;
+      }
+      if (requested === "lm" || requested === "lmstudio" || requested === "lm-studio") {
+        switchRuntimeLane("local", "lmstudio");
+        return;
+      }
+      if (requested === "ollama") {
+        switchRuntimeLane("local", "ollama");
         return;
       }
       if (requested === "mcp" || requested === "switchbay-mcp" || requested === "bridge") {
@@ -876,7 +896,7 @@ export function SwitchbayApp({
       }
       dispatch({
         type: "assistant/appended",
-        message: `Unknown lane \`${requested}\`. Use \`/lane cloud\`, \`/lane local\`, \`/lane mcp\`, \`/lane native-mcp\`, or \`/lane\` to toggle.`,
+        message: `Unknown lane \`${requested}\`. Use \`/lane cloud\`, \`/lane local\`, \`/lane ollama\`, \`/lane lmstudio\`, \`/lane mcp\`, \`/lane native-mcp\`, or \`/lane\` to toggle.`,
       });
       setQuerySync("");
       return;
@@ -911,8 +931,22 @@ export function SwitchbayApp({
         setQuerySync("");
         return;
       }
-      if (requested === "local" || requested === "lm" || requested === "lmstudio") {
-        void openModelDrawer("local");
+      if (requested === "local") {
+        void openModelDrawer("local", localProvider);
+        setQuerySync("");
+        return;
+      }
+      if (requested === "lm" || requested === "lmstudio" || requested === "lm-studio") {
+        setActiveLocalProvider("lmstudio");
+        setLocalProvider("lmstudio");
+        void openModelDrawer("local", "lmstudio");
+        setQuerySync("");
+        return;
+      }
+      if (requested === "ollama") {
+        setActiveLocalProvider("ollama");
+        setLocalProvider("ollama");
+        void openModelDrawer("local", "ollama");
         setQuerySync("");
         return;
       }
@@ -929,7 +963,7 @@ export function SwitchbayApp({
       }
       dispatch({
         type: "assistant/appended",
-        message: `Unknown model lane \`${requested}\`. Use \`/model\`, \`/model cloud\`, \`/model cloud-mcp\`, \`/model local\`, or \`/model mcp\`.`,
+        message: `Unknown model lane \`${requested}\`. Use \`/model\`, \`/model cloud\`, \`/model cloud-mcp\`, \`/model local\`, \`/model ollama\`, or \`/model mcp\`.`,
       });
       setQuerySync("");
       return;

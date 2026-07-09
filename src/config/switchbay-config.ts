@@ -45,7 +45,7 @@ export function loadSwitchbayConfig(): SwitchbayConfig {
       const parsed = JSON.parse(raw) as Partial<SwitchbayConfig>;
       _cached = {
         locations: Array.isArray(parsed.locations)
-          ? parsed.locations.map((l) => path.resolve(l.replace(/^~/, os.homedir())))
+          ? parsed.locations.map((l) => resolveLocationInput(String(l)))
           : DEFAULTS.locations,
         auto_discover: parsed.auto_discover ?? DEFAULTS.auto_discover,
         discover_exclude: Array.isArray(parsed.discover_exclude)
@@ -72,12 +72,28 @@ export function saveSwitchbayConfig(config: SwitchbayConfig): void {
 
 export function addWhitelistedLocation(location: string): SwitchbayConfig {
   const config = loadSwitchbayConfig();
-  const resolved = path.resolve(location.replace(/^~/, os.homedir()));
+  const resolved = resolveLocationInput(location);
   if (!config.locations.includes(resolved)) {
     config.locations = [...config.locations, resolved];
     saveSwitchbayConfig(config);
   }
   return config;
+}
+
+export function resolveLocationInput(location: string): string {
+  const unquoted = stripWrappingQuotes(location.trim());
+  return path.resolve(unquoted.replace(/^~/, os.homedir()));
+}
+
+function stripWrappingQuotes(value: string): string {
+  if (value.length >= 2) {
+    const first = value[0];
+    const last = value[value.length - 1];
+    if ((first === `"` && last === `"`) || (first === `'` && last === `'`)) {
+      return value.slice(1, -1);
+    }
+  }
+  return value;
 }
 
 export function invalidateConfigCache(): void {

@@ -994,6 +994,12 @@ test("workspace slash commands show, add, and hop known workspaces", async () =>
     expect(added.handled).toBe(true);
     expect(added.assistantMessage).toContain(target);
 
+    const quoted = await tryLocalCommand(`/workspace add "${target}"`, baseOptions);
+    expect(quoted.handled).toBe(true);
+    expect(quoted.assistantMessage).toContain(target);
+    expect(quoted.assistantMessage).not.toContain(`"${target}"`);
+    expect(quoted.assistantMessage).not.toContain(`${originalCwd}/"`);
+
     const hopped = await tryLocalCommand(`/hop ${target}`, baseOptions);
     expect(hopped.handled).toBe(true);
     expect(hopped.travel?.toPath).toBe(target);

@@ -39,7 +39,7 @@ import {
 } from "../knowledge/store";
 import { describeLatestTrace, latestTraceExportPath } from "../trace/store";
 import { describePlugins, readPlugin } from "../plugins/registry";
-import { addWhitelistedLocation } from "../config/switchbay-config";
+import { addWhitelistedLocation, resolveLocationInput } from "../config/switchbay-config";
 import { fuzzyMatchLocations, listTravelLocations, travelTo } from "../tools/travel";
 import { formatWorkspaceContext } from "../session/workspace";
 
@@ -461,13 +461,13 @@ async function handleWorkspaceCommand(
     if (action === "add") {
       const location = parts.slice(1).join(" ").trim();
       if (!location) return { handled: true, assistantMessage: "Usage: `/workspace add <path>`" };
-      const config = addWhitelistedLocation(location);
-      const added = config.locations[config.locations.length - 1] ?? location;
-      return { handled: true, assistantMessage: `Added workspace location:\n\n\`${added}\`\n\nUse \`/workspace hop ${parts.at(-1) ?? added}\` to switch.` };
+      addWhitelistedLocation(location);
+      const added = resolveLocationInput(location);
+      return { handled: true, assistantMessage: `Added workspace location:\n\n\`${added}\`\n\nUse \`/workspace hop ${added}\` to switch.` };
     }
 
     if (action === "hop" || action === "open" || action === "switch") {
-      const query = parts.slice(1).join(" ").trim();
+      const query = stripWrappingQuotes(parts.slice(1).join(" ").trim());
       if (!query) return { handled: true, assistantMessage: "Usage: `/workspace hop <name-or-path>`" };
       const matches = await fuzzyMatchLocations(query);
       if (!matches.length) {
@@ -489,6 +489,17 @@ async function handleWorkspaceCommand(
   } catch (e: any) {
     return { handled: true, assistantMessage: `Workspace command failed: ${e.message}` };
   }
+}
+
+function stripWrappingQuotes(value: string): string {
+  if (value.length >= 2) {
+    const first = value[0];
+    const last = value[value.length - 1];
+    if ((first === `"` && last === `"`) || (first === `'` && last === `'`)) {
+      return value.slice(1, -1);
+    }
+  }
+  return value;
 }
 
 function parseConversationalCreationIntent(input: string): "agent" | "engine" | "mcp" | "rule" | "skill" | "plugin" | null {

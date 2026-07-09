@@ -1128,6 +1128,12 @@ test("workspace slash commands show, add, and hop known workspaces", async () =>
     expect(cdHop.travel?.toPath).toBe(target);
     expect(cdHop.followUpInput).toBe("Bay, what's changed in git?");
 
+    process.chdir(originalCwd);
+    const statusFromWorkspace = await tryLocalCommand(`I need the repo status, summarized. From "${basename(target)}"`, baseOptions);
+    expect(statusFromWorkspace.handled).toBe(true);
+    expect(statusFromWorkspace.travel?.toPath).toBe(target);
+    expect(statusFromWorkspace.followUpInput).toBe("Bay, what's changed in git?");
+
     const missingHop = await tryLocalCommand("Bay, hop to no-such-switchbay-workspace", baseOptions);
     expect(missingHop.handled).toBe(true);
     expect(missingHop.travel).toBeUndefined();

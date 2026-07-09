@@ -121,6 +121,15 @@ export async function tryLocalCommand(
     if (creationIntent === "skill") return { handled: true, openCreateSkill: true };
     if (creationIntent === "plugin") return { handled: true, openCreatePlugin: true };
 
+    const workspaceReferenceIntent = parseConversationalWorkspaceReferenceIntent(trimmed);
+    if (workspaceReferenceIntent) {
+      const result = await handleWorkspaceCommand(`/workspace hop ${workspaceReferenceIntent.query}`, options);
+      if (result.handled && result.travel) {
+        return { ...result, followUpInput: workspaceReferenceIntent.followUp };
+      }
+      return result;
+    }
+
     const operatorIntent = await handleConversationalOperatorIntent(trimmed, options);
     if (operatorIntent.handled) return operatorIntent;
 
@@ -624,6 +633,54 @@ function parseConversationalWorkspaceHopIntent(input: string): { query: string; 
   return null;
 }
 
+function parseConversationalWorkspaceReferenceIntent(input: string): { query: string; followUp: string } | null {
+  const normalized = input
+    .replace(/^[,\s]*(hey|yo|ok|okay)?\s*(bay|switchbay)[,\s:;-]*/i, "")
+    .replace(/[.!?]+$/g, "")
+    .trim();
+
+  if (!/\b(repo|repository|workspace|project|git|status|dirty|changed|changes)\b/i.test(normalized)) {
+    return null;
+  }
+
+  const patterns = [
+    /^(.+?)(?:[.;,]\s*)?\b(?:from|in|for)\s+["']([^"']+)["']$/i,
+    /^(.+?)(?:[.;,]\s*)?\b(?:from|in|for)\s+(.+?)$/i,
+    /^(?:repo|repository|workspace|project)\s+status\s+(?:from|in|for)\s+(.+?)$/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = normalized.match(pattern);
+    if (!match) continue;
+
+    const request = (match.length >= 3 ? match[1] : "status")?.trim() || "status";
+    const rawQuery = match.length >= 3 ? match[2] : match[1];
+    const query = cleanupWorkspaceQuery(rawQuery ?? "");
+    if (!looksLikeWorkspaceReference(rawQuery ?? "", query)) continue;
+    if (!query || query.toLowerCase() === "scratch") continue;
+
+    return {
+      query,
+      followUp: normalizeWorkspaceReferenceFollowUp(request),
+    };
+  }
+
+  return null;
+}
+
+function looksLikeWorkspaceReference(rawQuery: string, query: string): boolean {
+  const raw = rawQuery.trim();
+  const lower = query.toLowerCase();
+  if (!query) return false;
+  if (["git", "repo", "repository", "workspace", "project", "status", "scratch"].includes(lower)) return false;
+  if (/^(repo|repository|workspace|project)\s+/i.test(raw)) return false;
+  return raw.startsWith(`"`) ||
+    raw.startsWith(`'`) ||
+    raw.includes("/") ||
+    /[A-Z]/.test(query) ||
+    /[-_]/.test(query);
+}
+
 function splitFollowUpIntent(input: string): { primary: string; followUp?: string } {
   const match = input.match(/\s*(?:,|;)?\s+(?:and\s+)?then\s+(.+)$/i);
   if (!match?.index || !match[1]?.trim()) return { primary: input };
@@ -648,6 +705,14 @@ function normalizeFollowUpInput(input: string): string {
     return "Bay, what's changed in git?";
   }
   if (/^status(?:\s+of\s+the\s+(?:repo|repository|project|workspace))?$/i.test(normalized)) {
+    return "Bay, what's changed in git?";
+  }
+  return normalized;
+}
+
+function normalizeWorkspaceReferenceFollowUp(input: string): string {
+  const normalized = input.trim();
+  if (/\b(status|dirty|changed|changes|git)\b/i.test(normalized)) {
     return "Bay, what's changed in git?";
   }
   return normalized;

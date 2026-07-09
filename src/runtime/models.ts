@@ -33,6 +33,7 @@ export type LmStudioPullOptions = {
 
 export type LmStudioPullResult = {
   model: string;
+  requestedModel: string;
   downloadStatus: string;
   jobId?: string;
   loadStatus: string;
@@ -213,7 +214,8 @@ export async function listLmStudioModels(
 }
 
 export async function pullLmStudioModel(options: LmStudioPullOptions): Promise<LmStudioPullResult> {
-  const model = options.model.trim();
+  const requestedModel = options.model.trim();
+  const model = normalizeLmStudioPullModel(requestedModel);
   if (!model) throw new Error("LM Studio model id or Hugging Face URL is required.");
 
   const fetchImpl = options.fetchImpl ?? fetch;
@@ -223,38 +225,62 @@ export async function pullLmStudioModel(options: LmStudioPullOptions): Promise<L
   const quantization = options.quantization?.trim();
   if (quantization) downloadPayload.quantization = quantization;
 
-  const started = await postLmStudioJson(`${nativeBase}/models/download`, downloadPayload, headers, fetchImpl);
-  const jobId = typeof started.job_id === "string" ? started.job_id : undefined;
-  let downloadStatus = String(started.status ?? "unknown");
+  try {
+    const started = await postLmStudioJson(`${nativeBase}/models/download`, downloadPayload, headers, fetchImpl);
+    const jobId = typeof started.job_id === "string" ? started.job_id : undefined;
+    let downloadStatus = String(started.status ?? "unknown");
 
-  if (jobId && (downloadStatus === "downloading" || downloadStatus === "paused")) {
-    const maxPolls = options.maxPolls ?? 180;
-    const pollDelayMs = options.pollDelayMs ?? 2000;
-    for (let i = 0; i < maxPolls; i++) {
-      if (pollDelayMs > 0) await Bun.sleep(pollDelayMs);
-      const status = await getLmStudioJson(`${nativeBase}/models/download/status/${encodeURIComponent(jobId)}`, headers, fetchImpl);
-      downloadStatus = String(status.status ?? downloadStatus);
-      if (downloadStatus === "completed" || downloadStatus === "failed") break;
+    if (jobId && (downloadStatus === "downloading" || downloadStatus === "paused")) {
+      const maxPolls = options.maxPolls ?? 180;
+      const pollDelayMs = options.pollDelayMs ?? 2000;
+      for (let i = 0; i < maxPolls; i++) {
+        if (pollDelayMs > 0) await Bun.sleep(pollDelayMs);
+        const status = await getLmStudioJson(`${nativeBase}/models/download/status/${encodeURIComponent(jobId)}`, headers, fetchImpl);
+        downloadStatus = String(status.status ?? downloadStatus);
+        if (downloadStatus === "completed" || downloadStatus === "failed") break;
+      }
     }
+
+    if (downloadStatus !== "completed" && downloadStatus !== "already_downloaded") {
+      throw new Error(`LM Studio download did not complete. Status: ${downloadStatus}${jobId ? ` (${jobId})` : ""}.`);
+    }
+
+    const loaded = await postLmStudioJson(`${nativeBase}/models/load`, {
+      model,
+      echo_load_config: true,
+    }, headers, fetchImpl);
+
+    return {
+      model,
+      requestedModel,
+      downloadStatus,
+      jobId,
+      loadStatus: String(loaded.status ?? "unknown"),
+      instanceId: typeof loaded.instance_id === "string" ? loaded.instance_id : undefined,
+      loadTimeSeconds: typeof loaded.load_time_seconds === "number" ? loaded.load_time_seconds : undefined,
+    };
+  } catch (error: any) {
+    throw new Error(formatLmStudioPullError({
+      base: nativeBase,
+      message: error.message,
+      model,
+      requestedModel,
+    }));
   }
+}
 
-  if (downloadStatus !== "completed" && downloadStatus !== "already_downloaded") {
-    throw new Error(`LM Studio download did not complete. Status: ${downloadStatus}${jobId ? ` (${jobId})` : ""}.`);
+export function normalizeLmStudioPullModel(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  try {
+    const url = new URL(trimmed);
+    if (url.hostname === "lmstudio.ai" && url.pathname.startsWith("/models/")) {
+      return decodeURIComponent(url.pathname.replace(/^\/models\//, "").replace(/\/$/, ""));
+    }
+  } catch {
+    // Not a URL; use it as entered.
   }
-
-  const loaded = await postLmStudioJson(`${nativeBase}/models/load`, {
-    model,
-    echo_load_config: true,
-  }, headers, fetchImpl);
-
-  return {
-    model,
-    downloadStatus,
-    jobId,
-    loadStatus: String(loaded.status ?? "unknown"),
-    instanceId: typeof loaded.instance_id === "string" ? loaded.instance_id : undefined,
-    loadTimeSeconds: typeof loaded.load_time_seconds === "number" ? loaded.load_time_seconds : undefined,
-  };
+  return trimmed;
 }
 
 export async function pullOllamaModel(options: { model: string; fetchImpl?: FetchLike }): Promise<{ model: string; status: string }> {
@@ -410,6 +436,54 @@ function extractLmStudioError(parsed: unknown): string | null {
   }
   const message = (parsed as Record<string, unknown>).message;
   return typeof message === "string" ? message : null;
+}
+
+function formatLmStudioPullError(input: {
+  base: string;
+  message: string;
+  model: string;
+  requestedModel: string;
+}): string {
+  const lines = [
+    input.message,
+    "",
+    `LM Studio native API: ${input.base}`,
+    input.requestedModel !== input.model
+      ? `Normalized model target: ${input.model}`
+      : `Model target: ${input.model}`,
+  ];
+
+  const lower = input.message.toLowerCase();
+  if (
+    lower.includes("unable to connect") ||
+    lower.includes("fetch") ||
+    lower.includes("network") ||
+    lower.includes("typo in the url") ||
+    lower.includes("connection")
+  ) {
+    lines.push(
+      "",
+      "LM Studio reported a network/catalog download failure. That usually means the machine running LM Studio cannot reach the model source, the model is not in LM Studio's catalog, or the URL is not an exact Hugging Face model URL.",
+    );
+  }
+
+  if (!input.model.includes("/") && !input.model.startsWith("http")) {
+    lines.push("", "Short names like `gemma-3-1b` are usually not enough. Use an LM Studio catalog id like `google/gemma-3-1b` or an exact Hugging Face URL.");
+  }
+
+  lines.push(
+    "",
+    "Accepted forms:",
+    "- LM Studio catalog id, e.g. `ibm/granite-4-micro`",
+    "- Exact Hugging Face URL, e.g. `https://huggingface.co/lmstudio-community/gpt-oss-20b-GGUF`",
+    "- LM Studio catalog page URLs are normalized to catalog ids before sending.",
+    "",
+    "Debug commands:",
+    "- `switchbay local-provider`",
+    "- `switchbay models --lane lmstudio`",
+  );
+
+  return lines.join("\n");
 }
 
 function envModelOption(

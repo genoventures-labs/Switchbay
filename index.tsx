@@ -25,6 +25,7 @@ import { describeCloudProviders, normalizeCloudProvider, setActiveCloudProvider 
 import { addDailyTask, clearDailyBoard, completeDailyTask, describeDailyBoard } from "./src/operator/daily-board";
 import { formatFrictionRadar, runFrictionRadar } from "./src/operator/radar";
 import { buildQuickHandoff } from "./src/operator/handoff";
+import { getLmStudioNativeBase } from "./src/config/env";
 
 // Ensure config is initialized on first boot
 loadSwitchbayConfig();
@@ -662,7 +663,11 @@ async function runModelPullCommand(rawLane: string | null, target: string | null
       return;
     }
     console.log(`Pulling ${target} through LM Studio...`);
+    console.log(`LM Studio native API: ${getLmStudioNativeBase()}`);
     const result = await pullLmStudioModel({ model: target, quantization });
+    if (result.requestedModel !== result.model) {
+      console.log(`Normalized target: ${result.model}`);
+    }
     setSelectedRuntimeModel(lane, {
       id: result.instanceId ?? result.model,
       provider: lane === "local-mcp" ? "lmstudio-mcp" : "lmstudio",

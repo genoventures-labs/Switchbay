@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { getCloudModelPresets, listRuntimeModels, listLmStudioModels, listOllamaModels, pullLmStudioModel, pullOllamaModel } from "./models";
+import { getCloudModelPresets, listRuntimeModels, listLmStudioModels, listOllamaModels, normalizeLmStudioPullModel, pullLmStudioModel, pullOllamaModel } from "./models";
 import { invalidateLocalProvidersConfig } from "./local-providers";
 import { invalidateCloudProvidersConfig } from "./cloud-providers";
 
@@ -186,6 +186,7 @@ test("pulls an LM Studio model by downloading, polling, and loading", async () =
 
   expect(result).toEqual({
     model: "ibm/granite-4-micro",
+    requestedModel: "ibm/granite-4-micro",
     downloadStatus: "completed",
     jobId: "job_123",
     loadStatus: "loaded",
@@ -200,6 +201,30 @@ test("pulls an LM Studio model by downloading, polling, and loading", async () =
   expect(requests[0]?.body).toEqual({ model: "ibm/granite-4-micro", quantization: "Q4_K_M" });
   expect(requests[2]?.body).toEqual({ model: "ibm/granite-4-micro", echo_load_config: true });
   expect(requests.every((request) => request.authorization === "Bearer lm-key")).toBe(true);
+});
+
+test("normalizes LM Studio catalog page URLs for model pulls", () => {
+  expect(normalizeLmStudioPullModel("https://lmstudio.ai/models/google/gemma-3-1b")).toBe("google/gemma-3-1b");
+  expect(normalizeLmStudioPullModel("https://lmstudio.ai/models/lmstudio-community/gpt-oss-20b-GGUF/")).toBe("lmstudio-community/gpt-oss-20b-GGUF");
+  expect(normalizeLmStudioPullModel("google/gemma-3-1b")).toBe("google/gemma-3-1b");
+});
+
+test("explains LM Studio pull network/catalog failures", async () => {
+  Bun.env.SWITCHBAY_LMSTUDIO_BASE = "http://192.168.1.50:1234/v1";
+
+  await expect(pullLmStudioModel({
+    model: "gemma-3-1b",
+    fetchImpl: async () => Response.json({
+      error: { message: "Unable to connect. Is the computer able to access the url?" },
+    }, { status: 400 }),
+  })).rejects.toThrow("Short names like `gemma-3-1b` are usually not enough");
+
+  await expect(pullLmStudioModel({
+    model: "https://lmstudio.ai/models/google/gemma-3-1b",
+    fetchImpl: async () => Response.json({
+      error: { message: "Unable to connect. Is the computer able to access the url?" },
+    }, { status: 400 }),
+  })).rejects.toThrow("Normalized model target: google/gemma-3-1b");
 });
 
 test("lists Ollama models from the active local provider", async () => {

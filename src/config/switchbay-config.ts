@@ -17,6 +17,14 @@ export type SwitchbayConfig = {
   discover_exclude: string[];
   /** Per-lane model pins set by the CLI/TUI. */
   selected_models: Partial<Record<RuntimeLane, SelectedRuntimeModel>>;
+  /** Operator surfaces for Bay's local-first daily cockpit. */
+  operator: OperatorConfig;
+};
+
+export type OperatorConfig = {
+  enabled: boolean;
+  startupOverview: boolean;
+  dailyBoard: boolean;
 };
 
 export type SelectedRuntimeModel = {
@@ -40,6 +48,11 @@ const DEFAULTS: SwitchbayConfig = {
     "sys",
   ],
   selected_models: {},
+  operator: {
+    enabled: true,
+    startupOverview: true,
+    dailyBoard: true,
+  },
 };
 
 let _cached: SwitchbayConfig | null = null;
@@ -61,6 +74,7 @@ export function loadSwitchbayConfig(): SwitchbayConfig {
           ? parsed.discover_exclude
           : DEFAULTS.discover_exclude,
         selected_models: normalizeSelectedModels(parsed.selected_models),
+        operator: normalizeOperatorConfig(parsed.operator),
       };
     } else {
       _cached = { ...DEFAULTS };
@@ -107,6 +121,10 @@ export function setSelectedRuntimeModel(lane: RuntimeLane, model: SelectedRuntim
   return next;
 }
 
+export function getOperatorConfig(): OperatorConfig {
+  return applyOperatorEnv(loadSwitchbayConfig().operator);
+}
+
 export function resolveLocationInput(location: string): string {
   const unquoted = stripWrappingQuotes(location.trim());
   return path.resolve(unquoted.replace(/^~/, os.homedir()));
@@ -140,6 +158,40 @@ function normalizeSelectedModels(value: unknown): Partial<Record<RuntimeLane, Se
     };
   }
   return result;
+}
+
+function normalizeOperatorConfig(value: unknown): OperatorConfig {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return { ...DEFAULTS.operator };
+  }
+  const raw = value as Record<string, unknown>;
+  return {
+    enabled: normalizeBoolean(raw.enabled, DEFAULTS.operator.enabled),
+    startupOverview: normalizeBoolean(raw.startupOverview, DEFAULTS.operator.startupOverview),
+    dailyBoard: normalizeBoolean(raw.dailyBoard, DEFAULTS.operator.dailyBoard),
+  };
+}
+
+function applyOperatorEnv(config: OperatorConfig): OperatorConfig {
+  return {
+    enabled: normalizeBooleanEnv(Bun.env.SWITCHBAY_OPERATOR, config.enabled),
+    startupOverview: normalizeBooleanEnv(Bun.env.SWITCHBAY_STARTUP_OVERVIEW, config.startupOverview),
+    dailyBoard: normalizeBooleanEnv(Bun.env.SWITCHBAY_DAILY_BOARD, config.dailyBoard),
+  };
+}
+
+function normalizeBoolean(value: unknown, fallback: boolean): boolean {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") return normalizeBooleanEnv(value, fallback);
+  return fallback;
+}
+
+function normalizeBooleanEnv(value: string | undefined, fallback: boolean): boolean {
+  const normalized = value?.trim().toLowerCase();
+  if (!normalized) return fallback;
+  if (normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on") return true;
+  if (normalized === "0" || normalized === "false" || normalized === "no" || normalized === "off") return false;
+  return fallback;
 }
 
 export function invalidateConfigCache(): void {

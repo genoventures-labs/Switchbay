@@ -12,6 +12,7 @@ import { resolveAgentPolicy } from "../agent/policy";
 import type { ChatRuntimeClient } from "../runtime/client";
 import { createRuntimeClient, getRuntimeLaneLabel } from "../runtime/client";
 import { getToolMode, type RuntimeLane, type ToolMode } from "../config/env";
+import { getOperatorConfig } from "../config/switchbay-config";
 import { createSessionStore, sessionReducer } from "../session/store";
 import { createTranscriptEntry } from "../agent/turn-state";
 import { loadPersistedSession, savePersistedSession, listSessions, purgeSessions } from "../session/persistence";
@@ -53,7 +54,8 @@ import { loadToolboxInventory, type ToolboxSkill } from "../toolbox/hub";
 import { RightRail } from "./components/RightRail";
 import { saveTraceRecord } from "../trace/store";
 import { formatRouteTag } from "../runtime/route-display";
-import { addDailyTask, clearDailyBoard, completeDailyTask, describeDailyBoard } from "../operator/daily-board";
+import { addDailyTask, clearDailyBoard, completeDailyTask, describeDailyBoard, loadDailyBoard } from "../operator/daily-board";
+import { buildStartupOverview } from "../operator/startup-overview";
 
 export type SwitchbayAppProps = {
   client: ChatRuntimeClient;
@@ -152,6 +154,7 @@ export function SwitchbayApp({
   const [rightRailCollapsed, setRightRailCollapsed] = useState(false);
   
   const didHydrateRef = useRef(false);
+  const didShowStartupOverviewRef = useRef(false);
   const historyRef = useRef<string[]>([]);
   const historyIndexRef = useRef<number>(-1);
   const initialPolicy = resolveAgentPolicy({ mode, profile });
@@ -770,6 +773,37 @@ export function SwitchbayApp({
 
     void savePersistedSession(state);
   }, [state]);
+
+  useEffect(() => {
+    if (initialQuery || didShowStartupOverviewRef.current || !didHydrateRef.current || !state.workspace) {
+      return;
+    }
+
+    const operator = getOperatorConfig();
+    didShowStartupOverviewRef.current = true;
+    if (!operator.enabled || !operator.startupOverview) {
+      return;
+    }
+
+    const workspace = state.workspace;
+    let canceled = false;
+    void listSessions().then((sessions) => {
+      if (canceled) return;
+      dispatch({
+        type: "assistant/appended",
+        message: buildStartupOverview({
+          workspace,
+          runtimeBadge,
+          dailyBoard: operator.dailyBoard ? loadDailyBoard() : null,
+          sessions,
+        }),
+      });
+    });
+
+    return () => {
+      canceled = true;
+    };
+  }, [initialQuery, runtimeBadge, state.workspace]);
 
   async function handleResumeSession(id: string) {
     const persisted = await loadPersistedSession(id);

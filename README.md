@@ -173,6 +173,14 @@ Interactive terminal UI:
 switchbay
 ```
 
+On TUI startup, Bay shows a compact local overview with today's Daily Board, workspace state, active lane, and latest session signal. Quiet the operator layer with:
+
+```bash
+export SWITCHBAY_OPERATOR=off
+export SWITCHBAY_STARTUP_OVERVIEW=off
+export SWITCHBAY_DAILY_BOARD=off
+```
+
 For the release-readiness pass, use [docs/1.0_SMOKE_CHECKLIST.md](docs/1.0_SMOKE_CHECKLIST.md).
 
 For the Bay operator direction, use [docs/1.5_ROADMAP.md](docs/1.5_ROADMAP.md).

@@ -672,7 +672,11 @@ function looksLikeWorkspaceReference(rawQuery: string, query: string): boolean {
   if (/^(?:the\s+)?(?:repo|repository|workspace|project)\b/i.test(raw)) return false;
   if (/^(repo|repository|workspace|project)\s+/i.test(raw)) return false;
   if (/[?]/.test(raw)) return false;
-  if (/\b(?:what|which|dirty|changed|changes|status)\b/i.test(raw) && !raw.startsWith(`"`) && !raw.startsWith(`'`)) return false;
+  if (!raw.startsWith(`"`) && !raw.startsWith(`'`)) {
+    if (/[.;,]/.test(raw)) return false;
+    if (raw.split(/\s+/).filter(Boolean).length > 4) return false;
+    if (/\b(?:what|which|dirty|changed|changes|status|working|work|next|once|done|private|publish|commit|readme)\b/i.test(raw)) return false;
+  }
   return raw.startsWith(`"`) ||
     raw.startsWith(`'`) ||
     raw.includes("/") ||

@@ -1126,6 +1126,12 @@ test("workspace slash commands show, add, and hop known workspaces", async () =>
     expect(statusFromWorkspace.travel?.toPath).toBe(target);
     expect(statusFromWorkspace.followUpInput).toBe("Bay, what's changed in git?");
 
+    const createRepoRequest = await tryLocalCommand(
+      'bay, I need you to make me a repo called "BillTend", no elaborate readme. Just a placeholder for working on the next project. Once it\'s done, you can commit and publish it. Private.',
+      baseOptions,
+    );
+    expect(createRepoRequest.handled).toBe(false);
+
     const missingHop = await tryLocalCommand("Bay, hop to no-such-switchbay-workspace", baseOptions);
     expect(missingHop.handled).toBe(true);
     expect(missingHop.travel).toBeUndefined();

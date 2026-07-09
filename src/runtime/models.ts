@@ -6,6 +6,7 @@ import {
   type RuntimeLane,
 } from "../config/env";
 import { getCloudProviderConfig } from "./cloud-providers";
+import { loadCloudModelCatalog } from "./cloud-model-catalog";
 import { getActiveLocalProvider, getLocalProviderConfig } from "./local-providers";
 
 export type RuntimeModelProvider = Exclude<CloudProvider, "auto"> | "lmstudio" | "lmstudio-mcp" | "ollama";
@@ -15,7 +16,7 @@ export type RuntimeModelOption = {
   label: string;
   lane: RuntimeLane;
   provider: RuntimeModelProvider;
-  source: "preset" | "env" | "lmstudio" | "ollama";
+  source: "preset" | "env" | "custom" | "lmstudio" | "ollama";
 };
 
 export type RuntimeModelList = {
@@ -89,6 +90,13 @@ export function getCloudModelPresetsForLane(lane: Extract<RuntimeLane, "cloud" |
     envModelOption(openAi.model, "OpenAI configured default", lane, "openai"),
     envModelOption(anthropic.model, "Anthropic configured default", lane, "anthropic"),
     envModelOption(google.model, "Google configured default", lane, "google"),
+    ...loadCloudModelCatalog().models.map((model) => ({
+      id: model.id,
+      label: model.label ?? model.id,
+      lane,
+      provider: model.provider,
+      source: "custom" as const,
+    })),
     ...OPENAI_PRESETS.map((model) => ({ ...model, lane })),
     ...ANTHROPIC_PRESETS.map((model) => ({ ...model, lane })),
     ...GOOGLE_PRESETS.map((model) => ({ ...model, lane })),

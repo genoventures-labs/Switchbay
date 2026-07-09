@@ -1,9 +1,14 @@
-import { afterEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, test } from "bun:test";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { getCloudModelPresets, listRuntimeModels, listLmStudioModels, listOllamaModels, normalizeLmStudioPullModel, pullLmStudioModel, pullOllamaModel } from "./models";
 import { invalidateLocalProvidersConfig } from "./local-providers";
+import { addCloudModel, invalidateCloudModelCatalog } from "./cloud-model-catalog";
 import { invalidateCloudProvidersConfig } from "./cloud-providers";
 
 const savedEnv = {
+  SWITCHBAY_CONFIG_DIR: Bun.env.SWITCHBAY_CONFIG_DIR,
   SWITCHBAY_LANE: Bun.env.SWITCHBAY_LANE,
   SWITCHBAY_OPENAI_MODEL: Bun.env.SWITCHBAY_OPENAI_MODEL,
   SWITCHBAY_GOOGLE_MODEL: Bun.env.SWITCHBAY_GOOGLE_MODEL,
@@ -15,7 +20,17 @@ const savedEnv = {
   SWITCHBAY_OLLAMA_MODEL: Bun.env.SWITCHBAY_OLLAMA_MODEL,
 };
 
+let tempDir = "";
+
+beforeEach(() => {
+  tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "switchbay-models-"));
+  Bun.env.SWITCHBAY_CONFIG_DIR = tempDir;
+  invalidateCloudProvidersConfig();
+  invalidateCloudModelCatalog();
+});
+
 afterEach(() => {
+  fs.rmSync(tempDir, { recursive: true, force: true });
   for (const [key, value] of Object.entries(savedEnv)) {
     if (value === undefined) {
       delete Bun.env[key];
@@ -25,6 +40,7 @@ afterEach(() => {
   }
   invalidateLocalProvidersConfig();
   invalidateCloudProvidersConfig();
+  invalidateCloudModelCatalog();
 });
 
 test("cloud presets include the current OpenAI main, mini, and nano models", () => {
@@ -49,6 +65,25 @@ test("cloud MCP model list uses cloud presets on the cloud-mcp lane", async () =
   expect(result.models.map((model) => model.provider)).toContain("openai");
   expect(result.models.map((model) => model.provider)).toContain("anthropic");
   expect(result.models.map((model) => model.provider)).toContain("google");
+});
+
+test("cloud model list includes custom cloud catalog entries", async () => {
+  await addCloudModel({
+    id: "gpt-custom-json",
+    label: "GPT Custom JSON",
+    provider: "openai",
+    verify: false,
+  });
+
+  const result = await listRuntimeModels("cloud");
+
+  expect(result.models).toContainEqual({
+    id: "gpt-custom-json",
+    label: "GPT Custom JSON",
+    lane: "cloud",
+    provider: "openai",
+    source: "custom",
+  });
 });
 
 test("lists LM Studio models from the configured host", async () => {

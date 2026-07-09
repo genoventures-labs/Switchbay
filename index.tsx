@@ -26,6 +26,8 @@ import { addDailyTask, clearDailyBoard, completeDailyTask, describeDailyBoard } 
 import { formatFrictionRadar, runFrictionRadar } from "./src/operator/radar";
 import { buildQuickHandoff } from "./src/operator/handoff";
 import { getLmStudioNativeBase } from "./src/config/env";
+import { addCloudModel, inferCloudModelProvider } from "./src/runtime/cloud-model-catalog";
+import type { CloudProviderId } from "./src/runtime/cloud-providers";
 
 // Ensure config is initialized on first boot
 loadSwitchbayConfig();
@@ -53,6 +55,8 @@ Models and lanes:
   switchbay model                    Show the active lane model
   switchbay model <id>               Pin a model for the active lane
   switchbay model <lane> <id>        Pin a model for a specific lane
+  switchbay model add openai <id>    Add a custom cloud model to the local catalog
+  switchbay --lane cloud --add-model <id>
   switchbay model pull <id|url>      Pull/load a model through the active local provider
   switchbay cloud-provider           Show cloud provider/router config
   switchbay cloud-provider set <id>  Switch cloud provider: auto | openai | anthropic
@@ -172,7 +176,7 @@ Options:
   }
 
   if (options.subcommand === "model") {
-    await runModelCommand(options.lane, options.modelLane, options.modelTarget, options.modelAction ?? "show", options.modelQuantization ?? null);
+    await runModelCommand(options.lane, options.modelLane, options.modelTarget, options.modelAction ?? "show", options.modelQuantization ?? null, options.modelLabel ?? null);
     return;
   }
 
@@ -595,12 +599,18 @@ async function runModelCommand(
   rawLane: string | null,
   rawModelLane: string | null,
   target: string | null,
-  action: "show" | "set" | "pull",
+  action: "show" | "set" | "pull" | "add",
   quantization: string | null,
+  label: string | null,
 ) {
   const lane = normalizeRuntimeLane(rawModelLane ?? rawLane);
   if (action === "pull") {
     await runModelPullCommand(rawModelLane ?? rawLane, target, quantization);
+    return;
+  }
+
+  if (action === "add") {
+    await runModelAddCommand(rawModelLane ?? rawLane, target, label);
     return;
   }
 
@@ -635,6 +645,56 @@ async function runModelCommand(
     console.error(`switchbay model: ${msg}`);
     process.exit(1);
   }
+}
+
+async function runModelAddCommand(rawLane: string | null, target: string | null, label: string | null) {
+  const provider = normalizeCloudModelProvider(rawLane, target);
+  const modelId = isCloudProviderAlias(target) ? null : target;
+  if (!modelId?.trim()) {
+    console.error("switchbay model add: requires a cloud model id.");
+    console.error("Example: switchbay model add openai gpt-5.5");
+    console.error("Example: switchbay --lane cloud --add-model gpt-5.5");
+    process.exit(1);
+  }
+
+  try {
+    const result = await addCloudModel({
+      id: modelId,
+      label,
+      provider,
+    });
+    setSelectedRuntimeModel("cloud", {
+      id: result.model.id,
+      provider: result.model.provider,
+    });
+    console.log(`Added ${result.model.id} to cloud model catalog (${result.model.provider}).`);
+    console.log(`Catalog: ~/.switchbay/cloud-models.json`);
+    console.log(`Selected ${result.model.id} for Cloud.`);
+    console.log(result.verified ? "OpenAI validation: ok" : result.notice ?? "Added without live validation.");
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`switchbay model add: ${msg}`);
+    process.exit(1);
+  }
+}
+
+function normalizeCloudModelProvider(rawLane: string | null, target: string | null): CloudProviderId {
+  const alias = rawLane?.toLowerCase();
+  if (alias === "openai" || alias === "open-ai" || alias === "gpt") return "openai";
+  if (alias === "anthropic" || alias === "claude") return "anthropic";
+  if (alias === "google" || alias === "gemini") return "google";
+  return inferCloudModelProvider(target ?? "");
+}
+
+function isCloudProviderAlias(value: string | null): boolean {
+  const normalized = value?.toLowerCase();
+  return normalized === "openai" ||
+    normalized === "open-ai" ||
+    normalized === "gpt" ||
+    normalized === "anthropic" ||
+    normalized === "claude" ||
+    normalized === "google" ||
+    normalized === "gemini";
 }
 
 async function runModelPullCommand(rawLane: string | null, target: string | null, quantization: string | null) {

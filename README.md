@@ -91,6 +91,14 @@ switchbay cloud-provider set anthropic
 switchbay cloud-provider set google
 ```
 
+Custom cloud model ids live in `~/.switchbay/cloud-models.json` and feed the same model drawer/list as built-in presets. Use this when OpenAI or another cloud provider ships a model before Switchbay has baked it in:
+
+```bash
+switchbay model add openai gpt-new-model --label "GPT New Model"
+switchbay --lane cloud --add-model gpt-new-model
+switchbay models --lane cloud
+```
+
 Local LM Studio lane:
 
 ```bash
@@ -222,6 +230,8 @@ switchbay models --lane openai
 switchbay models --lane google
 switchbay model local qwen/qwen3-4b-2507
 switchbay model openai gpt-5.5
+switchbay model add openai gpt-new-model --label "GPT New Model"
+switchbay --lane cloud --add-model gpt-new-model
 switchbay model google gemini-3.5-flash
 switchbay cloud-provider set anthropic
 switchbay cloud-provider set google

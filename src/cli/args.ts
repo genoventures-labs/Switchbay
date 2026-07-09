@@ -29,10 +29,11 @@ export type CliOptions = {
   taskAction?: "status" | "add" | "done" | "clear";
   taskText?: string | null;
   taskId?: number | null;
-  modelAction?: "show" | "set" | "pull";
+  modelAction?: "show" | "set" | "pull" | "add";
   modelTarget: string | null;
   modelLane: string | null;
   modelQuantization?: string | null;
+  modelLabel?: string | null;
 };
 
 export function parseCliArgs(argv: string[]): CliOptions {
@@ -71,6 +72,32 @@ export function parseCliArgs(argv: string[]): CliOptions {
       newSession = true;
     } else if (arg === "--purge") {
       purge = args[++i] ?? null;
+    } else if (arg === "--add-model") {
+      return {
+        surface,
+        profile,
+        mode,
+        lane,
+        initialQuery: "",
+        hop,
+        resume,
+        newSession,
+        purge,
+        subcommand: "model",
+        engineAction: "status",
+        toolboxAction: "status",
+        toolboxSkill: null,
+        memoryAction: "status",
+        memoryNote: null,
+        knowledgeAction: "status",
+        knowledgeQuery: null,
+        traceAction: "last",
+        mcpAction: "status",
+        modelAction: "add",
+        modelTarget: args[++i] ?? null,
+        modelLane: null,
+        modelLabel: readLabelFlag(args.slice(i + 1)),
+      };
     } else if (arg === "engines" || arg === "engine-bay") {
       const action = args[i + 1];
       const engineAction = action === "sync" || action === "list" || action === "templates" || action === "status"
@@ -474,6 +501,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
         modelTarget: parsedModel.target,
         modelLane: parsedModel.commandLane,
         modelQuantization: parsedModel.quantization,
+        modelLabel: parsedModel.label,
       };
     } else if (arg === "update") {
       console.log("Run this to update Switchbay from source:\n");
@@ -517,11 +545,12 @@ export function parseCliArgs(argv: string[]): CliOptions {
 }
 
 type ParsedModelCommand = {
-  action: "show" | "set" | "pull";
+  action: "show" | "set" | "pull" | "add";
   commandLane: string | null;
   flagLane: string | null;
   target: string | null;
   quantization: string | null;
+  label: string | null;
 };
 
 type ParsedTaskCommand = {
@@ -548,20 +577,28 @@ function parseModelCommand(args: string[]): ParsedModelCommand {
   const rest: string[] = [];
   let flagLane: string | null = null;
   let quantization: string | null = null;
+  let label: string | null = null;
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--lane") {
       flagLane = args[++i] ?? null;
     } else if (args[i] === "--quant" || args[i] === "--quantization" || args[i] === "-q") {
       quantization = args[++i] ?? null;
+    } else if (args[i] === "--label" || args[i] === "--name") {
+      label = args[++i] ?? null;
     } else {
       rest.push(args[i]!);
     }
   }
 
-  const action = rest[0] === "pull" ? "pull" : rest.length ? "set" : "show";
-  const actionRest = action === "pull" ? rest.slice(1) : rest;
+  const action = rest[0] === "pull" ? "pull" : rest[0] === "add" ? "add" : rest.length ? "set" : "show";
+  const actionRest = action === "pull" || action === "add" ? rest.slice(1) : rest;
   const first = actionRest[0] ?? null;
   const second = actionRest[1] ?? null;
+  const inferredLabel = action === "add" && !label && first && second && isLaneAlias(first)
+    ? actionRest.slice(2).join(" ") || null
+    : action === "add" && !label && first && !isLaneAlias(first)
+      ? actionRest.slice(1).join(" ") || null
+      : label;
   const firstIsLane = isLaneAlias(first);
   return {
     action,
@@ -569,11 +606,17 @@ function parseModelCommand(args: string[]): ParsedModelCommand {
     flagLane,
     target: firstIsLane ? second : first,
     quantization,
+    label: inferredLabel,
   };
 }
 
 function readLaneFlag(args: string[]): string | null {
   const index = args.indexOf("--lane");
+  return index >= 0 ? args[index + 1] ?? null : null;
+}
+
+function readLabelFlag(args: string[]): string | null {
+  const index = args.findIndex((arg) => arg === "--label" || arg === "--name");
   return index >= 0 ? args[index + 1] ?? null : null;
 }
 

@@ -142,6 +142,19 @@ test("parses model helper commands", () => {
   expect(pullOllama.modelAction).toBe("pull");
   expect(pullOllama.modelLane).toBe("ollama");
   expect(pullOllama.modelTarget).toBe("llama3.2");
+
+  const addCloud = parseCliArgs(["bun", "index.tsx", "model", "add", "openai", "gpt-next", "--label", "GPT Next"]);
+  expect(addCloud.modelAction).toBe("add");
+  expect(addCloud.modelLane).toBe("openai");
+  expect(addCloud.modelTarget).toBe("gpt-next");
+  expect(addCloud.modelLabel).toBe("GPT Next");
+
+  const addFlag = parseCliArgs(["bun", "index.tsx", "--lane", "cloud", "--add-model", "gpt-flag", "--label", "GPT Flag"]);
+  expect(addFlag.subcommand).toBe("model");
+  expect(addFlag.lane).toBe("cloud");
+  expect(addFlag.modelAction).toBe("add");
+  expect(addFlag.modelTarget).toBe("gpt-flag");
+  expect(addFlag.modelLabel).toBe("GPT Flag");
 });
 
 test("parses local provider helper commands", () => {

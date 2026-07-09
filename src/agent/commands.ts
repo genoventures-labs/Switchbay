@@ -106,7 +106,11 @@ export async function tryLocalCommand(
   if (!trimmed.startsWith("/")) {
     const workspaceHopIntent = parseConversationalWorkspaceHopIntent(trimmed);
     if (workspaceHopIntent) {
-      return handleWorkspaceCommand(`/workspace hop ${workspaceHopIntent}`, options);
+      const result = await handleWorkspaceCommand(`/workspace hop ${workspaceHopIntent.query}`, options);
+      if (result.handled && result.travel && workspaceHopIntent.followUp) {
+        return { ...result, followUpInput: workspaceHopIntent.followUp };
+      }
+      return result;
     }
 
     const creationIntent = parseConversationalCreationIntent(trimmed);
@@ -594,24 +598,59 @@ function stripWrappingQuotes(value: string): string {
   return value;
 }
 
-function parseConversationalWorkspaceHopIntent(input: string): string | null {
+function parseConversationalWorkspaceHopIntent(input: string): { query: string; followUp?: string } | null {
   const normalized = input
     .replace(/^[,\s]*(hey|yo|ok|okay)?\s*(bay|switchbay)[,\s:;-]*/i, "")
     .replace(/[.!?]+$/g, "")
     .trim();
+  const { primary, followUp } = splitFollowUpIntent(normalized);
 
   const patterns = [
-    /^(?:please\s+)?(?:hop|switch|jump|travel)(?:\s+(?:to|into|over\s+to))?\s+(?:the\s+)?(?:(?:workspace|repo|repository|project)\s+)?(.+)$/i,
+    /^(?:please\s+)?(?:hop|switch|jump|travel|cd)(?:\s+(?:to|into|over\s+to))?\s+(?:the\s+)?(?:(?:workspace|repo|repository|project)\s+)?(.+)$/i,
     /^(?:please\s+)?(?:go\s+to|take\s+me\s+to|open)\s+(?:the\s+)?(?:workspace|repo|repository|project)\s+(.+)$/i,
     /^(?:please\s+)?(?:go\s+to|take\s+me\s+to|open)\s+(.+?)\s+(?:workspace|repo|repository|project)$/i,
   ];
 
   for (const pattern of patterns) {
-    const query = normalized.match(pattern)?.[1]?.trim();
-    if (query) return stripWrappingQuotes(query);
+    const query = primary.match(pattern)?.[1]?.trim();
+    if (query) {
+      return {
+        query: cleanupWorkspaceQuery(query),
+        ...(followUp ? { followUp } : {}),
+      };
+    }
   }
 
   return null;
+}
+
+function splitFollowUpIntent(input: string): { primary: string; followUp?: string } {
+  const match = input.match(/\s*(?:,|;)?\s+(?:and\s+)?then\s+(.+)$/i);
+  if (!match?.index || !match[1]?.trim()) return { primary: input };
+  return {
+    primary: input.slice(0, match.index).replace(/[.!?;,]+$/g, "").trim(),
+    followUp: normalizeFollowUpInput(match[1].trim()),
+  };
+}
+
+function cleanupWorkspaceQuery(query: string): string {
+  return stripWrappingQuotes(
+    query
+      .replace(/\s+(?:workspace|repo|repository|project)$/i, "")
+      .replace(/[.!?;,]+$/g, "")
+      .trim(),
+  );
+}
+
+function normalizeFollowUpInput(input: string): string {
+  const normalized = input.trim();
+  if (/^(?:tell me|show me|give me)\s+(?:the\s+)?status(?:\s+of\s+the\s+(?:repo|repository|project|workspace))?$/i.test(normalized)) {
+    return "Bay, what's changed in git?";
+  }
+  if (/^status(?:\s+of\s+the\s+(?:repo|repository|project|workspace))?$/i.test(normalized)) {
+    return "Bay, what's changed in git?";
+  }
+  return normalized;
 }
 
 async function handleConversationalOperatorIntent(

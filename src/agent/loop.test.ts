@@ -1110,6 +1110,24 @@ test("workspace slash commands show, add, and hop known workspaces", async () =>
     expect(conversationalHop.travel?.toPath).toBe(target);
     expect(conversationalHop.travel?.workspace.cwd).toBe(target);
 
+    process.chdir(originalCwd);
+    const hopWithFollowUp = await tryLocalCommand(`hop to ${basename(target)}, then tell me the status`, baseOptions);
+    expect(hopWithFollowUp.handled).toBe(true);
+    expect(hopWithFollowUp.travel?.toPath).toBe(target);
+    expect(hopWithFollowUp.followUpInput).toBe("Bay, what's changed in git?");
+
+    process.chdir(originalCwd);
+    const repoSuffixHop = await tryLocalCommand(`Bay, hop to ${basename(target)} repo. Then tell me the status`, baseOptions);
+    expect(repoSuffixHop.handled).toBe(true);
+    expect(repoSuffixHop.travel?.toPath).toBe(target);
+    expect(repoSuffixHop.followUpInput).toBe("Bay, what's changed in git?");
+
+    process.chdir(originalCwd);
+    const cdHop = await tryLocalCommand(`Bay, cd to ${basename(target)}, then tell me the status of the repo`, baseOptions);
+    expect(cdHop.handled).toBe(true);
+    expect(cdHop.travel?.toPath).toBe(target);
+    expect(cdHop.followUpInput).toBe("Bay, what's changed in git?");
+
     const missingHop = await tryLocalCommand("Bay, hop to no-such-switchbay-workspace", baseOptions);
     expect(missingHop.handled).toBe(true);
     expect(missingHop.travel).toBeUndefined();

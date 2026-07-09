@@ -10,7 +10,7 @@ import { listSessions, purgeSessions, loadPersistedSession, savePersistedSession
 import { buildTurn, executeTurn, extractAssistantText, refreshWorkspace, synthesizeAssistantFallback } from "./src/agent/loop";
 import { describeEngineBay, loadEngineBayInventory, syncEngineBayRepo } from "./src/engines/hub";
 import { describeToolbox, loadToolboxInventory, readToolboxSkill } from "./src/toolbox/hub";
-import { describeMemory, listMemoryNotes, readMemoryFacts, refreshMemory } from "./src/memory/store";
+import { addMemoryNote, describeMemory, listMemoryNotes, readMemoryFacts, refreshMemory } from "./src/memory/store";
 import { describeKnowledgeIndex, formatKnowledgeSearchResults, refreshKnowledgeIndex, searchKnowledgeIndex } from "./src/knowledge/store";
 import { describeLatestTrace, latestTraceExportPath, saveTraceRecord } from "./src/trace/store";
 import { createDefaultLmStudioMcpConfig, describeLmStudioMcpConfig, loadLmStudioMcpConfig, saveLmStudioMcpConfig } from "./src/runtime/lmstudio-mcp-config";
@@ -52,6 +52,7 @@ Usage:
   switchbay plugins list             List installed workspace plugins
   switchbay plugins inspect <id>     Print a plugin manifest and assets
   switchbay memory                   Show workspace memory status
+  switchbay memory add <note>        Add a workspace memory note
   switchbay memory refresh           Refresh operational memory
   switchbay memory list              List memory notes
   switchbay memory facts             List structured memory facts
@@ -97,7 +98,7 @@ Options:
   }
 
   if (options.subcommand === "memory") {
-    await runMemoryCommand(options.memoryAction);
+    await runMemoryCommand(options.memoryAction, options.memoryNote);
     return;
   }
 
@@ -313,9 +314,19 @@ async function runPluginCommand(action: "status" | "list" | "inspect", pluginId:
   }
 }
 
-async function runMemoryCommand(action: "status" | "refresh" | "list" | "facts") {
+async function runMemoryCommand(action: "status" | "refresh" | "list" | "facts" | "add", note: string | null) {
   try {
     const cwd = process.cwd();
+    if (action === "add") {
+      if (!note?.trim()) {
+        console.error('switchbay memory: add requires a note, e.g. `switchbay memory add "use Bun for tests"`.');
+        process.exit(1);
+      }
+      const count = await addMemoryNote(cwd, note);
+      console.log(`Remembered: ${note.trim()}`);
+      console.log(`${count} note${count !== 1 ? "s" : ""} in memory.`);
+      return;
+    }
     if (action === "refresh") {
       console.log(await refreshMemory(cwd));
       return;

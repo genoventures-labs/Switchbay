@@ -16,7 +16,8 @@ export type CliOptions = {
   toolboxSkill: string | null;
   pluginAction?: "status" | "list" | "inspect";
   pluginId?: string | null;
-  memoryAction: "status" | "refresh" | "list" | "facts";
+  memoryAction: "status" | "refresh" | "list" | "facts" | "add";
+  memoryNote: string | null;
   knowledgeAction: "status" | "refresh" | "search";
   knowledgeQuery: string | null;
   traceAction: "last" | "export";
@@ -81,6 +82,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
         toolboxAction: "status",
         toolboxSkill: null,
         memoryAction: "status",
+        memoryNote: null,
         knowledgeAction: "status",
         knowledgeQuery: null,
         traceAction: "last",
@@ -108,6 +110,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
         toolboxAction,
         toolboxSkill: toolboxAction === "read" ? args[i + 2] ?? null : null,
         memoryAction: "status",
+        memoryNote: null,
         knowledgeAction: "status",
         knowledgeQuery: null,
         traceAction: "last",
@@ -137,6 +140,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
         pluginAction,
         pluginId: pluginAction === "inspect" ? args[i + 2] ?? null : null,
         memoryAction: "status",
+        memoryNote: null,
         knowledgeAction: "status",
         knowledgeQuery: null,
         traceAction: "last",
@@ -146,8 +150,8 @@ export function parseCliArgs(argv: string[]): CliOptions {
       };
     } else if (arg === "memory") {
       const action = args[i + 1];
-      const memoryAction = action === "refresh" || action === "list" || action === "facts" || action === "status"
-        ? action
+      const memoryAction = action === "refresh" || action === "list" || action === "facts" || action === "status" || action === "add" || action === "remember"
+        ? action === "remember" ? "add" : action
         : "status";
       return {
         surface,
@@ -164,6 +168,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
         toolboxAction: "status",
         toolboxSkill: null,
         memoryAction,
+        memoryNote: memoryAction === "add" ? args.slice(i + 2).join(" ") || null : null,
         knowledgeAction: "status",
         knowledgeQuery: null,
         traceAction: "last",
@@ -191,6 +196,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
         toolboxAction: "status",
         toolboxSkill: null,
         memoryAction: "status",
+        memoryNote: null,
         knowledgeAction,
         knowledgeQuery: knowledgeAction === "search" ? args.slice(i + 2).join(" ") || null : null,
         traceAction: "last",
@@ -216,6 +222,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
         toolboxAction: "status",
         toolboxSkill: null,
         memoryAction: "status",
+        memoryNote: null,
         knowledgeAction: "status",
         knowledgeQuery: null,
         traceAction,
@@ -243,6 +250,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
         toolboxAction: "status",
         toolboxSkill: null,
         memoryAction: "status",
+        memoryNote: null,
         knowledgeAction: "status",
         knowledgeQuery: null,
         traceAction: "last",
@@ -267,6 +275,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
         toolboxAction: "status",
         toolboxSkill: null,
         memoryAction: "status",
+        memoryNote: null,
         knowledgeAction: "status",
         knowledgeQuery: null,
         traceAction: "last",
@@ -291,6 +300,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
         toolboxAction: "status",
         toolboxSkill: null,
         memoryAction: "status",
+        memoryNote: null,
         knowledgeAction: "status",
         knowledgeQuery: null,
         traceAction: "last",
@@ -308,7 +318,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
       console.log("switchbay 0.9.83");
       process.exit(0);
     } else if (arg === undefined || arg === "help" || arg === "--help" || arg === "-h") {
-      return { surface, profile, mode, lane, initialQuery: "", hop: null, resume: false, newSession: false, purge: null, subcommand: "help", engineAction: "status", toolboxAction: "status", toolboxSkill: null, memoryAction: "status", knowledgeAction: "status", knowledgeQuery: null, traceAction: "last", mcpAction: "status", modelTarget: null, modelLane: null };
+      return { surface, profile, mode, lane, initialQuery: "", hop: null, resume: false, newSession: false, purge: null, subcommand: "help", engineAction: "status", toolboxAction: "status", toolboxSkill: null, memoryAction: "status", memoryNote: null, knowledgeAction: "status", knowledgeQuery: null, traceAction: "last", mcpAction: "status", modelTarget: null, modelLane: null };
     } else if (!arg.startsWith("-")) {
       positional.push(arg);
     }
@@ -329,6 +339,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
     toolboxAction: "status",
     toolboxSkill: null,
     memoryAction: "status",
+    memoryNote: null,
     knowledgeAction: "status",
     knowledgeQuery: null,
     traceAction: "last",

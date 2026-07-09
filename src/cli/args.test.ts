@@ -51,6 +51,18 @@ test("parses Workspace Knowledge helper commands", () => {
   expect(search.knowledgeQuery).toBe("approval gates");
 });
 
+test("parses Memory helper add commands", () => {
+  const add = parseCliArgs(["bun", "index.tsx", "memory", "add", "use Bun for tests"]);
+  expect(add.subcommand).toBe("memory");
+  expect(add.memoryAction).toBe("add");
+  expect(add.memoryNote).toBe("use Bun for tests");
+
+  const remember = parseCliArgs(["bun", "index.tsx", "memory", "remember", "prefer local workspaces"]);
+  expect(remember.subcommand).toBe("memory");
+  expect(remember.memoryAction).toBe("add");
+  expect(remember.memoryNote).toBe("prefer local workspaces");
+});
+
 test("parses Skills helper commands and keeps toolbox alias", () => {
   const skills = parseCliArgs(["bun", "index.tsx", "skills", "read", "debugging-triage"]);
   expect(skills.subcommand).toBe("skills");

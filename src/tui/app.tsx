@@ -43,7 +43,7 @@ import { generateAgentDefinition, generateEngineManifest, generateLmStudioMcpCon
 import type { ActivePlan } from "../agent/turn-state";
 import { ShortcutDrawer } from "./components/ShortcutDrawer";
 import { getCommandMatches } from "./commands";
-import { runCommand, runShellString } from "../tools/shell";
+import { runCommand, runShellString, type ShellResult } from "../tools/shell";
 import { loadEngineRegistry, type EngineManifest } from "../engines/registry";
 import { ModelDrawer } from "./components/ModelDrawer";
 import { listRuntimeModels, type RuntimeModelOption } from "../runtime/models";
@@ -1291,8 +1291,8 @@ export function SwitchbayApp({
         dispatch({ type: "shell/cleared" });
         dispatch({
           type: "turn/submitted",
-          message: { role: "user", content: intent === "always" ? `approve always: ${shellCmd.command}` : `approve: ${shellCmd.command}` },
-          objective: `Run: ${shellCmd.command}`,
+          message: { role: "user", content: intent === "always" ? "Approved shell command permanently." : "Approved shell command." },
+          objective: "Run approved shell command",
           pendingPlan: [],
           mode: state.mode,
           resolvedProfile: state.resolvedProfile,
@@ -1303,8 +1303,7 @@ export function SwitchbayApp({
           if (!result.ok) {
             throw new Error(result.stderr || result.stdout || `exit ${result.exitCode}`);
           }
-          const output = [result.stdout, result.stderr].filter(Boolean).join("\n") || "Done.";
-          dispatch({ type: "turn/completed", content: `\`${shellCmd.command}\`\n\n${output}` });
+          dispatch({ type: "turn/completed", content: formatShellCompletion(result) });
         } catch (err: any) {
           dispatch({ type: "turn/failed", error: `Shell failed: ${err.message}` });
         }
@@ -1747,15 +1746,14 @@ export function SwitchbayApp({
           const shellCwd = state.workspace?.cwd ?? process.cwd();
           dispatch({
             type: "assistant/appended",
-            message: `Auto-approved remembered command:\n\`${toolExecution.shellPending.command}\``,
+            message: "Auto-approved remembered shell command.",
           });
           try {
             const result = await runShellString(toolExecution.shellPending.command, shellCwd);
             if (!result.ok) {
               throw new Error(result.stderr || result.stdout || `exit ${result.exitCode}`);
             }
-            const output = [result.stdout, result.stderr].filter(Boolean).join("\n") || "Done.";
-            autoApprovedShellContent = `\`${toolExecution.shellPending.command}\`\n\n${output}`;
+            autoApprovedShellContent = formatShellCompletion(result);
           } catch (err: any) {
             autoApprovedShellFailed = true;
             dispatch({ type: "turn/failed", error: `Shell failed: ${err.message}` });
@@ -2168,6 +2166,18 @@ export function SwitchbayApp({
 
 function isSwitchbayCheckpointLine(line: string): boolean {
   return /\bswitchbay:\s*/.test(line);
+}
+
+function formatShellCompletion(result: ShellResult): string {
+  const output = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();
+  if (!output) return "Shell command completed.";
+
+  const maxOutputLength = 900;
+  const clipped = output.length > maxOutputLength
+    ? `${output.slice(0, maxOutputLength).trimEnd()}\n...`
+    : output;
+
+  return `Shell command completed.\n\nOutput:\n\`\`\`text\n${clipped}\n\`\`\``;
 }
 
 function sliceTranscriptForRows(

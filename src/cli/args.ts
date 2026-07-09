@@ -10,7 +10,7 @@ export type CliOptions = {
   resume: string | boolean; // string (id/index) or true (latest)
   newSession: boolean;
   purge: string | null;
-  subcommand: "run" | "update" | "version" | "help" | "engines" | "skills" | "toolbox" | "plugins" | "memory" | "knowledge" | "trace" | "mcp";
+  subcommand: "run" | "update" | "version" | "help" | "engines" | "skills" | "toolbox" | "plugins" | "memory" | "knowledge" | "trace" | "mcp" | "models" | "model";
   engineAction: "status" | "sync" | "list" | "templates";
   toolboxAction: "status" | "sync" | "list" | "templates" | "read";
   toolboxSkill: string | null;
@@ -21,6 +21,8 @@ export type CliOptions = {
   knowledgeQuery: string | null;
   traceAction: "last" | "export";
   mcpAction: "status" | "init" | "catalog";
+  modelTarget: string | null;
+  modelLane: string | null;
 };
 
 export function parseCliArgs(argv: string[]): CliOptions {
@@ -83,6 +85,8 @@ export function parseCliArgs(argv: string[]): CliOptions {
         knowledgeQuery: null,
         traceAction: "last",
         mcpAction: "status",
+        modelTarget: null,
+        modelLane: null,
       };
     } else if (arg === "skills" || arg === "toolbox") {
       const action = args[i + 1];
@@ -108,6 +112,8 @@ export function parseCliArgs(argv: string[]): CliOptions {
         knowledgeQuery: null,
         traceAction: "last",
         mcpAction: "status",
+        modelTarget: null,
+        modelLane: null,
       };
     } else if (arg === "plugins") {
       const action = args[i + 1];
@@ -135,6 +141,8 @@ export function parseCliArgs(argv: string[]): CliOptions {
         knowledgeQuery: null,
         traceAction: "last",
         mcpAction: "status",
+        modelTarget: null,
+        modelLane: null,
       };
     } else if (arg === "memory") {
       const action = args[i + 1];
@@ -160,6 +168,8 @@ export function parseCliArgs(argv: string[]): CliOptions {
         knowledgeQuery: null,
         traceAction: "last",
         mcpAction: "status",
+        modelTarget: null,
+        modelLane: null,
       };
     } else if (arg === "knowledge" || arg === "index") {
       const action = args[i + 1];
@@ -185,6 +195,8 @@ export function parseCliArgs(argv: string[]): CliOptions {
         knowledgeQuery: knowledgeAction === "search" ? args.slice(i + 2).join(" ") || null : null,
         traceAction: "last",
         mcpAction: "status",
+        modelTarget: null,
+        modelLane: null,
       };
     } else if (arg === "trace") {
       const action = args[i + 1];
@@ -208,6 +220,8 @@ export function parseCliArgs(argv: string[]): CliOptions {
         knowledgeQuery: null,
         traceAction,
         mcpAction: "status",
+        modelTarget: null,
+        modelLane: null,
       };
     } else if (arg === "mcp") {
       const action = args[i + 1];
@@ -233,6 +247,56 @@ export function parseCliArgs(argv: string[]): CliOptions {
         knowledgeQuery: null,
         traceAction: "last",
         mcpAction,
+        modelTarget: null,
+        modelLane: null,
+      };
+    } else if (arg === "models") {
+      const commandLane = readLaneFlag(args.slice(i + 1));
+      return {
+        surface,
+        profile,
+        mode,
+        lane: commandLane ?? lane,
+        initialQuery: "",
+        hop,
+        resume,
+        newSession,
+        purge,
+        subcommand: "models",
+        engineAction: "status",
+        toolboxAction: "status",
+        toolboxSkill: null,
+        memoryAction: "status",
+        knowledgeAction: "status",
+        knowledgeQuery: null,
+        traceAction: "last",
+        mcpAction: "status",
+        modelTarget: null,
+        modelLane: null,
+      };
+    } else if (arg === "model") {
+      const parsedModel = parseModelCommand(args.slice(i + 1));
+      return {
+        surface,
+        profile,
+        mode,
+        lane: parsedModel.flagLane ?? lane,
+        initialQuery: "",
+        hop,
+        resume,
+        newSession,
+        purge,
+        subcommand: "model",
+        engineAction: "status",
+        toolboxAction: "status",
+        toolboxSkill: null,
+        memoryAction: "status",
+        knowledgeAction: "status",
+        knowledgeQuery: null,
+        traceAction: "last",
+        mcpAction: "status",
+        modelTarget: parsedModel.target,
+        modelLane: parsedModel.commandLane,
       };
     } else if (arg === "update") {
       console.log("Run this to update Switchbay from source:\n");
@@ -244,7 +308,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
       console.log("switchbay 0.9.83");
       process.exit(0);
     } else if (arg === undefined || arg === "help" || arg === "--help" || arg === "-h") {
-      return { surface, profile, mode, lane, initialQuery: "", hop: null, resume: false, newSession: false, purge: null, subcommand: "help", engineAction: "status", toolboxAction: "status", toolboxSkill: null, memoryAction: "status", knowledgeAction: "status", knowledgeQuery: null, traceAction: "last", mcpAction: "status" };
+      return { surface, profile, mode, lane, initialQuery: "", hop: null, resume: false, newSession: false, purge: null, subcommand: "help", engineAction: "status", toolboxAction: "status", toolboxSkill: null, memoryAction: "status", knowledgeAction: "status", knowledgeQuery: null, traceAction: "last", mcpAction: "status", modelTarget: null, modelLane: null };
     } else if (!arg.startsWith("-")) {
       positional.push(arg);
     }
@@ -269,5 +333,44 @@ export function parseCliArgs(argv: string[]): CliOptions {
     knowledgeQuery: null,
     traceAction: "last",
     mcpAction: "status",
+    modelTarget: null,
+    modelLane: null,
   };
+}
+
+function parseModelCommand(args: string[]): { commandLane: string | null; flagLane: string | null; target: string | null } {
+  const rest: string[] = [];
+  let flagLane: string | null = null;
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === "--lane") {
+      flagLane = args[++i] ?? null;
+    } else {
+      rest.push(args[i]!);
+    }
+  }
+
+  const first = rest[0] ?? null;
+  const second = rest[1] ?? null;
+  const firstIsLane = isLaneAlias(first);
+  return {
+    commandLane: firstIsLane ? first : null,
+    flagLane,
+    target: firstIsLane ? second : first,
+  };
+}
+
+function readLaneFlag(args: string[]): string | null {
+  const index = args.indexOf("--lane");
+  return index >= 0 ? args[index + 1] ?? null : null;
+}
+
+function isLaneAlias(value: string | null): boolean {
+  return value === "cloud" ||
+    value === "cloud-mcp" ||
+    value === "mcp" ||
+    value === "local" ||
+    value === "local-mcp" ||
+    value === "native-mcp" ||
+    value === "lm" ||
+    value === "lmstudio";
 }

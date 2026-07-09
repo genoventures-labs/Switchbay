@@ -77,6 +77,27 @@ test("parses Plugins helper commands", () => {
   expect(inspect.pluginId).toBe("repo-ops");
 });
 
+test("parses model helper commands", () => {
+  const models = parseCliArgs(["bun", "index.tsx", "models", "--lane", "local"]);
+  expect(models.subcommand).toBe("models");
+  expect(models.lane).toBe("local");
+
+  const setActiveLane = parseCliArgs(["bun", "index.tsx", "model", "gpt-5.5"]);
+  expect(setActiveLane.subcommand).toBe("model");
+  expect(setActiveLane.modelTarget).toBe("gpt-5.5");
+  expect(setActiveLane.modelLane).toBeNull();
+
+  const setSpecificLane = parseCliArgs(["bun", "index.tsx", "model", "local", "qwen/qwen3-4b-2507"]);
+  expect(setSpecificLane.subcommand).toBe("model");
+  expect(setSpecificLane.modelLane).toBe("local");
+  expect(setSpecificLane.modelTarget).toBe("qwen/qwen3-4b-2507");
+
+  const setFlagLane = parseCliArgs(["bun", "index.tsx", "model", "--lane", "cloud-mcp", "claude-sonnet-4-5"]);
+  expect(setFlagLane.subcommand).toBe("model");
+  expect(setFlagLane.lane).toBe("cloud-mcp");
+  expect(setFlagLane.modelTarget).toBe("claude-sonnet-4-5");
+});
+
 test("parses Trace helper commands", () => {
   const last = parseCliArgs(["bun", "index.tsx", "trace"]);
   expect(last.subcommand).toBe("trace");

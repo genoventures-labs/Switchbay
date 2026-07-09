@@ -1,10 +1,10 @@
 import React from "react";
 import { render } from "ink";
 import { parseCliArgs } from "./src/cli/args";
-import { createRuntimeClient } from "./src/runtime/client";
+import { createRuntimeClient, getRuntimeLaneLabel } from "./src/runtime/client";
 import { getToolMode, normalizeRuntimeLane } from "./src/config/env";
 import { SwitchbayApp } from "./src/tui/app";
-import { loadSwitchbayConfig } from "./src/config/switchbay-config";
+import { getSelectedRuntimeModel, loadSwitchbayConfig, setSelectedRuntimeModel } from "./src/config/switchbay-config";
 import { fuzzyMatchLocations, travelTo } from "./src/tools/travel";
 import { listSessions, purgeSessions, loadPersistedSession, savePersistedSession } from "./src/session/persistence";
 import { buildTurn, executeTurn, extractAssistantText, refreshWorkspace, synthesizeAssistantFallback } from "./src/agent/loop";
@@ -17,6 +17,7 @@ import { createDefaultLmStudioMcpConfig, describeLmStudioMcpConfig, loadLmStudio
 import { describeTrustedMcpCatalog } from "./src/runtime/mcp-catalog";
 import { ANSI_COLORS as CLR } from "./src/tui/theme";
 import { describePlugins, loadPluginInventory, readPlugin } from "./src/plugins/registry";
+import { listRuntimeModels, type RuntimeModelOption } from "./src/runtime/models";
 
 // Ensure config is initialized on first boot
 loadSwitchbayConfig();
@@ -62,6 +63,10 @@ Usage:
   switchbay mcp                      Show Switchbay MCP bridge config
   switchbay mcp init                 Create ~/.switchbay/lmstudio.mcp.json
   switchbay mcp catalog              List trusted MCP config options
+  switchbay models                   List models for the active lane
+  switchbay model                    Show the active lane model
+  switchbay model <id>               Pin a model for the active lane
+  switchbay model <lane> <id>        Pin a model for a specific lane
 
 Options:
   -s, --surface <type>   Surface context (default: dev)
@@ -108,6 +113,16 @@ Options:
 
   if (options.subcommand === "mcp") {
     await runMcpCommand(options.mcpAction);
+    return;
+  }
+
+  if (options.subcommand === "models") {
+    await runModelsCommand(options.lane);
+    return;
+  }
+
+  if (options.subcommand === "model") {
+    await runModelCommand(options.lane, options.modelLane, options.modelTarget);
     return;
   }
 
@@ -166,7 +181,8 @@ Options:
 
   // TUI Mode: No query, launch interactive app
   const lane = normalizeRuntimeLane(options.lane);
-  const client = createRuntimeClient(lane);
+  const selected = getSelectedRuntimeModel(lane);
+  const client = createRuntimeClient(lane, selected ? { model: selected.id, provider: normalizeClientProvider(selected.provider) } : {});
   render(
     <SwitchbayApp
       client={client}
@@ -384,10 +400,66 @@ async function runMcpCommand(action: "status" | "init" | "catalog") {
   }
 }
 
+async function runModelsCommand(rawLane: string | null) {
+  const lane = normalizeRuntimeLane(rawLane);
+  try {
+    const selected = getSelectedRuntimeModel(lane);
+    const result = await listRuntimeModels(lane);
+    const rows = result.models.map((model) => formatModelRow(model, selected?.id === model.id));
+    console.log(`${getRuntimeLaneLabel(lane)} models`);
+    console.log(rows.length ? rows.join("\n") : "No models found.");
+    if (selected && !result.models.some((model) => model.id === selected.id)) {
+      console.log(`\nSelected: ${selected.id} (not returned by the current model list)`);
+    }
+    if (result.notice) console.log(`\n${result.notice}`);
+    console.log(`\nSwitch with: switchbay model ${lane} <model-id>`);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`switchbay models: ${msg}`);
+    process.exit(1);
+  }
+}
+
+async function runModelCommand(rawLane: string | null, rawModelLane: string | null, target: string | null) {
+  const lane = normalizeRuntimeLane(rawModelLane ?? rawLane);
+  if (!target) {
+    const selected = getSelectedRuntimeModel(lane);
+    console.log(`${getRuntimeLaneLabel(lane)} model: ${selected?.id ?? "default"}`);
+    console.log(`List options with: switchbay models --lane ${lane}`);
+    console.log(`Switch with: switchbay model ${lane} <model-id>`);
+    return;
+  }
+
+  try {
+    const result = await listRuntimeModels(lane);
+    const match = findRuntimeModel(result.models, target);
+    if (!match) {
+      console.error(`switchbay model: model not found on ${getRuntimeLaneLabel(lane)}: ${target}`);
+      if (result.models.length) {
+        console.error(`Available: ${result.models.map((model) => model.id).join(", ")}`);
+      }
+      if (result.notice) console.error(result.notice);
+      process.exit(1);
+    }
+
+    setSelectedRuntimeModel(lane, {
+      id: match.id,
+      provider: match.provider,
+    });
+    console.log(`Selected ${match.id} for ${getRuntimeLaneLabel(lane)}.`);
+    console.log(`Stored in ~/.switchbay/config.json`);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`switchbay model: ${msg}`);
+    process.exit(1);
+  }
+}
+
 async function runCliMode(options: any, resumeId: string | null) {
   const runtimeLane = normalizeRuntimeLane(options.lane);
   const toolMode = getToolMode();
-  const client = createRuntimeClient(runtimeLane);
+  const selected = getSelectedRuntimeModel(runtimeLane);
+  const client = createRuntimeClient(runtimeLane, selected ? { model: selected.id, provider: normalizeClientProvider(selected.provider) } : {});
   const workspace = await refreshWorkspace();
   
   let state = await loadPersistedSession(resumeId === "latest" ? undefined : resumeId || undefined);
@@ -463,6 +535,22 @@ async function runCliMode(options: any, resumeId: string | null) {
     const msg = err instanceof Error ? err.message : String(err);
     process.stdout.write(`\n${CLR.accent}⏺${CLR.reset} ${CLR.text}${CLR.bold}Error:${CLR.reset} ${msg}\n`);
   }
+}
+
+function findRuntimeModel(models: RuntimeModelOption[], target: string): RuntimeModelOption | null {
+  const normalized = target.trim().toLowerCase();
+  return models.find((model) => model.id.toLowerCase() === normalized) ??
+    models.find((model) => model.label.toLowerCase() === normalized) ??
+    null;
+}
+
+function formatModelRow(model: RuntimeModelOption, selected: boolean): string {
+  const marker = selected ? "*" : " ";
+  return `${marker} ${model.id} (${model.provider}, ${model.source})`;
+}
+
+function normalizeClientProvider(provider: string | undefined) {
+  return provider === "openai" || provider === "anthropic" ? provider : null;
 }
 
 boot().catch((err) => {

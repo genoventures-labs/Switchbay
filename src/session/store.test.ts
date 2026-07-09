@@ -59,6 +59,23 @@ test("turn/completed records assistant text and clears streaming state", () => {
   expect(completed.transcript.at(-1)?.body).toBe("Hello");
 });
 
+test("local command entries do not mutate model conversation", () => {
+  const prior = sessionReducer(createState(), {
+    type: "turn/submitted",
+    message: { role: "user", content: "hello bay" },
+    objective: "Answer the user.",
+    pendingPlan: [],
+    mode: "build",
+    resolvedProfile: "switchbay",
+  });
+  const completed = sessionReducer(prior, { type: "turn/completed", content: "hello" });
+  const local = sessionReducer(completed, { type: "local-command/submitted", input: "/workspace" });
+
+  expect(local.transcript.map((entry) => entry.body)).toContain("/workspace");
+  expect(local.conversation).toEqual(completed.conversation);
+  expect(local.currentObjective).toBe(completed.currentObjective);
+});
+
 test("plan step progression reaches awaiting_continue then complete", () => {
   const plan: ActivePlan = {
     id: "plan-1",

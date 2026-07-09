@@ -31,6 +31,7 @@ export type SessionAction =
       mode: AgentMode;
       resolvedProfile: string;
     }
+  | { type: "local-command/submitted"; input: string }
   | { type: "turn/started" }
   | { type: "turn/token"; token: string }
   | { type: "turn/tokens"; count: number }
@@ -204,6 +205,15 @@ export function sessionReducer(
           kind: "user",
           title: "User",
           body: String(action.message.content),
+        }),
+      );
+    case "local-command/submitted":
+      return appendTranscript(
+        appendActivity(state, "info", `Ran local command: ${action.input.slice(0, 80)}`),
+        createTranscriptEntry({
+          kind: "user",
+          title: "User",
+          body: action.input,
         }),
       );
     case "turn/started":

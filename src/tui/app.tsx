@@ -1273,14 +1273,7 @@ export function SwitchbayApp({
       activeAgentId: state.activeAgentId,
     });
     if (localCommand.handled) {
-      dispatch({
-        type: "turn/submitted",
-        message: { role: "user", content: value },
-        objective: state.currentObjective ?? "Process a local command.",
-        pendingPlan: state.pendingPlan,
-        mode: state.mode,
-        resolvedProfile: state.resolvedProfile,
-      });
+      dispatch({ type: "local-command/submitted", input: value });
 
       if (localCommand.workspace) {
         dispatch({ type: "workspace/updated", workspace: localCommand.workspace });

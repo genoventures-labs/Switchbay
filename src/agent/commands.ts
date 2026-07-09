@@ -93,6 +93,11 @@ export async function tryLocalCommand(
   const trimmed = input.trim();
 
   if (!trimmed.startsWith("/")) {
+    const workspaceHopIntent = parseConversationalWorkspaceHopIntent(trimmed);
+    if (workspaceHopIntent) {
+      return handleWorkspaceCommand(`/workspace hop ${workspaceHopIntent}`, options);
+    }
+
     const creationIntent = parseConversationalCreationIntent(trimmed);
     if (creationIntent === "agent") return { handled: true, openCreateAgent: true };
     if (creationIntent === "engine") return { handled: true, openCreateEngine: true };
@@ -500,6 +505,26 @@ function stripWrappingQuotes(value: string): string {
     }
   }
   return value;
+}
+
+function parseConversationalWorkspaceHopIntent(input: string): string | null {
+  const normalized = input
+    .replace(/^[,\s]*(hey|yo|ok|okay)?\s*(bay|switchbay)[,\s:;-]*/i, "")
+    .replace(/[.!?]+$/g, "")
+    .trim();
+
+  const patterns = [
+    /^(?:please\s+)?(?:hop|switch|jump|travel)(?:\s+(?:to|into|over\s+to))?\s+(?:the\s+)?(?:(?:workspace|repo|repository|project)\s+)?(.+)$/i,
+    /^(?:please\s+)?(?:go\s+to|take\s+me\s+to|open)\s+(?:the\s+)?(?:workspace|repo|repository|project)\s+(.+)$/i,
+    /^(?:please\s+)?(?:go\s+to|take\s+me\s+to|open)\s+(.+?)\s+(?:workspace|repo|repository|project)$/i,
+  ];
+
+  for (const pattern of patterns) {
+    const query = normalized.match(pattern)?.[1]?.trim();
+    if (query) return stripWrappingQuotes(query);
+  }
+
+  return null;
 }
 
 function parseConversationalCreationIntent(input: string): "agent" | "engine" | "mcp" | "rule" | "skill" | "plugin" | null {

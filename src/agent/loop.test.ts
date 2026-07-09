@@ -1,5 +1,5 @@
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { tmpdir } from "node:os";
 import { expect, test } from "bun:test";
 import type { ChatRuntimeClient } from "../runtime/client";
@@ -1004,6 +1004,17 @@ test("workspace slash commands show, add, and hop known workspaces", async () =>
     expect(hopped.handled).toBe(true);
     expect(hopped.travel?.toPath).toBe(target);
     expect(hopped.travel?.workspace.cwd).toBe(target);
+
+    process.chdir(originalCwd);
+    const conversationalHop = await tryLocalCommand(`Bay, hop to ${basename(target)}`, baseOptions);
+    expect(conversationalHop.handled).toBe(true);
+    expect(conversationalHop.travel?.toPath).toBe(target);
+    expect(conversationalHop.travel?.workspace.cwd).toBe(target);
+
+    const missingHop = await tryLocalCommand("Bay, hop to no-such-switchbay-workspace", baseOptions);
+    expect(missingHop.handled).toBe(true);
+    expect(missingHop.travel).toBeUndefined();
+    expect(missingHop.assistantMessage).toContain("No workspace matched");
   } finally {
     process.chdir(originalCwd);
     if (previousConfigDir === undefined) {

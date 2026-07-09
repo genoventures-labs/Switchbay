@@ -175,6 +175,8 @@ switchbay
 
 For the release-readiness pass, use [docs/1.0_SMOKE_CHECKLIST.md](docs/1.0_SMOKE_CHECKLIST.md).
 
+For the Bay operator direction, use [docs/1.5_ROADMAP.md](docs/1.5_ROADMAP.md).
+
 One-shot request:
 
 ```bash

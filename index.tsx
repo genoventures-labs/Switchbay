@@ -38,91 +38,91 @@ const options = parseCliArgs(process.argv);
 async function boot() {
   if (options.subcommand === "help") {
     console.log(`
-Switchbay — terminal coding agent shell
+${CLR.accentBright}${CLR.bold}Switchbay${CLR.reset} — terminal coding agent shell
 
-Usage:
-  switchbay                          Launch the TUI (interactive mode)
-  switchbay "query"                  One-shot request
-  switchbay serve                    Start the local HTTP API
-  switchbay service install          Install the macOS login service
-  switchbay service status           Show background service status
-  switchbay service restart          Restart the background service
-  switchbay service uninstall        Remove the background service
-  switchbay "query" --hop <name>     Launch in a different workspace
+${CLR.accent}${CLR.bold}Usage:${CLR.reset}
+  ${CLR.bold}switchbay${CLR.reset}                          Launch the TUI (interactive mode)
+  ${CLR.bold}switchbay${CLR.reset} "${CLR.accentBright}query${CLR.reset}"                  One-shot request
+  ${CLR.bold}switchbay serve${CLR.reset}                    Start the local HTTP API
+  ${CLR.bold}switchbay service install${CLR.reset}          Install the macOS login service
+  ${CLR.bold}switchbay service status${CLR.reset}           Show background service status
+  ${CLR.bold}switchbay service restart${CLR.reset}          Restart the background service
+  ${CLR.bold}switchbay service uninstall${CLR.reset}        Remove the background service
+  ${CLR.bold}switchbay${CLR.reset} "${CLR.accentBright}query${CLR.reset}" ${CLR.accent}--hop${CLR.reset} <name>     Launch in a different workspace
 
-Sessions:
-  switchbay --resume                 Resume the last session
-  switchbay --resume <id|index>      Resume a specific session by ID or index
-  switchbay --new                    Start a fresh session
-  switchbay --purge <duration>       Clean up old sessions (e.g. 1d, 1w)
+${CLR.accent}${CLR.bold}Sessions:${CLR.reset}
+  ${CLR.bold}switchbay --resume${CLR.reset}                 Resume the last session
+  ${CLR.bold}switchbay --resume${CLR.reset} <id|index>      Resume a specific session by ID or index
+  ${CLR.bold}switchbay --new${CLR.reset}                    Start a fresh session
+  ${CLR.bold}switchbay --purge${CLR.reset} <duration>       Clean up old sessions (e.g. 1d, 1w)
 
-Models and lanes:
-  switchbay models                   List models for the active lane
-  switchbay model                    Show the active lane model
-  switchbay model <id>               Pin a model for the active lane
-  switchbay model <lane> <id>        Pin a model for a specific lane
-  switchbay model add openai <id>    Add a custom cloud model to the local catalog
-  switchbay --lane cloud --add-model <id>
-  switchbay model pull <id|url>      Pull/load a model through the active local provider
-  switchbay cloud-provider           Show cloud provider/router config
-  switchbay cloud-provider set <id>  Switch cloud provider: auto | openai | anthropic
-  switchbay local-provider           Show local provider config
-  switchbay local-provider set <id>  Switch local provider: lmstudio | ollama
-  switchbay mcp                      Show Switchbay MCP bridge config
-  switchbay mcp init                 Create ~/.switchbay/lmstudio.mcp.json
-  switchbay mcp catalog              List trusted MCP config options
+${CLR.accent}${CLR.bold}Models and Lanes:${CLR.reset}
+  ${CLR.bold}switchbay models${CLR.reset}                   List models for the active lane
+  ${CLR.bold}switchbay model${CLR.reset}                    Show the active lane model
+  ${CLR.bold}switchbay model${CLR.reset} <id>               Pin a model for the active lane
+  ${CLR.bold}switchbay model${CLR.reset} <lane> <id>        Pin a model for a specific lane
+  ${CLR.bold}switchbay model add openai${CLR.reset} <id>    Add a custom cloud model to the local catalog
+  ${CLR.bold}switchbay --lane cloud --add-model${CLR.reset} <id>
+  ${CLR.bold}switchbay model pull${CLR.reset} <id|url>      Pull/load a model through the active local provider
+  ${CLR.bold}switchbay cloud-provider${CLR.reset}           Show cloud provider/router config
+  ${CLR.bold}switchbay cloud-provider set${CLR.reset} <id>  Switch cloud provider: ${CLR.accentBright}auto | openai | anthropic | google${CLR.reset}
+  ${CLR.bold}switchbay local-provider${CLR.reset}           Show local provider config
+  ${CLR.bold}switchbay local-provider set${CLR.reset} <id>  Switch local provider: ${CLR.accentBright}lmstudio | ollama${CLR.reset}
+  ${CLR.bold}switchbay mcp${CLR.reset}                      Show Switchbay MCP bridge config
+  ${CLR.bold}switchbay mcp init${CLR.reset}                 Create ~/.switchbay/lmstudio.mcp.json
+  ${CLR.bold}switchbay mcp catalog${CLR.reset}              List trusted MCP config options
 
-Context and memory:
-  switchbay agenda                   Show today's Daily Board
-  switchbay task add <text>          Add a Daily Board task
-  switchbay task done <id>           Mark a Daily Board task done
-  switchbay task clear               Clear today's Daily Board
-  switchbay memory                   Show workspace memory status
-  switchbay memory add <note>        Add a workspace memory note
-  switchbay memory refresh           Refresh operational memory
-  switchbay memory list              List memory notes
-  switchbay memories list            Alias for memory notes
-  switchbay memory facts             List structured memory facts
-  switchbay knowledge                Show workspace knowledge index status
-  switchbay knowledge refresh        Build/rebuild the local workspace knowledge map
-  switchbay knowledge search <query> Search sourced workspace snippets
-  switchbay trace                    Show latest turn trace
-  switchbay trace export             Print latest trace file path
-  switchbay radar                    Run read-only local friction checks
-  switchbay handoff                  Print a compact next-session handoff
+${CLR.accent}${CLR.bold}Context and Memory:${CLR.reset}
+  ${CLR.bold}switchbay agenda${CLR.reset}                   Show today's Daily Board
+  ${CLR.bold}switchbay task add${CLR.reset} <text>          Add a Daily Board task
+  ${CLR.bold}switchbay task done${CLR.reset} <id>           Mark a Daily Board task done
+  ${CLR.bold}switchbay task clear${CLR.reset}               Clear today's Daily Board
+  ${CLR.bold}switchbay memory${CLR.reset}                   Show workspace memory status
+  ${CLR.bold}switchbay memory add${CLR.reset} <note>        Add a workspace memory note
+  ${CLR.bold}switchbay memory refresh${CLR.reset}           Refresh operational memory
+  ${CLR.bold}switchbay memory list${CLR.reset}              List memory notes
+  ${CLR.bold}switchbay memories list${CLR.reset}            Alias for memory notes
+  ${CLR.bold}switchbay memory facts${CLR.reset}             List structured memory facts
+  ${CLR.bold}switchbay knowledge${CLR.reset}                Show workspace knowledge index status
+  ${CLR.bold}switchbay knowledge refresh${CLR.reset}        Build/rebuild the local workspace knowledge map
+  ${CLR.bold}switchbay knowledge search${CLR.reset} <query> Search sourced workspace snippets
+  ${CLR.bold}switchbay trace${CLR.reset}                    Show latest turn trace
+  ${CLR.bold}switchbay trace export${CLR.reset}             Print latest trace file path
+  ${CLR.bold}switchbay radar${CLR.reset}                    Run read-only local friction checks
+  ${CLR.bold}switchbay handoff${CLR.reset}                  Print a compact next-session handoff
 
-Extensions:
-  switchbay agents                   Show available specialist agents
-  switchbay agents list              List built-in, user, workspace, and plugin agents
-  switchbay agents read <id>         Print an agent definition
-  switchbay agent create --name <n> --specialty <role>
-  switchbay agent create "Name" "Role or domain"
-  switchbay engines                  Show Engine Bay cache status
-  switchbay engines sync             Pull the Switchbay-Engines GitHub repo
-  switchbay engines list             List cached engine files and manifests
-  switchbay engines templates        List cached templates
-  switchbay skills                   Show available Bay skills
-  switchbay skills sync              Pull the GitHub-backed skills repo
-  switchbay skills list              List available skills
-  switchbay skills templates         List cached skill templates
-  switchbay skills read <id>         Print a skill
-  switchbay plugins                  Show workspace plugin status
-  switchbay plugins list             List installed workspace plugins
-  switchbay plugins inspect <id>     Print a plugin manifest and assets
+${CLR.accent}${CLR.bold}Extensions:${CLR.reset}
+  ${CLR.bold}switchbay agents${CLR.reset}                   Show available specialist agents
+  ${CLR.bold}switchbay agents list${CLR.reset}              List built-in, user, workspace, and plugin agents
+  ${CLR.bold}switchbay agents read${CLR.reset} <id>         Print an agent definition
+  ${CLR.bold}switchbay agent create --name${CLR.reset} <n> ${CLR.accent}--specialty${CLR.reset} <role>
+  ${CLR.bold}switchbay agent create${CLR.reset} "Name" "Role or domain"
+  ${CLR.bold}switchbay engines${CLR.reset}                  Show Engine Bay cache status
+  ${CLR.bold}switchbay engines sync${CLR.reset}             Pull the Switchbay-Engines GitHub repo
+  ${CLR.bold}switchbay engines list${CLR.reset}             List cached engine files and manifests
+  ${CLR.bold}switchbay engines templates${CLR.reset}        List cached templates
+  ${CLR.bold}switchbay skills${CLR.reset}                   Show available Bay skills
+  ${CLR.bold}switchbay skills sync${CLR.reset}              Pull the GitHub-backed skills repo
+  ${CLR.bold}switchbay skills list${CLR.reset}              List available skills
+  ${CLR.bold}switchbay skills templates${CLR.reset}         List cached skill templates
+  ${CLR.bold}switchbay skills read${CLR.reset} <id>         Print a skill
+  ${CLR.bold}switchbay plugins${CLR.reset}                  Show workspace plugin status
+  ${CLR.bold}switchbay plugins list${CLR.reset}             List installed workspace plugins
+  ${CLR.bold}switchbay plugins inspect${CLR.reset} <id>     Print a plugin manifest and assets
 
-Maintenance:
-  switchbay update                   Print update instructions
-  switchbay version                  Print version
+${CLR.accent}${CLR.bold}Maintenance:${CLR.reset}
+  ${CLR.bold}switchbay update${CLR.reset}                   Print update instructions
+  ${CLR.bold}switchbay version${CLR.reset}                  Print version
 
-Options:
-  -s, --surface <type>   Surface context (default: dev)
-  -p, --profile <name>   Working style (default: switchbay)
-  -m, --mode <name>      Agent mode: build | design | debug (default: build)
-  --lane <name>          Runtime lane: cloud | local | mcp (default: SWITCHBAY_LANE or cloud)
-  --hop <name>           Travel to a whitelisted location before launching
-  --resume <val>         Resume last saved session, or specific ID/Index (0=latest)
-  --new                  Force a fresh session even if a saved one exists
-  --purge <duration>     Purge sessions older than duration (1d, 5d, 2w, etc.)
+${CLR.accent}${CLR.bold}Options:${CLR.reset}
+  ${CLR.bold}-s, --surface${CLR.reset} <type>   Surface context (default: dev)
+  ${CLR.bold}-p, --profile${CLR.reset} <name>   Working style (default: switchbay)
+  ${CLR.bold}-m, --mode${CLR.reset} <name>      Agent mode: ${CLR.accentBright}build | design | debug${CLR.reset} (default: build)
+  ${CLR.bold}--lane${CLR.reset} <name>          Runtime lane: ${CLR.accentBright}cloud | local | mcp${CLR.reset} (default: SWITCHBAY_LANE or cloud)
+  ${CLR.bold}--hop${CLR.reset} <name>           Travel to a whitelisted location before launching
+  ${CLR.bold}--resume${CLR.reset} <val>         Resume last saved session, or specific ID/Index (0=latest)
+  ${CLR.bold}--new${CLR.reset}                  Force a fresh session even if a saved one exists
+  ${CLR.bold}--purge${CLR.reset} <duration>     Purge sessions older than duration (1d, 5d, 2w, etc.)
 `);
     return;
   }

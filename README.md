@@ -195,7 +195,7 @@ curl -s http://127.0.0.1:7349/v1/turn \
   -d '{"input":"Summarize this workspace","workspace":"/absolute/path/to/project"}'
 ```
 
-The API binds to `127.0.0.1:7349` by default and processes agent turns one at a time. Set `SWITCHBAY_API_TOKEN` or `SWITCHBAY_API_TOKEN_FILE` to require bearer authentication. Binding beyond localhost is refused unless a token is configured. See [docs/LOCAL_API_README.md](docs/LOCAL_API_README.md) for the route contract and integration details.
+The API binds to `127.0.0.1:7349` by default and processes agent turns one at a time. Set `SWITCHBAY_API_TOKEN` or `SWITCHBAY_API_TOKEN_FILE` to require bearer authentication. Binding beyond localhost is refused unless a token is configured. Start with the [app integration guide](docs/API_INTEGRATION.md) when connecting PageTend or another application; use [the local API implementation notes](docs/LOCAL_API_README.md) for the underlying route design.
 
 Use Switchbay from another Bun, Node.js, or TypeScript app:
 

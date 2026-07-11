@@ -9,26 +9,69 @@
 [![Plugins](https://img.shields.io/badge/Plugins-local%20bundles-11a79b)](#plugins)
 [![License](https://img.shields.io/badge/license-MIT-0f766e)](#license)
 
-**Switchbay is a terminal-first AI coding workbench.** Cloud intelligence, local control, provider independence — all in one fast shell. No rebuilding your workflow every time the model landscape shifts.
+**Switchbay is your AI development operating system.** One intelligent agent — Bay — that lives in your terminal, knows every project you work in, routes across every model without breaking your flow, and can be extended with engines, skills, agents, and plugins without ever touching its core.
 
-Inside the TUI, the assistant answers to **Bay**. Switchbay is the workbench. Bay is the callsign.
+Most AI coding tools give you a chat window bolted onto a model. Switchbay gives you a **platform**.
 
-> Cloud when it helps. Local when it matters. Same rig either way.
+> Bay isn't a chatbot. Bay is your AI co-pilot — persistent, context-aware, and extensible.
 
 ---
 
-## Why Switchbay?
+## The Idea
 
-Most AI coding tools lock you into one model, one cloud, or one backend. Switchbay is different.
+The AI landscape is moving faster than any one tool can keep up with. Models get better, providers change, teams ship new APIs. If your workflow is tied to one model or one UI, you're rebuilding constantly.
 
-It's a **routing layer, context loader, local tool runner, memory system, session keeper, approval gate, engine registry, and terminal cockpit** — all wired together so you can work fast without losing control.
+Switchbay bets on a different architecture:
 
-- **Switch between cloud and local models** without touching your workflow
-- **Your codebase, your context** — workspace memory, pinned files, sourced knowledge snippets
-- **Extend anything** — swappable engines, reusable skills, local plugins
-- **Stay in the terminal** — everything in one fast TUI, no browser, no dashboards
+- **The model is interchangeable.** Bay routes between OpenAI, Anthropic, Google, and Ollama — mid-session, mid-task, without restarting anything. Best model for the job, every time.
+- **Context is owned, not rented.** Bay builds a persistent memory of your workspace — decisions, facts, pinned files, sourced knowledge — and carries it across every session. It doesn't ask you the same questions twice.
+- **Capabilities are composable.** Drop a JSON engine manifest and Bay gains new callable tools. Write a skill file and Bay gains a new working method. Bundle agents, engines, and rules into a plugin and share it across every repo you work in.
+- **You stay in control.** Every shell command, every publish, every broad or irreversible action goes through an explicit approval gate. Bay works fast. It doesn't act blind.
 
-Built for solo builders, senior developers, technical founders, and internal-tool people who live in the terminal.
+This is what "AI-native tooling" actually looks like — not a wrapper, a workbench.
+
+---
+
+## Architecture
+
+```mermaid
+graph TD
+    User["👤 You"] --> TUI["Switchbay TUI\n(React + Ink)"]
+    User --> CLI["CLI / One-shot"]
+    User --> API["Local HTTP API\n127.0.0.1:7349"]
+
+    TUI --> Bay["🧠 Bay\nAgent Loop"]
+    CLI --> Bay
+    API --> Bay
+
+    Bay --> Router["Model Router"]
+    Router --> Cloud["☁️ Cloud\nOpenAI · Anthropic · Google"]
+    Router --> Local["💻 Local\nOllama · HuggingFace"]
+
+    Bay --> Context["Context Layer"]
+    Context --> Memory["Workspace Memory"]
+    Context --> Knowledge["Knowledge Index\n(local RAG)"]
+    Context --> Quickstarts["Quick Starts\n+ Rules"]
+    Context --> Pins["Pinned Files"]
+    Context --> SWITCHBAY["SWITCHBAY.md"]
+
+    Bay --> Agents["Specialist Agents\n(8 built-in + custom)"]
+    Bay --> Skills["Skills\n(working methods)"]
+    Bay --> Engines["Engine Bay\n(JSON tool manifests)"]
+    Bay --> Plugins["Plugins\n(bundled extensions)"]
+    Bay --> MCP["MCP Bridge\n(tool-intent layer)"]
+
+    Bay --> Tools["Tool Execution"]
+    Tools --> Shell["Shell / Files"]
+    Tools --> Approval["Approval Gate\n(destructive ops)"]
+    Tools --> Traces["Trace Ledger\n(turn receipts)"]
+
+    Engines --> GumOps["GumOps Engine\n(Gumroad ops)"]
+    Engines --> Thinkapse["Thinkapse Engine\n(local harness)"]
+    Engines --> Web["Web Engine\n(guarded reads)"]
+    Engines --> Creative["Creative Engine\n(writing tools)"]
+    Engines --> Custom["Custom Engines\n(.engine.json)"]
+```
 
 ---
 
@@ -48,71 +91,106 @@ bun link
 switchbay --help
 ```
 
+Run as a persistent background service so the local API is always available:
+
+```bash
+switchbay service install
+switchbay service status
+```
+
+---
+
+## What Bay Actually Does
+
+Bay is not a command runner with AI sprinkled on top. Bay is an **agent** — it plans, reasons, uses tools, reads and writes your codebase, and surfaces decisions to you when they matter.
+
+```bash
+switchbay                              # open the full TUI cockpit
+switchbay "find the auth bug"          # one-shot, no session needed
+switchbay --resume                     # pick up exactly where you left off
+switchbay --agent security "review PR" # activate a specialist, run a task
+switchbay serve                        # start the local API for integrations
+switchbay update                       # sync commits, push, pull latest, reinstall
+```
+
+**On any given task, Bay will:**
+
+- Read the relevant files and understand the current state of the code before touching anything
+- Form a plan, show you what it intends to do, and execute step-by-step
+- Switch specialist agents mid-session — debugger to architect to code reviewer — without losing context
+- Pull relevant context from workspace memory, pinned files, and the knowledge index automatically
+- Run shell commands, install dependencies, run tests, and format output — all locally
+- Gate anything destructive or high-impact (publishes, force-pushes, refunds, disk ops) behind explicit approval
+- Write a durable trace receipt for every completed turn so nothing is a black box
+
+Bay isn't helpful when you ask it nicely. Bay is operational — it has working modes, specialist personas, memory, and context. It's the difference between a calculator and a co-pilot.
+
 ---
 
 ## Model Lanes
 
-Switchbay routes between cloud and local without changing your workflow.
+The model is a variable. Switchbay is the constant.
 
-**Cloud** (OpenAI, Anthropic, Google — auto-routed or pinned):
+Switch providers, pull new models, and pin lanes — without changing how you work or what Bay knows about your project.
 
 ```bash
+# Cloud (auto-routes between OpenAI, Anthropic, Google by intent)
 export SWITCHBAY_LANE=cloud
-export SWITCHBAY_CLOUD_PROVIDER=auto  # auto | openai | anthropic | google
+export SWITCHBAY_CLOUD_PROVIDER=auto
 export OPENAI_API_KEY=...
 export ANTHROPIC_API_KEY=...
 export GOOGLE_API_KEY=...
-```
 
-**Local via Ollama:**
-
-```bash
+# Local via Ollama
 export SWITCHBAY_LANE=local
-export SWITCHBAY_LOCAL_PROVIDER=ollama
 export SWITCHBAY_OLLAMA_MODEL=llama3.2
 ```
 
-**Pull and manage models:**
+Pull and manage models without leaving Switchbay:
 
 ```bash
 switchbay model pull ibm/granite-4-micro
 switchbay model pull https://huggingface.co/lmstudio-community/gpt-oss-20b-GGUF --quant Q4_K_M
-switchbay cloud-provider set anthropic
-switchbay local-provider set ollama
 ```
 
-Inside the TUI, `/lane` cycles cloud and local. `/lane openai`, `/lane anthropic`, `/lane google`, `/lane ollama` pin a provider instantly. Routing is transparent — completed turns show exactly what model and intent was used:
+TUI lane controls — instant, mid-session, no restart:
+
+```text
+/lane openai · /lane anthropic · /lane google · /lane ollama
+```
+
+Auto-routing picks the right cloud model by intent — code-heavy work goes to Anthropic, structured tasks to OpenAI, vision to OpenAI vision. Every completed turn logs the decision:
 
 ```text
 Using: cloud/anthropic/claude-sonnet-4-5 · intent=code_work · mode=auto
 ```
 
+Full reference: [MODEL_LANES.md](docs/MODEL_LANES.md)
+
 ---
 
-## What Bay Can Do
+## Specialist Agents
 
-```bash
-switchbay                          # open the TUI
-switchbay "find the auth bug"      # one-shot query
-switchbay --resume                 # pick up where you left off
-switchbay --mode build             # switch working style
-switchbay serve                    # start the local API server
-switchbay update                   # pull latest, commit/push, reinstall
-```
+One Bay, eight modes. Activate a specialist and Bay's entire operating lens shifts — priorities, review criteria, what it calls out, what it refuses to do — without changing your session, context, or tools.
 
-**Inside a session, Bay can:**
+| Agent | Activates on | Focus |
+|---|---|---|
+| 🎨 UI Designer | `/agent ui-designer` | Hierarchy, accessibility, components, design systems |
+| ⚙️ Backend Engineer | `/agent backend` | APIs, DB schema, auth, query performance |
+| 🚀 DevOps | `/agent devops` | CI/CD, containers, infra, observability |
+| 🔍 Debugger | `/agent debugger` | Root cause analysis, bisect, reproduction |
+| 🏗️ Architect | `/agent architect` | System design, tradeoffs, long-term structure |
+| 🔒 Security | `/agent security` | Threat modeling, injection, auth, secrets |
+| 📝 Tech Writer | `/agent docs` | Accuracy, reader-first, working examples |
+| 👁️ Code Reviewer | `/agent reviewer` | Blocking issues, edge cases, test gaps |
 
-- Read, write, search, and run code in your workspace
-- Plan, review, debug, and implement — move between specialist agents (`/agent backend`, `/agent security`, `/agent ui`)
-- Pull sourced snippets from code, docs, memory, rules, and skill files
-- Stage approvals for destructive or publishing-impact commands
-- Save memories, pin files, keep sessions, and resume work
+Build your own with `/create-agent` — specialist agents for your domain, your stack, your codebase patterns. Full reference: [AGENTS.md](docs/AGENTS.md)
 
 ---
 
 ## Engine Bay
 
-Engines are swappable tool manifests. Drop a JSON file and Bay gains new callable tools — no code changes, no restarts.
+Engines are the extension layer. A JSON manifest drops new callable tools into Bay without touching source code, without restarting, without configuration rituals.
 
 ```json
 {
@@ -130,35 +208,44 @@ Engines are swappable tool manifests. Drop a JSON file and Bay gains new callabl
 }
 ```
 
-Switchbay auto-discovers engines from `.switchbay/engines/`, `~/.switchbay/engines/`, and `SWITCHBAY_ENGINE_PATHS`. The GitHub-backed **Engine Bay** lets you sync community engine templates in one command:
+Drop it in `.switchbay/engines/` and Bay picks it up. The GitHub-backed Engine Bay gives you community templates on demand:
 
 ```bash
 switchbay engines sync
 ```
 
-Built-in engines include a guarded **Web Engine** (safe URL reads, no private hosts) and a **Creative Engine** (briefs, naming, positioning, hooks, copy drafting, content calendars).
+**Built-in engines:**
+- **Web Engine** — guarded public URL reads, no private host access, cites sources
+- **Creative Engine** — briefs, naming packets, positioning, hooks, copy drafting, content calendars
+
+**Auto-discovered engines** (when paths are set):
+- **GumOps** — Gumroad ops, sales queries, product management, refund gating
+- **Thinkapse** — local capture/triage/routing harness, agent inspection, memory tools
+
+Full reference: [ENGINE_BAY.md](docs/ENGINE_BAY.md)
 
 ---
 
 ## Skills
 
-Skills are reusable working methods — markdown files with frontmatter that Bay reads before tackling a task. Think of them as portable SOPs for your agents.
+Skills are reusable working methods — Bay reads them before tackling a task and applies the method, not just the answer.
 
-Built-in skills: `code-review-pass`, `debugging-triage`, `implementation-plan`, `release-readiness`, `test-strategy`, `ui-polish-pass`, `api-contract-check`, `web-research`.
+Built-in: `code-review-pass`, `debugging-triage`, `implementation-plan`, `release-readiness`, `test-strategy`, `ui-polish-pass`, `api-contract-check`, `web-research`
 
 ```bash
 switchbay skills sync              # pull latest from GitHub
-switchbay skills list
 switchbay skills read release-readiness
 ```
 
-The TUI auto-checks for skill updates on startup and offers to sync with a single keypress.
+Write your own. A skill is a markdown file with frontmatter — a named method that lives in your workspace or user config and follows you across projects. The TUI checks for updates on startup and syncs with one keypress.
+
+Full reference: [SKILLS.md](docs/SKILLS.md)
 
 ---
 
 ## Plugins
 
-Bundle agents, skills, engines, guides, knowledge, and MCP configs into a single portable `plugin.json` under `.switchbay/plugins/<id>/`. Everything loads automatically — no registration needed.
+Plugins are the packaging layer. Bundle everything — agents, engines, skills, quick-start guides, knowledge files, MCP config — into a single portable manifest your whole setup loads automatically.
 
 ```json
 {
@@ -171,95 +258,93 @@ Bundle agents, skills, engines, guides, knowledge, and MCP configs into a single
 }
 ```
 
+Drop it in `.switchbay/plugins/<id>/plugin.json` and it's live — no registration, no restarts. Full reference: [PLUGINS.md](docs/PLUGINS.md)
+
+---
+
+## Persistent Context
+
+Bay never starts from scratch. Every session loads a full context layer built from your workspace:
+
+| Source | What It Carries |
+|---|---|
+| `SWITCHBAY.md` | Project overview, stack decisions, permanent context |
+| `.switchbay/memory/` | Session memories, operational facts, auto-refreshed summaries |
+| `.switchbay/knowledge/` | Local knowledge index — code, docs, rules, sourced snippets |
+| `.switchbay/traces/` | Durable receipts for every completed turn |
+| `.switchbay/pins.json` | Files that are always in context, no matter what |
+| `~/.switchbay/rules/` | Your personal operating rules, across every repo |
+| `~/.switchbay/quickstarts/` | How Bay should act in specific tool or domain contexts |
+
+Bay reads memory before every session, cites knowledge sources inline, and writes trace receipts after every turn. Full reference: [MEMORY_KNOWLEDGE_TRACES.md](docs/MEMORY_KNOWLEDGE_TRACES.md)
+
 ---
 
 ## Local API
 
-Switchbay runs a local HTTP API on `127.0.0.1:7349` for editor integrations, desktop apps, and scripting:
+Switchbay isn't just a TUI. It's a local API server — so you can power editor integrations, desktop sidebars, automation scripts, and internal tools with the same Bay that runs in your terminal.
 
 ```bash
 switchbay serve
+
 curl -s http://127.0.0.1:7349/v1/turn \
   -H 'content-type: application/json' \
-  -d '{"input":"Summarize this workspace","workspace":"/path/to/project"}'
+  -d '{"input":"Review the auth flow","workspace":"/path/to/project"}'
 ```
 
-Or use the TypeScript client:
+TypeScript client:
 
 ```ts
 import { Switchbay } from "@genoventures/switchbay";
 
 const bay = new Switchbay({ token: process.env.SWITCHBAY_API_TOKEN, workspace: "/path/to/project" });
 const turn = await bay.turn({ input: "Review the auth flow." });
-console.log(turn.content);
 ```
 
-Install as a macOS background service so the API is always running:
-
-```bash
-switchbay service install
-switchbay service status
-```
-
----
-
-## Workspace Context
-
-Switchbay builds a rich context layer so Bay always knows your project:
-
-| File / Path | Purpose |
-|---|---|
-| `SWITCHBAY.md` | Persistent project context |
-| `.switchbay/memory/` | Workspace memory and operational facts |
-| `.switchbay/knowledge/` | Local RAG source map (Workspace Knowledge) |
-| `.switchbay/traces/` | Durable turn receipts (Trace Ledger) |
-| `.switchbay/pins.json` | Pinned files always in context |
-| `.switchbay/agents/*.md` | Custom specialist agents |
-| `.switchbay/engines/*.engine.json` | Workspace engine manifests |
-| `.switchbay/plugins/*/plugin.json` | Local plugin bundles |
-| `.switchbay/rules/*.rule.md` | Workspace-specific operating rules |
-| `~/.switchbay/rules/*.rule.md` | User rules shared across repos |
+Full reference: [API_INTEGRATION.md](docs/API_INTEGRATION.md)
 
 ---
 
 ## Key TUI Commands
 
 ```text
-/lane              Cycle or pin a model provider
-/model             Switch active model
-/agent <id>        Activate a specialist agent
-/plan              Generate and execute a step-by-step plan
-/remember          Save a workspace memory note
-/pin               Pin a file into future context
-/search            Search Workspace Knowledge
-/skills            Show or sync agent skills
-/engines           List registered engines
-/trace             Show the latest turn receipt
-/resume            Pick up a previous session
-/checkpoint        Save a git-stash checkpoint
-/create-rule       Create a custom operating rule
-/create-agent      Create a custom agent
-/create-engine     Create a custom engine manifest
-/create-plugin     Create a local plugin
+/lane · /model              Switch provider or model, mid-session
+/agent <id>                 Activate a specialist agent
+/plan                       Generate and execute a step-by-step plan
+/remember                   Save a workspace memory
+/pin                        Pin a file into future context
+/search                     Search the workspace knowledge index
+/skills sync                Pull latest skills from GitHub
+/engines                    List registered engines
+/trace                      Show the latest turn receipt
+/resume                     Resume a previous session
+/checkpoint                 Save a git-stash checkpoint
+/create-rule                Build a custom operating rule
+/create-agent               Define a custom specialist agent
+/create-engine              Create a new engine manifest
+/create-plugin              Bundle everything into a plugin
 ```
+
+Full reference: [SLASH_COMMANDS.md](docs/SLASH_COMMANDS.md)
 
 ---
 
 ## Documentation
 
-Full reference docs live in [`docs/`](docs/):
-
 | Doc | Contents |
 |---|---|
 | [MODEL_LANES.md](docs/MODEL_LANES.md) | Cloud, local, MCP bridge, auto-routing, per-command overrides |
-| [ENGINE_BAY.md](docs/ENGINE_BAY.md) | Engine manifests, GitHub sync, Web Engine, Creative Engine, GumOps, Thinkapse |
-| [SKILLS.md](docs/SKILLS.md) | Built-in skills, custom skill authoring, GitHub sync, model tools |
-| [PLUGINS.md](docs/PLUGINS.md) | Plugin manifest format, asset types, creating plugins, plugin guides |
-| [MEMORY_KNOWLEDGE_TRACES.md](docs/MEMORY_KNOWLEDGE_TRACES.md) | Operational memory, Workspace Knowledge, Trace Ledger, Quick Starts/Rules |
+| [MCP_BRIDGE.md](docs/MCP_BRIDGE.md) | Switchbay MCP bridge — config format, trusted catalog, enabling |
+| [AGENTS.md](docs/AGENTS.md) | Built-in specialist agents, custom agent authoring, activation |
+| [ENGINE_BAY.md](docs/ENGINE_BAY.md) | Engine manifests, GitHub sync, Web/Creative/GumOps/Thinkapse engines |
+| [SKILLS.md](docs/SKILLS.md) | Built-in skills, custom skill authoring, GitHub sync |
+| [PLUGINS.md](docs/PLUGINS.md) | Plugin manifest format, asset types, creating plugins |
+| [MEMORY_KNOWLEDGE_TRACES.md](docs/MEMORY_KNOWLEDGE_TRACES.md) | Memory, Knowledge Index, Trace Ledger, Quick Starts/Rules |
+| [QUICKSTARTS_AND_RULES.md](docs/QUICKSTARTS_AND_RULES.md) | The quickstarts Bay reads before acting, how to write your own |
 | [SLASH_COMMANDS.md](docs/SLASH_COMMANDS.md) | Complete TUI slash command reference |
-| [APPROVAL_MODEL.md](docs/APPROVAL_MODEL.md) | What gates for approval, what runs freely, approval flow and API |
-| [API_INTEGRATION.md](docs/API_INTEGRATION.md) | Local HTTP API, app integration, TypeScript client |
-| [LOCAL_API_README.md](docs/LOCAL_API_README.md) | Underlying local API route design |
+| [APPROVAL_MODEL.md](docs/APPROVAL_MODEL.md) | What gates for approval, what runs freely |
+| [API_INTEGRATION.md](docs/API_INTEGRATION.md) | Local HTTP API and TypeScript client |
+| [LOCAL_API_README.md](docs/LOCAL_API_README.md) | Local API route design |
 | [1.0_SMOKE_CHECKLIST.md](docs/1.0_SMOKE_CHECKLIST.md) | Release-readiness smoke test checklist |
 | [1.5_ROADMAP.md](docs/1.5_ROADMAP.md) | Bay operator direction and roadmap |
 
@@ -271,8 +356,8 @@ Full reference docs live in [`docs/`](docs/):
 bun install
 bun test
 bun run build
-bun index.tsx      # run from source
-switchbay update   # commit local changes, push, pull latest, rebuild
+bun index.tsx        # run from source
+switchbay update     # commit local changes, push, pull latest, reinstall
 ```
 
 ---

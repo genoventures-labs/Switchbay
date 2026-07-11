@@ -15,7 +15,7 @@ export const TRUSTED_MCP_CATALOG: TrustedMcpCatalogEntry[] = [
     integration: "mcp/playwright",
     aliases: ["browser", "browsing", "web", "web automation", "playwright", "testing", "e2e"],
     description: "Browser automation, page inspection, screenshots, and basic web testing.",
-    installHint: "Install/enable a Playwright MCP server in LM Studio and name the server `playwright` in LM Studio's mcp.json.",
+    installHint: "Install a Playwright MCP server and add `mcp/playwright` to your `~/.switchbay/mcp.json` integrations.",
   },
   {
     id: "filesystem",
@@ -23,7 +23,7 @@ export const TRUSTED_MCP_CATALOG: TrustedMcpCatalogEntry[] = [
     integration: "mcp/filesystem",
     aliases: ["file", "files", "filesystem", "folder", "folders", "directory", "directories", "local files"],
     description: "Scoped file and directory access through an MCP server.",
-    installHint: "Install/enable a filesystem MCP server in LM Studio and name the server `filesystem` in LM Studio's mcp.json.",
+    installHint: "Install a filesystem MCP server and add `mcp/filesystem` to your `~/.switchbay/mcp.json` integrations.",
   },
   {
     id: "github",
@@ -31,7 +31,7 @@ export const TRUSTED_MCP_CATALOG: TrustedMcpCatalogEntry[] = [
     integration: "mcp/github",
     aliases: ["github", "git hub", "issues", "pull requests", "prs", "repo", "repositories"],
     description: "GitHub repository, issue, and pull-request workflows.",
-    installHint: "Install/enable a GitHub MCP server in LM Studio, configure its token there, and name the server `github` in LM Studio's mcp.json.",
+    installHint: "Install a GitHub MCP server, configure its token, and add `mcp/github` to your `~/.switchbay/mcp.json` integrations.",
   },
   {
     id: "memory",
@@ -39,7 +39,7 @@ export const TRUSTED_MCP_CATALOG: TrustedMcpCatalogEntry[] = [
     integration: "mcp/memory",
     aliases: ["memory", "knowledge graph", "graph memory", "remember", "persistent memory"],
     description: "Simple persistent memory through an MCP server.",
-    installHint: "Install/enable a memory MCP server in LM Studio and name the server `memory` in LM Studio's mcp.json.",
+    installHint: "Install a memory MCP server and add `mcp/memory` to your `~/.switchbay/mcp.json` integrations.",
   },
   {
     id: "fetch",
@@ -47,7 +47,7 @@ export const TRUSTED_MCP_CATALOG: TrustedMcpCatalogEntry[] = [
     integration: "mcp/fetch",
     aliases: ["fetch", "http", "url", "urls", "web request", "download", "crawl"],
     description: "HTTP fetch/read access for URLs through an MCP server.",
-    installHint: "Install/enable a fetch MCP server in LM Studio and name the server `fetch` in LM Studio's mcp.json.",
+    installHint: "Install a fetch MCP server and add `mcp/fetch` to your `~/.switchbay/mcp.json` integrations.",
   },
   {
     id: "sequential-thinking",
@@ -55,7 +55,7 @@ export const TRUSTED_MCP_CATALOG: TrustedMcpCatalogEntry[] = [
     integration: "mcp/sequential-thinking",
     aliases: ["sequential", "sequential thinking", "reasoning", "planning", "planner", "think"],
     description: "Structured step-by-step planning through an MCP server.",
-    installHint: "Install/enable a sequential-thinking MCP server in LM Studio and name the server `sequential-thinking` in LM Studio's mcp.json.",
+    installHint: "Install a sequential-thinking MCP server and add `mcp/sequential-thinking` to your `~/.switchbay/mcp.json` integrations.",
   },
   {
     id: "postgres",
@@ -63,7 +63,7 @@ export const TRUSTED_MCP_CATALOG: TrustedMcpCatalogEntry[] = [
     integration: "mcp/postgres",
     aliases: ["postgres", "postgresql", "database", "db", "sql"],
     description: "Read/query Postgres databases through an MCP server.",
-    installHint: "Install/enable a Postgres MCP server in LM Studio, configure its connection string there, and name the server `postgres` in LM Studio's mcp.json.",
+    installHint: "Install a Postgres MCP server, configure its connection string, and add `mcp/postgres` to your `~/.switchbay/mcp.json` integrations.",
   },
 ];
 

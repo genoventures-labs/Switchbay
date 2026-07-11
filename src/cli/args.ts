@@ -589,7 +589,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
         modelLane: null,
       };
     } else if (arg === "version" || arg === "--version" || arg === "-v") {
-      console.log("switchbay 1.6.7");
+      console.log("switchbay 1.6.8");
       process.exit(0);
     } else if (arg === undefined || arg === "help" || arg === "--help" || arg === "-h") {
       return { surface, profile, mode, lane, initialQuery: "", hop: null, resume: false, newSession: false, purge: null, subcommand: "help", engineAction: "status", toolboxAction: "status", toolboxSkill: null, memoryAction: "status", memoryNote: null, knowledgeAction: "status", knowledgeQuery: null, traceAction: "last", mcpAction: "status", modelTarget: null, modelLane: null };

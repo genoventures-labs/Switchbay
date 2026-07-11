@@ -50,7 +50,28 @@ export class OllamaClient {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         model: request.model ?? this.model,
-        messages: request.messages,
+        messages: request.messages.map((msg) => {
+          if (!msg.tool_calls || !msg.tool_calls.length) return msg;
+          return {
+            ...msg,
+            tool_calls: msg.tool_calls.map((tc) => {
+              if (typeof tc.function?.arguments === "string") {
+                try {
+                  return {
+                    ...tc,
+                    function: {
+                      ...tc.function,
+                      arguments: JSON.parse(tc.function.arguments),
+                    },
+                  };
+                } catch {
+                  // Keep as-is if parsing fails
+                }
+              }
+              return tc;
+            }),
+          };
+        }),
         stream: useStream,
         ...(request.tools && request.tools.length > 0 ? { tools: request.tools } : {}),
       }),

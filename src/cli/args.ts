@@ -10,7 +10,8 @@ export type CliOptions = {
   resume: string | boolean; // string (id/index) or true (latest)
   newSession: boolean;
   purge: string | null;
-  subcommand: "run" | "update" | "version" | "help" | "engines" | "skills" | "toolbox" | "plugins" | "agents" | "memory" | "knowledge" | "trace" | "radar" | "handoff" | "mcp" | "models" | "model" | "local-provider" | "cloud-provider" | "agenda" | "task";
+  subcommand: "run" | "serve" | "service" | "update" | "version" | "help" | "engines" | "skills" | "toolbox" | "plugins" | "agents" | "memory" | "knowledge" | "trace" | "radar" | "handoff" | "mcp" | "models" | "model" | "local-provider" | "cloud-provider" | "agenda" | "task";
+  serviceAction?: "install" | "status" | "restart" | "uninstall";
   engineAction: "status" | "sync" | "list" | "templates";
   toolboxAction: "status" | "sync" | "list" | "templates" | "read";
   toolboxSkill: string | null;
@@ -104,6 +105,21 @@ export function parseCliArgs(argv: string[]): CliOptions {
         modelTarget: args[++i] ?? null,
         modelLane: null,
         modelLabel: readLabelFlag(args.slice(i + 1)),
+      };
+    } else if (arg === "serve") {
+      return {
+        surface, profile, mode, lane, initialQuery: "", hop, resume, newSession, purge,
+        subcommand: "serve", engineAction: "status", toolboxAction: "status", toolboxSkill: null,
+        memoryAction: "status", memoryNote: null, knowledgeAction: "status", knowledgeQuery: null,
+        traceAction: "last", mcpAction: "status", modelTarget: null, modelLane: null,
+      };
+    } else if (arg === "service") {
+      const action = args[i + 1];
+      return {
+        surface, profile, mode, lane, initialQuery: "", hop, resume, newSession, purge,
+        subcommand: "service", serviceAction: action === "install" || action === "restart" || action === "uninstall" ? action : "status",
+        engineAction: "status", toolboxAction: "status", toolboxSkill: null, memoryAction: "status", memoryNote: null,
+        knowledgeAction: "status", knowledgeQuery: null, traceAction: "last", mcpAction: "status", modelTarget: null, modelLane: null,
       };
     } else if (arg === "engines" || arg === "engine-bay") {
       const action = args[i + 1];

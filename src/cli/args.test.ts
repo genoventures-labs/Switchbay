@@ -2,6 +2,17 @@ import { expect, test } from "bun:test";
 import { normalizeRuntimeLane } from "../config/env";
 import { parseCliArgs } from "./args";
 
+test("parses the local API server command", () => {
+  expect(parseCliArgs(["bun", "index.tsx", "serve"]).subcommand).toBe("serve");
+});
+
+test("parses macOS service management commands", () => {
+  expect(parseCliArgs(["bun", "index.tsx", "service"]).serviceAction).toBe("status");
+  expect(parseCliArgs(["bun", "index.tsx", "service", "install"]).serviceAction).toBe("install");
+  expect(parseCliArgs(["bun", "index.tsx", "service", "restart"]).serviceAction).toBe("restart");
+  expect(parseCliArgs(["bun", "index.tsx", "service", "uninstall"]).serviceAction).toBe("uninstall");
+});
+
 test("parses MCP CLI helper commands", () => {
   const status = parseCliArgs(["bun", "index.tsx", "mcp"]);
   expect(status.subcommand).toBe("mcp");

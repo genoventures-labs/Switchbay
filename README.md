@@ -185,6 +185,35 @@ Interactive terminal UI:
 switchbay
 ```
 
+Local HTTP API for desktop apps, local web apps, and editor integrations:
+
+```bash
+switchbay serve
+curl -s http://127.0.0.1:7349/health
+curl -s http://127.0.0.1:7349/v1/turn \
+  -H 'content-type: application/json' \
+  -d '{"input":"Summarize this workspace","workspace":"/absolute/path/to/project"}'
+```
+
+The API binds to `127.0.0.1:7349` by default and processes agent turns one at a time. Set `SWITCHBAY_API_TOKEN` or `SWITCHBAY_API_TOKEN_FILE` to require bearer authentication. Binding beyond localhost is refused unless a token is configured. See [docs/LOCAL_API_README.md](docs/LOCAL_API_README.md) for the route contract and integration details.
+
+Use Switchbay from another Bun, Node.js, or TypeScript app:
+
+```ts
+import { Switchbay } from "@genoventures/switchbay";
+
+const bay = new Switchbay({
+  token: process.env.SWITCHBAY_API_TOKEN,
+  clientId: "pagetend",
+  workspace: "/absolute/path/to/PageTend",
+});
+
+const turn = await bay.turn({ input: "Review the current page and suggest the next fix." });
+console.log(turn.content);
+```
+
+`turnStream()` exposes SSE token and tool-step events, `cancel(requestId)` cancels active work, and `approvals` exposes inspect/approve/cancel helpers. Install and manage the macOS login service with `switchbay service install`, `switchbay service status`, `switchbay service restart`, and `switchbay service uninstall`.
+
 On TUI startup, Bay shows a compact local overview with today's Daily Board, workspace state, active lane, and latest session signal. Quiet the operator layer with:
 
 ```bash

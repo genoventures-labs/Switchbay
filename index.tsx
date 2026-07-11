@@ -43,6 +43,11 @@ Switchbay — terminal coding agent shell
 Usage:
   switchbay                          Launch the TUI (interactive mode)
   switchbay "query"                  One-shot request
+  switchbay serve                    Start the local HTTP API
+  switchbay service install          Install the macOS login service
+  switchbay service status           Show background service status
+  switchbay service restart          Restart the background service
+  switchbay service uninstall        Remove the background service
   switchbay "query" --hop <name>     Launch in a different workspace
 
 Sessions:
@@ -119,6 +124,19 @@ Options:
   --new                  Force a fresh session even if a saved one exists
   --purge <duration>     Purge sessions older than duration (1d, 5d, 2w, etc.)
 `);
+    return;
+  }
+
+  if (options.subcommand === "serve") {
+    const { startApiServer } = await import("./src/api/server");
+    const server = startApiServer();
+    console.log(`Switchbay API listening on http://${server.hostname}:${server.port}`);
+    return;
+  }
+
+  if (options.subcommand === "service") {
+    const { runServiceCommand } = await import("./src/service/macos");
+    console.log(await runServiceCommand(options.serviceAction ?? "status"));
     return;
   }
 
@@ -916,109 +934,28 @@ function shellQuote(value: string): string {
 }
 
 async function runCliMode(options: any, resumeId: string | null) {
-  const runtimeLane = normalizeRuntimeLane(options.lane);
-  const toolMode = getToolMode();
-  const localProvider = normalizeLocalProvider(options.lane);
-  const cloudProvider = normalizeCloudProvider(options.lane);
-  const selected = getSelectedRuntimeModel(runtimeLane);
-  const client = createRuntimeClient(runtimeLane, selected
-    ? { model: selected.id, provider: normalizeClientProvider(selected.provider) ?? normalizeClientCloudProvider(cloudProvider), localProvider }
-    : { localProvider, provider: normalizeClientCloudProvider(cloudProvider) });
-  const workspace = await refreshWorkspace();
-  
-  let state = await loadPersistedSession(resumeId === "latest" ? undefined : resumeId || undefined);
-  if (!state || options.newSession) {
-    const { resolveAgentPolicy } = await import("./src/agent/policy");
-    const { createInitialSessionState } = await import("./src/agent/turn-state");
-    const policy = resolveAgentPolicy({ mode: options.mode, profile: options.profile });
-    state = createInitialSessionState({
-      mode: policy.mode,
-      profile: options.profile,
-      resolvedProfile: policy.runtimeProfile,
-      surface: options.surface,
-    });
-  }
-
-  const localCommand = await tryLocalCommand(options.initialQuery, {
-    client,
-    profile: state.resolvedProfile,
-    sessionId: state.sessionId,
-    surface: state.surface,
-    workspace,
-    conversation: state.conversation,
-    lastChangedFile: state.changedFiles[state.changedFiles.length - 1] ?? null,
-    activeAgentId: state.activeAgentId,
-    runtimeLane,
-    toolMode,
-  });
-  if (localCommand.handled && localCommand.assistantMessage) {
-    process.stdout.write(`\n${CLR.accent}⏺${CLR.reset} ${CLR.text}${CLR.bold}Switchbay${CLR.reset}\n`);
-    process.stdout.write(`  ${CLR.muted}└ ${CLR.reset}${localCommand.assistantMessage}\n\n`);
-    state.conversation.push({ role: "user", content: options.initialQuery });
-    state.conversation.push({ role: "assistant", content: localCommand.assistantMessage });
-    state.updatedAt = Date.now();
-    await savePersistedSession(state);
-    return;
-  }
-
-  const turn = await buildTurn({
-    input: options.initialQuery,
-    mode: state.mode,
-    profile: state.requestedProfile,
-    previousObjective: state.currentObjective,
-    transcript: state.conversation,
-    workspace,
-    runtimeLane,
-    toolMode,
-  });
-
+  const { runSwitchbayTurn } = await import("./src/api/service");
+  let sessionId = resumeId;
+  if (resumeId === "latest") sessionId = (await listSessions())[0]?.id ?? null;
   process.stdout.write(`\n${CLR.accent}⏺${CLR.reset} ${CLR.text}${CLR.bold}Switchbay${CLR.reset} ${CLR.muted}(thinking...)${CLR.reset}\n`);
-  
-  const onStep = (title: string) => {
-    process.stdout.write(`  ${CLR.muted}└ ${title}${CLR.reset}\n`);
-  };
-
   try {
-    const executedTurn = await executeTurn({
-      client,
-      sessionId: state.sessionId,
-      surface: state.surface,
-      turn,
-      workspace,
-      onStep,
+    const result = await runSwitchbayTurn({
+      input: options.initialQuery,
+      lane: options.lane,
+      mode: options.mode,
+      profile: options.profile,
+      surface: options.surface,
+      sessionId: sessionId ?? undefined,
+      newSession: options.newSession,
+      clientId: sessionId ? undefined : "cli",
+      workspace: process.cwd(),
+    }, {
+      onStep: (title) => process.stdout.write(`  ${CLR.muted}└ ${title}${CLR.reset}\n`),
     });
-
-    const content =
-      extractAssistantText(executedTurn.response) ||
-      synthesizeAssistantFallback(options.initialQuery, executedTurn.toolExecutions, workspace);
-    const routeTag = formatRouteTag(executedTurn.response);
-    if (content) {
-      process.stdout.write(`\n${CLR.accent}⏺${CLR.reset} ${CLR.text}${CLR.bold}Switchbay${CLR.reset}\n`);
-      if (routeTag) process.stdout.write(`  ${CLR.muted}└ ${CLR.reset}${routeTag}\n`);
-      process.stdout.write(`  ${CLR.muted}└ ${CLR.reset}${content}\n\n`);
-      await saveTraceRecord({
-        assistantContent: content,
-        cwd: workspace?.cwd ?? process.cwd(),
-        executedTurn,
-        runtimeLane,
-        toolMode,
-        sessionId: state.sessionId,
-        turn,
-        userPrompt: options.initialQuery,
-        workspace,
-      });
-      
-      state.conversation.push({ role: "user", content: options.initialQuery });
-      state.conversation.push({ role: "assistant", content });
-      state.updatedAt = Date.now();
-      await savePersistedSession(state);
-    } else if (executedTurn.toolExecutions.length > 0) {
-      process.stdout.write(`\n${CLR.accent}⏺${CLR.reset} ${CLR.text}${CLR.bold}Switchbay${CLR.reset}\n`);
-      process.stdout.write(`  ${CLR.muted}└ ${CLR.reset}Turn completed after local tool work, but the model returned no final assistant text.\n\n`);
-    } else {
-      process.stdout.write(`\n${CLR.accent}⏺${CLR.reset} ${CLR.text}${CLR.bold}Switchbay${CLR.reset}\n`);
-      process.stdout.write(`  ${CLR.muted}└ ${CLR.reset}The model returned no assistant text for this turn.\n\n`);
-    }
+    process.stdout.write(`\n${CLR.accent}⏺${CLR.reset} ${CLR.text}${CLR.bold}Switchbay${CLR.reset}\n`);
+    if (result.route?.using) process.stdout.write(`  ${CLR.muted}└ ${CLR.reset}Using: ${result.route.using}\n`);
+    process.stdout.write(`  ${CLR.muted}└ ${CLR.reset}${result.content}\n\n`);
+    if (result.pendingApproval) process.stdout.write(`  ${CLR.accentBright}Approval required:${CLR.reset} ${result.pendingApproval.summary}\n  Resume session ${result.sessionId} through the TUI or API to approve it.\n\n`);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     process.stdout.write(`\n${CLR.accent}⏺${CLR.reset} ${CLR.text}${CLR.bold}Error:${CLR.reset} ${msg}\n`);

@@ -69,6 +69,7 @@ export type ApprovalRequest = {
 
 export type SessionState = {
   sessionId: string;
+  clientId?: string;
   conversation: ChatMessage[];
   transcript: TranscriptEntry[];
   status: SessionStatus;
@@ -148,9 +149,11 @@ export function createInitialSessionState(input: {
   resolvedProfile: string;
   sessionId?: string;
   surface: string;
+  clientId?: string;
 }): SessionState {
   return {
     sessionId: input.sessionId ?? crypto.randomUUID(),
+    clientId: input.clientId,
     conversation: [],
     transcript: [
       createTranscriptEntry({

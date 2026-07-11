@@ -62,8 +62,8 @@ export async function savePersistedSession(state: SessionState): Promise<void> {
   }
 }
 
-export async function listSessions(): Promise<{ id: string; title: string; updatedAt: number }[]> {
-  const sessions: { id: string; title: string; updatedAt: number }[] = [];
+export async function listSessions(filters: { clientId?: string; workspace?: string } = {}): Promise<{ id: string; title: string; updatedAt: number; clientId: string | null; workspace: string | null }[]> {
+  const sessions: { id: string; title: string; updatedAt: number; clientId: string | null; workspace: string | null }[] = [];
   
   try {
     const { sessionDir } = getSessionPaths();
@@ -91,10 +91,16 @@ export async function listSessions(): Promise<{ id: string; title: string; updat
         
         const id = fname.replace("session-", "").replace(".json", "");
         
+        const clientId = typeof data.clientId === "string" ? data.clientId : null;
+        const workspace = typeof data.workspace?.cwd === "string" ? data.workspace.cwd : null;
+        if (filters.clientId && clientId !== filters.clientId) continue;
+        if (filters.workspace && workspace !== filters.workspace) continue;
         sessions.push({
           id,
           title,
           updatedAt: data.updatedAt ?? (await fs.stat(p)).mtimeMs,
+          clientId,
+          workspace,
         });
       } catch {
         // Skip malformed

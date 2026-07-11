@@ -1,6 +1,8 @@
-# Switchbay Local API Plan
+# Switchbay Local API
 
-This document explains how to add a local HTTP API so other apps can use Switchbay without shelling out to the CLI/TUI.
+This document describes the local HTTP API that lets other apps use Switchbay without shelling out to the CLI/TUI. The first implementation ships with `switchbay serve`, serialized agent turns, explicit workspace selection, loopback-only defaults, and optional bearer authentication.
+
+The original design notes remain below as implementation context. The source of truth for the current contract is `src/api/server.ts` and its tests.
 
 ## Goal
 
@@ -307,7 +309,7 @@ export function startApiServer(options: ServeOptions = {}) {
         const url = new URL(req.url);
 
         if (req.method === "GET" && url.pathname === "/health") {
-          return json({ ok: true, service: "switchbay", version: "0.9.81" });
+          return json({ ok: true, service: "switchbay", version: "1.6.4" });
         }
 
         if (req.method === "POST" && url.pathname === "/v1/turn") {
@@ -441,6 +443,7 @@ For the first version, environment variables are enough:
 SWITCHBAY_API_PORT=7349
 SWITCHBAY_API_HOST=127.0.0.1
 SWITCHBAY_API_TOKEN=optional-token
+SWITCHBAY_API_TOKEN_FILE=~/.switchbay/api-token
 ```
 
 ## Step 5: Wire `serve` in `index.tsx`
@@ -474,7 +477,7 @@ Response:
 {
   "ok": true,
   "service": "switchbay",
-  "version": "0.9.81"
+  "version": "1.6.4"
 }
 ```
 

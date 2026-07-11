@@ -1,0 +1,39 @@
+import type { RuntimeLane } from "../config/env";
+
+export type TurnRequest = {
+  input: string;
+  workspace?: string;
+  lane?: string | null;
+  mode?: string;
+  profile?: string;
+  surface?: string;
+  sessionId?: string;
+  newSession?: boolean;
+  clientId?: string;
+};
+
+export type TurnResponse = {
+  requestId: string;
+  sessionId: string;
+  content: string;
+  lane: RuntimeLane;
+  traceSaved: boolean;
+  toolExecutions: Array<{
+    tool: string;
+    summary: string;
+    ok: boolean;
+    changedFile?: string;
+  }>;
+  workspace: {
+    cwd: string;
+    repoRoot: string | null;
+    branch: string | null;
+    dirtyFiles: string[];
+  };
+  pendingApproval: import("../agent/turn-state").ApprovalRequest | null;
+  route: { provider?: string; model?: string; using?: string } | null;
+};
+
+export type ApiErrorResponse = {
+  error: { message: string; code: string };
+};

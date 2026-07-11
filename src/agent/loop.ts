@@ -708,6 +708,7 @@ export async function executeTurn(input: {
   onToken?: (token: string) => void;
   onTokens?: (count: number) => void;
   maxIterations?: number;
+  signal?: AbortSignal;
 }): Promise<ExecutedTurn> {
   const toolExecutions: AgentToolExecution[] = [];
   const messages: ChatMessage[] = [...input.turn.request.messages];
@@ -716,6 +717,7 @@ export async function executeTurn(input: {
   const MAX_EMPTY_REPLY_RETRIES = 1;
 
   for (let iteration = 0; iteration < MAX_ITERATIONS; iteration += 1) {
+    if (input.signal?.aborted) throw new DOMException("Turn cancelled", "AbortError");
     const request: ChatCompletionRequest = {
       ...input.turn.request,
       messages,
@@ -776,6 +778,7 @@ export async function executeTurn(input: {
     });
 
     for (const toolCall of toolCalls) {
+      if (input.signal?.aborted) throw new DOMException("Turn cancelled", "AbortError");
       const toolName = toolCall.function.name;
       let args: Record<string, unknown> = {};
       try {

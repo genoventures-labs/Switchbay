@@ -129,8 +129,21 @@ Options:
 
   if (options.subcommand === "serve") {
     const { startApiServer } = await import("./src/api/server");
-    const server = startApiServer();
-    console.log(`Switchbay API listening on http://${server.hostname}:${server.port}`);
+    try {
+      const server = startApiServer();
+      console.log(`Switchbay API listening on http://${server.hostname}:${server.port}`);
+    } catch (err: any) {
+      if (err?.code === "EADDRINUSE" || err?.message?.includes("EADDRINUSE")) {
+        console.error(`\n${CLR.error}Error: Port is already in use.${CLR.reset}`);
+        console.error("The Switchbay background service or another instance is likely already running.");
+        console.error("You can:");
+        console.error("  1. Check service status:   switchbay service status");
+        console.error("  2. Uninstall the service:  switchbay service uninstall");
+        console.error("  3. Run on another port:    SWITCHBAY_API_PORT=7350 switchbay serve\n");
+        process.exit(1);
+      }
+      throw err;
+    }
     return;
   }
 

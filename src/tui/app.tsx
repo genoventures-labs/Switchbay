@@ -153,6 +153,7 @@ export function SwitchbayApp({
   const [alwaysApprovedShellCommands, setAlwaysApprovedShellCommands] = useState<Set<string>>(() => new Set());
   const [rightRailCollapsed, setRightRailCollapsed] = useState(false);
   const [dailyBoard, setDailyBoard] = useState<DailyBoard>(() => loadDailyBoard());
+  const [pendingUpdateVersion, setPendingUpdateVersion] = useState<string | null>(null);
   
   const didHydrateRef = useRef(false);
   const didShowStartupOverviewRef = useRef(false);
@@ -807,6 +808,61 @@ export function SwitchbayApp({
     };
   }, [dailyBoard, initialQuery, operatorConfig, runtimeBadge, state.workspace]);
 
+  useEffect(() => {
+    if (initialQuery || !didHydrateRef.current) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      import("../runtime/update").then(({ checkForUpdate }) => {
+        checkForUpdate().then((latest) => {
+          if (latest) {
+            import("../../package.json").then((pkg) => {
+              dispatch({
+                type: "assistant/appended",
+                message: `✨ **Update Available**\n\nSwitchbay v${latest} is available! (Current: v${pkg.default.version})\n\nWould you like to update now?\n\n**y** to update and restart · **n** to ignore`,
+              });
+              setPendingUpdateVersion(latest);
+            });
+          }
+        }).catch(() => {});
+      }).catch(() => {});
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [initialQuery, didHydrateRef.current]);
+
+  async function performTuiUpdate(latest: string) {
+    const { existsSync } = await import("node:fs");
+    const { join } = await import("node:path");
+
+    const isGit = existsSync(join(process.cwd(), ".git"));
+    const cmdStr = isGit
+      ? `bun index.tsx update`
+      : `switchbay update`;
+
+    dispatch({
+      type: "assistant/appended",
+      message: `Running update in foreground...\nCommand: \`${cmdStr}\``,
+    });
+
+    const argsStr = process.argv.slice(2).map(a => `"${a.replace(/"/g, '\\"')}"`).join(" ");
+    const relaunchCmd = isGit
+      ? `bun index.tsx ${argsStr}`
+      : `switchbay ${argsStr}`;
+
+    const fullCmd = `sleep 0.2 && ${cmdStr} && ${relaunchCmd}`;
+
+    const child = Bun.spawn(["sh", "-c", fullCmd], {
+      stdin: "inherit",
+      stdout: "inherit",
+      stderr: "inherit",
+      detached: true,
+    });
+    child.unref();
+    process.exit(0);
+  }
+
   async function handleResumeSession(id: string) {
     const persisted = await loadPersistedSession(id);
     if (persisted) {
@@ -1076,6 +1132,24 @@ export function SwitchbayApp({
           void handleSubmit(currentStep);
           return;
         }
+      }
+    }
+
+    // Pending update confirmation
+    if (pendingUpdateVersion) {
+      const intent = parseApprovalIntent(trimmedVal);
+      if (intent === "apply" || intent === "always") {
+        const version = pendingUpdateVersion;
+        setPendingUpdateVersion(null);
+        setQuerySync("");
+        void performTuiUpdate(version);
+        return;
+      }
+      if (intent === "cancel") {
+        setPendingUpdateVersion(null);
+        dispatch({ type: "assistant/appended", message: "Update ignored." });
+        setQuerySync("");
+        return;
       }
     }
 

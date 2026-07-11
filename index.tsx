@@ -47,6 +47,7 @@ ${CLR.accent}${CLR.bold}Usage:${CLR.reset}
   ${CLR.bold}switchbay service status${CLR.reset}           Show background service status
   ${CLR.bold}switchbay service restart${CLR.reset}          Restart the background service
   ${CLR.bold}switchbay service uninstall${CLR.reset}        Remove the background service
+  ${CLR.bold}switchbay update${CLR.reset}                     Update Switchbay (git/homebrew & restart service)
   ${CLR.bold}switchbay${CLR.reset} "${CLR.accentBright}query${CLR.reset}" ${CLR.accent}--hop${CLR.reset} <name>     Launch in a different workspace
 
 ${CLR.accent}${CLR.bold}Sessions:${CLR.reset}
@@ -198,6 +199,11 @@ ${CLR.accent}${CLR.bold}Options:${CLR.reset}
   if (options.subcommand === "service") {
     const { runServiceCommand } = await import("./src/service/macos");
     console.log(await runServiceCommand(options.serviceAction ?? "status"));
+    return;
+  }
+
+  if (options.subcommand === "update") {
+    await runUpdateCommand();
     return;
   }
 
@@ -722,6 +728,103 @@ async function runMcpCommand(action: "status" | "init" | "catalog") {
     console.error(`switchbay mcp: ${msg}`);
     process.exit(1);
   }
+}
+
+async function runUpdateCommand() {
+  const { existsSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const { writeFile, chmod } = await import("node:fs/promises");
+  const { runCommand } = await import("./src/tools/shell");
+
+  const cwd = process.cwd();
+  const isGit = existsSync(join(cwd, ".git"));
+
+  if (isGit) {
+    console.log(`${CLR.accent}⏺${CLR.reset} ${CLR.bold}Switchbay Git Updater${CLR.reset}`);
+    console.log("Updating from local git repository...");
+
+    // 1. git pull
+    console.log("Running git pull...");
+    const gitPull = Bun.spawn(["git", "pull"], { stdout: "inherit", stderr: "inherit" });
+    const pullCode = await gitPull.exited;
+    if (pullCode !== 0) {
+      console.error(`${CLR.error}git pull failed with exit code ${pullCode}.${CLR.reset}`);
+      process.exit(1);
+    }
+
+    // 2. bun install
+    console.log("Running bun install...");
+    const bunInstall = Bun.spawn(["bun", "install"], { stdout: "inherit", stderr: "inherit" });
+    const installCode = await bunInstall.exited;
+    if (installCode !== 0) {
+      console.error(`${CLR.error}bun install failed with exit code ${installCode}.${CLR.reset}`);
+      process.exit(1);
+    }
+
+    // 3. bun run build
+    console.log("Building Switchbay...");
+    const bunBuild = Bun.spawn(["bun", "run", "build"], { stdout: "inherit", stderr: "inherit" });
+    const buildCode = await bunBuild.exited;
+    if (buildCode !== 0) {
+      console.error(`${CLR.error}bun run build failed with exit code ${buildCode}.${CLR.reset}`);
+      process.exit(1);
+    }
+
+    // 4. Update the service
+    console.log("Reinstalling macOS service...");
+    const { runServiceCommand } = await import("./src/service/macos");
+    console.log(await runServiceCommand("install"));
+
+    // 5. Try linking the global CLI to this repository
+    console.log("Updating global CLI command to point to this repository...");
+    try {
+      const activeCli = await runCommand(["which", "switchbay"]);
+      if (activeCli.ok && activeCli.stdout?.trim()) {
+        const cliPath = activeCli.stdout.trim();
+        const content = `#!/bin/bash\nexec bun "${join(cwd, "index.tsx")}" "$@"\n`;
+        await writeFile(cliPath, content);
+        await chmod(cliPath, 0o755);
+        console.log(`Linked global CLI command at ${cliPath} to ${join(cwd, "index.tsx")}`);
+      } else {
+        console.log("No global `switchbay` command found in PATH to link.");
+      }
+    } catch (err: any) {
+      console.log(`Note: Could not link global CLI path (run with sudo or check permissions if needed): ${err.message}`);
+    }
+
+    console.log(`\n${CLR.accent}⏺${CLR.reset} ${CLR.bold}Update successful!${CLR.reset}`);
+    return;
+  }
+
+  // Not a git repo - update via Homebrew
+  console.log(`${CLR.accent}⏺${CLR.reset} ${CLR.bold}Switchbay Homebrew Updater${CLR.reset}`);
+  console.log("Checking for updates via Homebrew...");
+
+  console.log("Running brew update...");
+  const brewUpdate = Bun.spawn(["brew", "update"], { stdout: "inherit", stderr: "inherit" });
+  const updateCode = await brewUpdate.exited;
+  if (updateCode !== 0) {
+    console.error(`${CLR.error}brew update failed with exit code ${updateCode}.${CLR.reset}`);
+    process.exit(1);
+  }
+
+  console.log("Running brew upgrade switchbay...");
+  const brewUpgrade = Bun.spawn(["brew", "upgrade", "switchbay"], { stdout: "inherit", stderr: "inherit" });
+  const upgradeCode = await brewUpgrade.exited;
+  if (upgradeCode !== 0) {
+    console.log("brew upgrade finished or already up-to-date.");
+  }
+
+  // Restart/reinstall the daemon
+  console.log("Rebuilding and restarting Switchbay macOS service...");
+  try {
+    const { runServiceCommand } = await import("./src/service/macos");
+    console.log(await runServiceCommand("install"));
+  } catch (err: any) {
+    console.error(`Failed to reinstall background service: ${err.message}`);
+  }
+
+  console.log(`\n${CLR.accent}⏺${CLR.reset} ${CLR.bold}Update completed!${CLR.reset}`);
 }
 
 async function runLocalProviderCommand(action: "status" | "set", target: string | null) {

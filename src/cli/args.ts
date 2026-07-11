@@ -565,11 +565,29 @@ export function parseCliArgs(argv: string[]): CliOptions {
         modelLabel: parsedModel.label,
       };
     } else if (arg === "update") {
-      console.log("Run this to update Switchbay from source:\n");
-      console.log("  bun install -g github:genoventures-labs/Switchbay#main\n");
-      console.log("Or, if installed through Homebrew:\n");
-      console.log("  brew upgrade switchbay\n");
-      process.exit(0);
+      return {
+        surface,
+        profile,
+        mode,
+        lane,
+        initialQuery: "",
+        hop,
+        resume,
+        newSession,
+        purge,
+        subcommand: "update",
+        engineAction: "status",
+        toolboxAction: "status",
+        toolboxSkill: null,
+        memoryAction: "status",
+        memoryNote: null,
+        knowledgeAction: "status",
+        knowledgeQuery: null,
+        traceAction: "last",
+        mcpAction: "status",
+        modelTarget: null,
+        modelLane: null,
+      };
     } else if (arg === "version" || arg === "--version" || arg === "-v") {
       console.log("switchbay 1.6.4");
       process.exit(0);

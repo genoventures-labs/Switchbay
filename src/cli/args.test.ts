@@ -275,6 +275,11 @@ test("parses operator helper commands", () => {
   expect(handoff.subcommand).toBe("handoff");
 });
 
+test("parses update command", () => {
+  const update = parseCliArgs(["bun", "index.tsx", "update"]);
+  expect(update.subcommand).toBe("update");
+});
+
 test("normalizes cloud MCP runtime lane aliases", () => {
   expect(normalizeRuntimeLane("mcp")).toBe("cloud-mcp");
   expect(normalizeRuntimeLane("cloud-mcp")).toBe("cloud-mcp");

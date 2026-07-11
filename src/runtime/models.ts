@@ -291,26 +291,125 @@ export function normalizeLmStudioPullModel(value: string): string {
   return trimmed;
 }
 
-export async function pullOllamaModel(options: { model: string; fetchImpl?: FetchLike }): Promise<{ model: string; status: string }> {
+export function normalizeOllamaHuggingFaceModel(target: string, quantization?: string | null): string {
+  const trimmed = target.trim();
+  if (!trimmed) return "";
+
+  let username = "";
+  let repository = "";
+  let tag = "";
+
+  try {
+    const url = new URL(trimmed);
+    if (url.hostname === "huggingface.co" || url.hostname === "www.huggingface.co") {
+      const parts = url.pathname.split("/").filter(Boolean);
+      if (parts.length >= 2) {
+        username = parts[0];
+        repository = parts[1];
+        // If there's a specific GGUF file in the URL
+        const ggufFile = parts.find(p => p.toLowerCase().endsWith(".gguf"));
+        if (ggufFile) {
+          tag = ggufFile;
+        }
+      }
+    }
+  } catch {
+    // Not a valid URL, could be in the format "username/repository" or "hf.co/username/repository"
+    if (trimmed.startsWith("hf.co/")) {
+      const parts = trimmed.split(":");
+      const repoPath = parts[0];
+      const rest = parts.slice(1).join(":");
+      const finalTag = quantization?.trim() || rest;
+      return `${repoPath}${finalTag ? `:${finalTag}` : ""}`;
+    } else if (trimmed.includes("/")) {
+      // e.g. "username/repository" or "username/repository:tag"
+      const parts = trimmed.split(":");
+      const repoPath = parts[0];
+      const rest = parts.slice(1).join(":");
+      const repoParts = repoPath.split("/");
+      if (repoParts.length === 2) {
+        const finalTag = quantization?.trim() || rest;
+        return `hf.co/${repoPath}${finalTag ? `:${finalTag}` : ""}`;
+      }
+    }
+  }
+
+  if (username && repository) {
+    let finalTag = quantization?.trim() || tag;
+    return `hf.co/${username}/${repository}${finalTag ? `:${finalTag}` : ""}`;
+  }
+
+  return trimmed;
+}
+
+export type OllamaPullOptions = {
+  model: string;
+  fetchImpl?: FetchLike;
+  onProgress?: (progress: { status: string; completed?: number; total?: number }) => void;
+};
+
+export async function pullOllamaModel(options: OllamaPullOptions): Promise<{ model: string; status: string }> {
   const model = options.model.trim();
   if (!model) throw new Error("Ollama model name is required.");
   const config = getLocalProviderConfig("ollama");
   const response = await (options.fetchImpl ?? fetch)(`${config.apiBase}/pull`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ model, stream: false }),
+    body: JSON.stringify({ model, stream: true }),
   });
-  const body = await response.text().catch(() => "");
-  let status = "";
-  try {
-    status = String((JSON.parse(body) as { status?: string }).status ?? "");
-  } catch {
-    status = body.trim();
-  }
+
   if (!response.ok) {
-    throw new Error(`Ollama API error ${response.status}: ${status || response.statusText}`);
+    const body = await response.text().catch(() => "");
+    throw new Error(`Ollama API error ${response.status}: ${body.trim() || response.statusText}`);
   }
-  return { model, status: status || "success" };
+
+  const reader = response.body!.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let lastStatus = "pending";
+
+  function processLine(line: string) {
+    if (!line.trim()) return;
+    try {
+      const chunk = JSON.parse(line) as { status?: string; completed?: number; total?: number; error?: string };
+      if (chunk.error) {
+        throw new Error(chunk.error);
+      }
+      if (chunk.status) {
+        lastStatus = chunk.status;
+        if (options.onProgress) {
+          options.onProgress({
+            status: chunk.status,
+            completed: chunk.completed,
+            total: chunk.total,
+          });
+        }
+      }
+    } catch (err: any) {
+      if (err.message && !err.message.includes("JSON")) {
+        throw err;
+      }
+    }
+  }
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) {
+      if (buffer.trim()) {
+        processLine(buffer);
+      }
+      break;
+    }
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+
+    for (const line of lines) {
+      processLine(line);
+    }
+  }
+
+  return { model, status: lastStatus };
 }
 
 async function listLmStudioNativeModels(

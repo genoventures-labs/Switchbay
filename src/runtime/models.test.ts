@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { getCloudModelPresets, listRuntimeModels, listLmStudioModels, listOllamaModels, normalizeLmStudioPullModel, pullLmStudioModel, pullOllamaModel } from "./models";
+import { getCloudModelPresets, listRuntimeModels, listLmStudioModels, listOllamaModels, normalizeLmStudioPullModel, pullLmStudioModel, pullOllamaModel, normalizeOllamaHuggingFaceModel } from "./models";
 import { invalidateLocalProvidersConfig } from "./local-providers";
 import { addCloudModel, invalidateCloudModelCatalog } from "./cloud-model-catalog";
 import { invalidateCloudProvidersConfig } from "./cloud-providers";
@@ -302,6 +302,16 @@ test("pulls an Ollama model through the configured API", async () => {
 
   expect(result).toEqual({ model: "llama3.2", status: "success" });
   expect(requests).toEqual([
-    { url: "http://localhost:11434/api/pull", body: { model: "llama3.2", stream: false } },
+    { url: "http://localhost:11434/api/pull", body: { model: "llama3.2", stream: true } },
   ]);
+});
+
+test("normalizes Hugging Face targets to Ollama hf.co format", () => {
+  expect(normalizeOllamaHuggingFaceModel("https://huggingface.co/lmstudio-community/gpt-oss-20b-GGUF", "Q4_K_M")).toBe("hf.co/lmstudio-community/gpt-oss-20b-GGUF:Q4_K_M");
+  expect(normalizeOllamaHuggingFaceModel("https://huggingface.co/lmstudio-community/gpt-oss-20b-GGUF/blob/main/gpt-oss-20b-Q4_K_M.gguf")).toBe("hf.co/lmstudio-community/gpt-oss-20b-GGUF:gpt-oss-20b-Q4_K_M.gguf");
+  expect(normalizeOllamaHuggingFaceModel("lmstudio-community/gpt-oss-20b-GGUF", "Q4_K_M")).toBe("hf.co/lmstudio-community/gpt-oss-20b-GGUF:Q4_K_M");
+  expect(normalizeOllamaHuggingFaceModel("hf.co/lmstudio-community/gpt-oss-20b-GGUF", "Q4_K_M")).toBe("hf.co/lmstudio-community/gpt-oss-20b-GGUF:Q4_K_M");
+  expect(normalizeOllamaHuggingFaceModel("lmstudio-community/gpt-oss-20b-GGUF:Q4_K_M")).toBe("hf.co/lmstudio-community/gpt-oss-20b-GGUF:Q4_K_M");
+  expect(normalizeOllamaHuggingFaceModel("llama3.2")).toBe("llama3.2");
+  expect(normalizeOllamaHuggingFaceModel("llama3.2:3b")).toBe("llama3.2:3b");
 });

@@ -20,7 +20,7 @@ export type LocalProvidersConfig = {
 const CONFIG_FILE = "local-providers.json";
 
 const DEFAULT_CONFIG: LocalProvidersConfig = {
-  active: "lmstudio",
+  active: "ollama",
   providers: {
     lmstudio: {
       id: "lmstudio",
@@ -49,7 +49,7 @@ export function normalizeLocalProvider(value?: string | null): LocalProviderId |
   if (normalized === "lm" || normalized === "lmstudio" || normalized === "lm-studio" || normalized === "studio") {
     return "lmstudio";
   }
-  if (normalized === "ollama" || normalized === "ol") {
+  if (normalized === "ollama" || normalized === "ol" || normalized === "huggingface" || normalized === "hf" || normalized === "hf.co") {
     return "ollama";
   }
   return null;
@@ -135,8 +135,8 @@ function normalizeProvider(value: unknown, fallback: LocalProviderConfig): Local
 function applyEnv(config: LocalProvidersConfig): LocalProvidersConfig {
   const lmBase = Bun.env.SWITCHBAY_LMSTUDIO_BASE || Bun.env.LMSTUDIO_API_BASE || Bun.env.LMSTUDIO_API_URL;
   const lmModel = Bun.env.SWITCHBAY_LMSTUDIO_MODEL || Bun.env.LMSTUDIO_DEFAULT_MODEL;
-  const ollamaBase = Bun.env.SWITCHBAY_OLLAMA_BASE || Bun.env.OLLAMA_API_BASE || Bun.env.OLLAMA_HOST;
-  const ollamaModel = Bun.env.SWITCHBAY_OLLAMA_MODEL || Bun.env.OLLAMA_MODEL;
+  const ollamaBase = Bun.env.SWITCHBAY_OLLAMA_BASE || Bun.env.OLLAMA_API_BASE || Bun.env.OLLAMA_HOST || lmBase;
+  const ollamaModel = Bun.env.SWITCHBAY_OLLAMA_MODEL || Bun.env.OLLAMA_MODEL || lmModel;
   return {
     ...config,
     active: normalizeLocalProvider(Bun.env.SWITCHBAY_LOCAL_PROVIDER) ?? config.active,
@@ -162,6 +162,16 @@ function normalizeProviderBase(provider: LocalProviderId, value: string, fallbac
     if (trimmed.endsWith("/v1")) return trimmed;
     if (trimmed.endsWith("/api/v1")) return trimmed.replace(/\/api\/v1$/, "/v1");
     return `${trimmed.replace(/\/$/, "")}/v1`;
+  }
+  if (provider === "ollama") {
+    let clean = trimmed;
+    if (clean.endsWith("/v1")) {
+      clean = clean.replace(/\/v1$/, "");
+    } else if (clean.endsWith("/api/v1")) {
+      clean = clean.replace(/\/api\/v1$/, "");
+    }
+    if (clean.endsWith("/api")) return clean;
+    return `${clean.replace(/\/$/, "")}/api`;
   }
   if (trimmed.endsWith("/api")) return trimmed;
   return `${trimmed.replace(/\/$/, "")}/api`;

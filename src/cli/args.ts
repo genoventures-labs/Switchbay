@@ -751,6 +751,9 @@ function isLaneAlias(value: string | null): boolean {
     value === "lmstudio" ||
     value === "lm-studio" ||
     value === "ollama" ||
+    value === "huggingface" ||
+    value === "hf" ||
+    value === "hf.co" ||
     value === "openai" ||
     value === "open-ai" ||
     value === "gpt" ||

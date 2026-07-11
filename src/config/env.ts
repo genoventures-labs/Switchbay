@@ -26,7 +26,7 @@ export function normalizeRuntimeLane(value?: string | null): RuntimeLane {
   if (lane === "native-mcp" || lane === "local-mcp" || lane === "lm-mcp" || lane === "lmstudio-mcp") {
     return "local-mcp";
   }
-  if (lane === "local" || lane === "lm" || lane === "lmstudio" || lane === "lm-studio" || lane === "ollama") {
+  if (lane === "local" || lane === "lm" || lane === "lmstudio" || lane === "lm-studio" || lane === "ollama" || lane === "huggingface" || lane === "hf" || lane === "hf.co") {
     return "local";
   }
   if (lane === "openai" || lane === "open-ai" || lane === "gpt" || lane === "anthropic" || lane === "claude" || lane === "google" || lane === "gemini") {
@@ -61,7 +61,29 @@ export function getToolMode(): ToolMode {
 
 export function getDefaultModel(): string {
   const lane = getRuntimeLane();
-  if (lane === "local" || lane === "local-mcp") {
+  if (lane === "local") {
+    const localProvider = readEnv("SWITCHBAY_LOCAL_PROVIDER")?.toLowerCase();
+    if (localProvider === "ollama" || localProvider === "ol") {
+      return getOllamaModel();
+    }
+    try {
+      const configPath = path.join(
+        Bun.env.HOME ?? Bun.env.USERPROFILE ?? "",
+        ".switchbay",
+        "local-providers.json"
+      );
+      if (require("node:fs").existsSync(configPath)) {
+        const config = JSON.parse(require("node:fs").readFileSync(configPath, "utf-8"));
+        if (config.active === "ollama") {
+          return getOllamaModel();
+        }
+      }
+    } catch {
+      // Ignore
+    }
+    return getLmStudioModel();
+  }
+  if (lane === "local-mcp") {
     return getLmStudioModel();
   }
 
@@ -80,6 +102,16 @@ export function getLmStudioModel(): string {
     readEnv("SWITCHBAY_LMSTUDIO_MODEL") ??
     readEnv("LMSTUDIO_DEFAULT_MODEL") ??
     DEFAULTS.lmStudioModel
+  );
+}
+
+export function getOllamaModel(): string {
+  return (
+    readEnv("SWITCHBAY_OLLAMA_MODEL") ??
+    readEnv("OLLAMA_MODEL") ??
+    readEnv("SWITCHBAY_LMSTUDIO_MODEL") ??
+    readEnv("LMSTUDIO_DEFAULT_MODEL") ??
+    DEFAULTS.ollamaModel
   );
 }
 

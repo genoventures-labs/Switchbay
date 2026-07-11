@@ -939,7 +939,7 @@ export function SwitchbayApp({
         switchRuntimeLane("local", "lmstudio");
         return;
       }
-      if (requested === "ollama") {
+      if (requested === "ollama" || requested === "hf" || requested === "huggingface") {
         switchRuntimeLane("local", "ollama");
         return;
       }
@@ -1005,7 +1005,7 @@ export function SwitchbayApp({
         setQuerySync("");
         return;
       }
-      if (requested === "ollama") {
+      if (requested === "ollama" || requested === "hf" || requested === "huggingface") {
         setActiveLocalProvider("ollama");
         setLocalProvider("ollama");
         void openModelDrawer("local", "ollama");

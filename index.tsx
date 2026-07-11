@@ -818,7 +818,7 @@ async function runModelPullCommand(rawLane: string | null, target: string | null
   const lane = normalizeRuntimeLane(rawLane ?? "local");
   const localProvider = normalizeLocalProvider(rawLane) ?? getActiveLocalProvider();
   if (lane !== "local" && lane !== "local-mcp") {
-    console.error("switchbay model pull: LM Studio pulls require the local lane. Use `switchbay model pull <model>` or `switchbay model pull local <model>`.");
+    console.error("switchbay model pull: local pulls require the local lane. Use `switchbay model pull <model>` or `switchbay model pull local <model>`.");
     process.exit(1);
   }
   if (!target?.trim()) {
@@ -830,13 +830,37 @@ async function runModelPullCommand(rawLane: string | null, target: string | null
 
   try {
     if (localProvider === "ollama") {
-      console.log(`Pulling ${target} through Ollama...`);
-      const { pullOllamaModel } = await import("./src/runtime/models");
-      const result = await pullOllamaModel({ model: target });
-      setSelectedRuntimeModel("local", { id: result.model, provider: "ollama" });
-      setActiveLocalProvider("ollama");
-      console.log(`Pulled: ${result.status}`);
-      console.log(`Selected ${result.model} for Ollama.`);
+      const { normalizeOllamaHuggingFaceModel, pullOllamaModel } = await import("./src/runtime/models");
+      const targetModel = normalizeOllamaHuggingFaceModel(target, quantization);
+      console.log(`Pulling ${targetModel} through Ollama...`);
+      try {
+        let lastPercent = -1;
+        const result = await pullOllamaModel({
+          model: targetModel,
+          onProgress: (progress) => {
+            if (progress.completed !== undefined && progress.total !== undefined && progress.total > 0) {
+              const percent = Math.floor((progress.completed / progress.total) * 100);
+              if (percent !== lastPercent) {
+                lastPercent = percent;
+                process.stdout.write(`\rPulling... ${percent}% (${progress.status})`);
+              }
+            } else {
+              process.stdout.write(`\rPulling... ${progress.status}`);
+            }
+          }
+        });
+        process.stdout.write("\n");
+        setSelectedRuntimeModel("local", { id: result.model, provider: "ollama" });
+        setActiveLocalProvider("ollama");
+        console.log(`Pulled: ${result.status}`);
+        console.log(`Selected ${result.model} for Ollama.`);
+      } catch (error: any) {
+        console.error(`Ollama pull API failed: ${error.message}`);
+        console.log("");
+        await runOllamaCliFallback(targetModel);
+        setSelectedRuntimeModel("local", { id: targetModel, provider: "ollama" });
+        setActiveLocalProvider("ollama");
+      }
       return;
     }
     console.log(`Pulling ${target} through LM Studio...`);
@@ -899,6 +923,27 @@ async function runLmStudioCliFallback(model: string, lane: ReturnType<typeof nor
     provider: lane === "local-mcp" ? "lmstudio-mcp" : "lmstudio",
   });
   console.log(`Selected ${model} for ${getRuntimeLaneLabel(lane)}.`);
+}
+
+async function runOllamaCliFallback(model: string) {
+  if (!model) throw new Error("Ollama CLI fallback needs a model id.");
+  console.log(`Trying Ollama CLI fallback: \`ollama pull ${model}\`.`);
+  try {
+    const proc = Bun.spawn(["ollama", "pull", model], {
+      stdin: "inherit",
+      stdout: "inherit",
+      stderr: "inherit",
+    });
+    const exitCode = await proc.exited;
+    if (exitCode !== 0) {
+      throw new Error(`ollama pull exited with ${exitCode}`);
+    }
+  } catch (error: any) {
+    if (error?.code === "ENOENT" || /ENOENT|not found/i.test(error.message)) {
+      throw new Error("Ollama CLI `ollama` was not found. Please make sure Ollama is installed and running.");
+    }
+    throw error;
+  }
 }
 
 async function runInheritedCommand(command: string[]): Promise<void> {

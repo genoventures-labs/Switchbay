@@ -280,7 +280,7 @@ test("normalizes cloud MCP runtime lane aliases", () => {
   expect(normalizeRuntimeLane("cloud-mcp")).toBe("cloud-mcp");
   expect(normalizeRuntimeLane("cloudmcp")).toBe("cloud-mcp");
   expect(normalizeRuntimeLane("cmcp")).toBe("cloud-mcp");
-  expect(normalizeRuntimeLane("native-mcp")).toBe("local-mcp");
+  expect(normalizeRuntimeLane("native-mcp")).toBe("local");
   expect(normalizeRuntimeLane("ollama")).toBe("local");
   expect(normalizeRuntimeLane("huggingface")).toBe("local");
   expect(normalizeRuntimeLane("hf")).toBe("local");

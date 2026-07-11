@@ -107,9 +107,10 @@ export function parseCliArgs(argv: string[]): CliOptions {
         modelLabel: readLabelFlag(args.slice(i + 1)),
       };
     } else if (arg === "serve") {
+      const detach = args.includes("--detach") || args.includes("-d");
       return {
         surface, profile, mode, lane, initialQuery: "", hop, resume, newSession, purge,
-        subcommand: "serve", engineAction: "status", toolboxAction: "status", toolboxSkill: null,
+        subcommand: "serve", detach, engineAction: "status", toolboxAction: "status", toolboxSkill: null,
         memoryAction: "status", memoryNote: null, knowledgeAction: "status", knowledgeQuery: null,
         traceAction: "last", mcpAction: "status", modelTarget: null, modelLane: null,
       };
@@ -745,11 +746,6 @@ function isLaneAlias(value: string | null): boolean {
     value === "cloud-mcp" ||
     value === "mcp" ||
     value === "local" ||
-    value === "local-mcp" ||
-    value === "native-mcp" ||
-    value === "lm" ||
-    value === "lmstudio" ||
-    value === "lm-studio" ||
     value === "ollama" ||
     value === "huggingface" ||
     value === "hf" ||

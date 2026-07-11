@@ -2,8 +2,6 @@ import { getRuntimeLane, type RuntimeLane } from "../config/env";
 import { AnthropicClient } from "./anthropic-client";
 import { CloudRouterClient } from "./cloud-router-client";
 import { getCloudProviderConfig, type CloudProviderId } from "./cloud-providers";
-import { LmStudioClient } from "./lmstudio-client";
-import { LmStudioMcpClient } from "./lmstudio-mcp-client";
 import { getActiveLocalProvider, getLocalProviderConfig, type LocalProviderId } from "./local-providers";
 import { OllamaClient } from "./ollama-client";
 import { OpenAiClient } from "./openai-client";
@@ -41,18 +39,12 @@ export function createRuntimeClient(
   let routerMode: string | null = null;
   if (lane === "local") {
     const localProvider = options.localProvider ?? getActiveLocalProvider();
-    client = localProvider === "ollama" ? new OllamaClient() : new LmStudioClient();
+    client = new OllamaClient();
     const config = getLocalProviderConfig(localProvider);
-    using = `local/${localProvider}/${model ?? config.model ?? "default"}`;
+    using = `local/ollama/${model ?? config.model ?? "default"}`;
     routerIntent = "local_provider";
-    routerReason = `Local provider selected: ${config.label}.`;
+    routerReason = `Local provider selected: Ollama.`;
     routerMode = options.localProvider ? "explicit" : "configured";
-  } else if (lane === "local-mcp") {
-    client = new LmStudioMcpClient();
-    using = `local-mcp/lmstudio/${model ?? "configured"}`;
-    routerIntent = "native_mcp";
-    routerReason = "LM Studio native MCP lane selected.";
-    routerMode = "explicit";
   } else if (options.provider === "openai") {
     client = new OpenAiClient();
     const config = getCloudProviderConfig("openai");
@@ -87,8 +79,7 @@ export function createRuntimeClient(
 
 export function getRuntimeLaneLabel(lane: RuntimeLane = getRuntimeLane()): string {
   if (lane === "cloud-mcp") return "Cloud + MCP Bridge";
-  if (lane === "local") return getLocalProviderConfig().label;
-  if (lane === "local-mcp") return "LM Studio Native MCP";
+  if (lane === "local") return "Ollama";
   return "Cloud";
 }
 

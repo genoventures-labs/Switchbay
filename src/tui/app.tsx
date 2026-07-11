@@ -39,7 +39,7 @@ import { CreateMcpDrawer, type CreateMcpAnswers } from "./components/CreateMcpDr
 import { CreateRuleDrawer, type CreateRuleAnswers } from "./components/CreateRuleDrawer";
 import { CreateSkillDrawer, type CreateSkillAnswers } from "./components/CreateSkillDrawer";
 import { CreatePluginDrawer, type CreatePluginAnswers } from "./components/CreatePluginDrawer";
-import { generateAgentDefinition, generateEngineManifest, generateLmStudioMcpConfig, generatePlan, generatePluginDefinition, generateRuleDefinition, generateSkillDefinition, type PendingAgentDraft, type PendingEngineDraft, type PendingMcpDraft, type PendingPluginDraft, type PendingRuleDraft, type PendingSkillDraft } from "../agent/loop";
+import { generateAgentDefinition, generateEngineManifest, generateSwitchbayMcpConfig, generatePlan, generatePluginDefinition, generateRuleDefinition, generateSkillDefinition, type PendingAgentDraft, type PendingEngineDraft, type PendingMcpDraft, type PendingPluginDraft, type PendingRuleDraft, type PendingSkillDraft } from "../agent/loop";
 import type { ActivePlan } from "../agent/turn-state";
 import { ShortcutDrawer } from "./components/ShortcutDrawer";
 import { getCommandMatches } from "./commands";
@@ -947,13 +947,9 @@ export function SwitchbayApp({
         switchToolMode("switchbay-mcp");
         return;
       }
-      if (requested === "native-mcp" || requested === "local-mcp" || requested === "lm-mcp" || requested === "lmstudio-mcp") {
-        switchRuntimeLane("local-mcp");
-        return;
-      }
       dispatch({
         type: "assistant/appended",
-        message: `Unknown lane \`${requested}\`. Use \`/lane cloud\`, \`/lane openai\`, \`/lane anthropic\`, \`/lane google\`, \`/lane local\`, \`/lane ollama\`, \`/lane lmstudio\`, \`/lane mcp\`, \`/lane native-mcp\`, or \`/lane\` to toggle.`,
+        message: `Unknown lane \`${requested}\`. Use \`/lane cloud\`, \`/lane openai\`, \`/lane anthropic\`, \`/lane google\`, \`/lane local\`, \`/lane ollama\`, \`/lane mcp\`, or \`/lane\` to toggle.`,
       });
       setQuerySync("");
       return;
@@ -998,13 +994,6 @@ export function SwitchbayApp({
         setQuerySync("");
         return;
       }
-      if (requested === "lm" || requested === "lmstudio" || requested === "lm-studio") {
-        setActiveLocalProvider("lmstudio");
-        setLocalProvider("lmstudio");
-        void openModelDrawer("local", "lmstudio");
-        setQuerySync("");
-        return;
-      }
       if (requested === "ollama" || requested === "hf" || requested === "huggingface") {
         setActiveLocalProvider("ollama");
         setLocalProvider("ollama");
@@ -1014,12 +1003,7 @@ export function SwitchbayApp({
       }
       if (requested === "mcp" || requested === "switchbay-mcp" || requested === "bridge") {
         setToolMode("switchbay-mcp");
-        void openModelDrawer(runtimeLane === "local-mcp" ? "local" : runtimeLane);
-        setQuerySync("");
-        return;
-      }
-      if (requested === "native-mcp" || requested === "local-mcp" || requested === "lm-mcp" || requested === "lmstudio-mcp") {
-        void openModelDrawer("local-mcp");
+        void openModelDrawer(runtimeLane);
         setQuerySync("");
         return;
       }
@@ -1038,11 +1022,6 @@ export function SwitchbayApp({
 
     if (trimmedVal === "/mcp off" || trimmedVal === "/mcp standard") {
       switchToolMode("standard");
-      return;
-    }
-
-    if (trimmedVal === "/mcp native") {
-      switchRuntimeLane("local-mcp");
       return;
     }
 
@@ -1886,7 +1865,7 @@ export function SwitchbayApp({
     setCreateMcpGenerating(true);
     try {
       const cloudClient = createRuntimeClient("cloud");
-      const draft = await generateLmStudioMcpConfig(cloudClient, surface, answers);
+      const draft = await generateSwitchbayMcpConfig(cloudClient, surface, answers);
       setComposerMode("default");
       setCreateMcpGenerating(false);
       setPendingMcpDraft(draft);

@@ -22,7 +22,7 @@ import { addDailyTask, clearDailyBoard, completeDailyTask, describeDailyBoard } 
 import { describeEngines, loadEngineRegistry } from "../engines/registry";
 import { describeEngineBay, loadEngineBayInventory } from "../engines/hub";
 import { describeToolbox, loadToolboxInventory, readToolboxSkill } from "../toolbox/hub";
-import { createDefaultLmStudioMcpConfig, describeLmStudioMcpConfig, loadLmStudioMcpConfig, saveLmStudioMcpConfig } from "../runtime/lmstudio-mcp-config";
+import { createDefaultSwitchbayMcpConfig, describeSwitchbayMcpConfig, loadSwitchbayMcpConfig, saveSwitchbayMcpConfig } from "../runtime/mcp-config";
 import { describeTrustedMcpCatalog } from "../runtime/mcp-catalog";
 import {
   addMemoryNote,
@@ -804,12 +804,7 @@ const SWITCHBAY_CONTROL_COACH: CommandCoachEntry[] = [
     cli: "switchbay local-provider set ollama",
     note: "Use `/model` or `switchbay models --lane ollama` to browse Ollama models.",
   },
-  {
-    title: "Switch to LM Studio",
-    patterns: [/\blm\s*studio\b/, /\blmstudio\b/],
-    slash: "/lane lmstudio",
-    cli: "switchbay local-provider set lmstudio",
-  },
+
   {
     title: "Switch Cloud Provider",
     patterns: [/\b(openai|anthropic|claude|google|gemini)\b.*\b(provider|lane|cloud)\b/, /\bcloud provider\b/],
@@ -933,7 +928,7 @@ function parseConversationalCreationIntent(input: string): "agent" | "engine" | 
   if (!wantsCreate) return null;
 
   if (/\b(agent|specialist|persona)\b/.test(normalized)) return "agent";
-  if (/\b(mcp|mcp config|mcp lane|lm studio mcp|lmstudio mcp|tool server|tool servers)\b/.test(normalized)) return "mcp";
+  if (/\b(mcp|mcp config|mcp lane|tool server|tool servers)\b/.test(normalized)) return "mcp";
   if (/\b(engine|engine builder|engine manifest|tool engine)\b/.test(normalized)) return "engine";
   if (/\b(rule|rules|operating rule|behavior rule|always remember to|never do|must always|must never)\b/.test(normalized)) return "rule";
   if (/\b(plugin|plugins|bundle|crate|pack)\b/.test(normalized)) return "plugin";
@@ -978,10 +973,10 @@ async function handleMcpCommand(
   const action = trimmed.slice("/mcp".length).trim().toLowerCase();
   try {
     if (action === "init") {
-      const path = await saveLmStudioMcpConfig(createDefaultLmStudioMcpConfig(), cwd);
+      const path = await saveSwitchbayMcpConfig(createDefaultSwitchbayMcpConfig(), cwd);
       return {
         handled: true,
-        assistantMessage: `Created Switchbay MCP config at \`${path}\`.\n\nEdit it to match trusted MCP intent, then enable the bridge with \`/mcp on\`. Use \`/lane native-mcp\` only when testing LM Studio's native MCP API.`,
+        assistantMessage: `Created Switchbay MCP config at \`${path}\`.\n\nEdit it to match trusted MCP intent, then enable the bridge with \`/mcp on\`.`,
       };
     }
 
@@ -1000,7 +995,7 @@ async function handleMcpCommand(
       return { handled: true, assistantMessage: "Usage: `/mcp [status|init|create|catalog|on|off]`" };
     }
 
-    return { handled: true, assistantMessage: describeLmStudioMcpConfig(await loadLmStudioMcpConfig(cwd)) };
+    return { handled: true, assistantMessage: describeSwitchbayMcpConfig(await loadSwitchbayMcpConfig(cwd)) };
   } catch (e: any) {
     return { handled: true, assistantMessage: `MCP config failed: ${e.message}` };
   }

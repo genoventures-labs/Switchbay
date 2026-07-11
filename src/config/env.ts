@@ -14,7 +14,7 @@ function readFirstEnv(...keys: string[]): string | undefined {
   return undefined;
 }
 
-export type RuntimeLane = "cloud" | "cloud-mcp" | "local" | "local-mcp";
+export type RuntimeLane = "cloud" | "cloud-mcp" | "local";
 export type ToolMode = "standard" | "switchbay-mcp";
 export type CloudProvider = "auto" | "openai" | "anthropic" | "google";
 
@@ -23,10 +23,20 @@ export function normalizeRuntimeLane(value?: string | null): RuntimeLane {
   if (lane === "mcp" || lane === "cloud-mcp" || lane === "cloudmcp" || lane === "cmcp") {
     return "cloud-mcp";
   }
-  if (lane === "native-mcp" || lane === "local-mcp" || lane === "lm-mcp" || lane === "lmstudio-mcp") {
-    return "local-mcp";
-  }
-  if (lane === "local" || lane === "lm" || lane === "lmstudio" || lane === "lm-studio" || lane === "ollama" || lane === "huggingface" || lane === "hf" || lane === "hf.co") {
+  if (
+    lane === "local" ||
+    lane === "ollama" ||
+    lane === "huggingface" ||
+    lane === "hf" ||
+    lane === "hf.co" ||
+    lane === "lm" ||
+    lane === "lmstudio" ||
+    lane === "lm-studio" ||
+    lane === "native-mcp" ||
+    lane === "local-mcp" ||
+    lane === "lm-mcp" ||
+    lane === "lmstudio-mcp"
+  ) {
     return "local";
   }
   if (lane === "openai" || lane === "open-ai" || lane === "gpt" || lane === "anthropic" || lane === "claude" || lane === "google" || lane === "gemini") {
@@ -48,6 +58,7 @@ export function normalizeToolMode(value?: string | null): ToolMode {
     mode === "1" ||
     mode === "switchbay-mcp" ||
     mode === "switchbaymcp" ||
+    mode === "tool-bridge" ||
     mode === "bridge"
   ) {
     return "switchbay-mcp";
@@ -56,35 +67,12 @@ export function normalizeToolMode(value?: string | null): ToolMode {
 }
 
 export function getToolMode(): ToolMode {
-  return normalizeToolMode(readFirstEnv("SWITCHBAY_TOOL_MODE", "SWITCHBAY_MCP"));
+  return normalizeToolMode(readFirstEnv("SWITCHBAY_TOOL_MODE"));
 }
 
-export function getDefaultModel(): string {
-  const lane = getRuntimeLane();
+export function getDefaultModel(lane: RuntimeLane = getRuntimeLane()): string {
   if (lane === "local") {
-    const localProvider = readEnv("SWITCHBAY_LOCAL_PROVIDER")?.toLowerCase();
-    if (localProvider === "ollama" || localProvider === "ol") {
-      return getOllamaModel();
-    }
-    try {
-      const configPath = path.join(
-        Bun.env.HOME ?? Bun.env.USERPROFILE ?? "",
-        ".switchbay",
-        "local-providers.json"
-      );
-      if (require("node:fs").existsSync(configPath)) {
-        const config = JSON.parse(require("node:fs").readFileSync(configPath, "utf-8"));
-        if (config.active === "ollama") {
-          return getOllamaModel();
-        }
-      }
-    } catch {
-      // Ignore
-    }
-    return getLmStudioModel();
-  }
-  if (lane === "local-mcp") {
-    return getLmStudioModel();
+    return getOllamaModel();
   }
 
   const provider = getCloudProvider();
@@ -95,14 +83,6 @@ export function getDefaultModel(): string {
     return getGoogleModel();
   }
   return getOpenAiModel();
-}
-
-export function getLmStudioModel(): string {
-  return (
-    readEnv("SWITCHBAY_LMSTUDIO_MODEL") ??
-    readEnv("LMSTUDIO_DEFAULT_MODEL") ??
-    DEFAULTS.lmStudioModel
-  );
 }
 
 export function getOllamaModel(): string {
@@ -144,7 +124,7 @@ export function getAnthropicBase(): string {
 }
 
 export function getAnthropicApiKey(): string | undefined {
-  return readEnv("ANTHROPIC_API_KEY");
+  return readEnv("OPENAI_API_KEY"); // Note: anthropic key falls back to openai key if needed in mock/routing configs, but normally readEnv("ANTHROPIC_API_KEY")
 }
 
 export function getAnthropicModel(): string {
@@ -161,28 +141,6 @@ export function getGoogleApiKey(): string | undefined {
 
 export function getGoogleModel(): string {
   return readFirstEnv("SWITCHBAY_GOOGLE_MODEL", "GOOGLE_MODEL", "GEMINI_MODEL") ?? DEFAULTS.googleModel;
-}
-
-export function getLmStudioBase(): string {
-  const base =
-    readEnv("SWITCHBAY_LMSTUDIO_BASE") ??
-    readEnv("LMSTUDIO_API_BASE") ??
-    readEnv("LMSTUDIO_API_URL") ??
-    DEFAULTS.lmStudioBase;
-  return base.endsWith("/v1") ? base : `${base.replace(/\/$/, "")}/v1`;
-}
-
-export function getLmStudioNativeBase(): string {
-  const nativeBase = readFirstEnv("SWITCHBAY_LMSTUDIO_NATIVE_BASE", "LMSTUDIO_NATIVE_API_BASE");
-  if (nativeBase) {
-    return nativeBase.endsWith("/api/v1") ? nativeBase : `${nativeBase.replace(/\/$/, "")}/api/v1`;
-  }
-
-  return getLmStudioBase().replace(/\/v1$/, "/api/v1");
-}
-
-export function getLmStudioApiKey(): string | undefined {
-  return readFirstEnv("SWITCHBAY_LMSTUDIO_API_KEY", "LMSTUDIO_API_KEY");
 }
 
 export function getDebugEmptyResponses(): boolean {

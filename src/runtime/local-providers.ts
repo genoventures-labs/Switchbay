@@ -3,7 +3,7 @@ import path from "node:path";
 import { DEFAULTS } from "../config/defaults";
 import { userConfigPath } from "../config/paths";
 
-export type LocalProviderId = "lmstudio" | "ollama";
+export type LocalProviderId = "ollama";
 
 export type LocalProviderConfig = {
   id: LocalProviderId;
@@ -22,12 +22,6 @@ const CONFIG_FILE = "local-providers.json";
 const DEFAULT_CONFIG: LocalProvidersConfig = {
   active: "ollama",
   providers: {
-    lmstudio: {
-      id: "lmstudio",
-      label: "LM Studio",
-      apiBase: DEFAULTS.lmStudioBase,
-      model: DEFAULTS.lmStudioModel,
-    },
     ollama: {
       id: "ollama",
       label: "Ollama",
@@ -46,9 +40,6 @@ export function localProvidersConfigPath(): string {
 export function normalizeLocalProvider(value?: string | null): LocalProviderId | null {
   const normalized = value?.trim().toLowerCase();
   if (!normalized) return null;
-  if (normalized === "lm" || normalized === "lmstudio" || normalized === "lm-studio" || normalized === "studio") {
-    return "lmstudio";
-  }
   if (normalized === "ollama" || normalized === "ol" || normalized === "huggingface" || normalized === "hf" || normalized === "hf.co") {
     return "ollama";
   }
@@ -80,7 +71,7 @@ export function saveLocalProvidersConfig(config: LocalProvidersConfig): void {
 }
 
 export function getActiveLocalProvider(): LocalProviderId {
-  return normalizeLocalProvider(Bun.env.SWITCHBAY_LOCAL_PROVIDER) ?? loadLocalProvidersConfig().active;
+  return "ollama";
 }
 
 export function setActiveLocalProvider(provider: LocalProviderId): LocalProvidersConfig {
@@ -104,7 +95,7 @@ export function describeLocalProviders(): string {
     "",
     ...rows,
     "",
-    "Switch with `/lane ollama`, `/lane lmstudio`, or `switchbay local-provider set ollama`.",
+    "Switch with `/lane ollama`, `/lane hf`, or `switchbay local-provider set ollama`.",
   ].join("\n");
 }
 
@@ -114,10 +105,9 @@ export function invalidateLocalProvidersConfig(): void {
 
 function normalizeConfig(parsed: Partial<LocalProvidersConfig>): LocalProvidersConfig {
   const providers = {
-    lmstudio: normalizeProvider(parsed.providers?.lmstudio, DEFAULT_CONFIG.providers.lmstudio),
     ollama: normalizeProvider(parsed.providers?.ollama, DEFAULT_CONFIG.providers.ollama),
   };
-  const active = normalizeLocalProvider(parsed.active) ?? DEFAULT_CONFIG.active;
+  const active = "ollama";
   return applyEnv({ active, providers });
 }
 
@@ -139,13 +129,8 @@ function applyEnv(config: LocalProvidersConfig): LocalProvidersConfig {
   const ollamaModel = Bun.env.SWITCHBAY_OLLAMA_MODEL || Bun.env.OLLAMA_MODEL || lmModel;
   return {
     ...config,
-    active: normalizeLocalProvider(Bun.env.SWITCHBAY_LOCAL_PROVIDER) ?? config.active,
+    active: "ollama",
     providers: {
-      lmstudio: {
-        ...config.providers.lmstudio,
-        apiBase: lmBase ? normalizeProviderBase("lmstudio", lmBase, config.providers.lmstudio.apiBase) : config.providers.lmstudio.apiBase,
-        model: lmModel?.trim() || config.providers.lmstudio.model,
-      },
       ollama: {
         ...config.providers.ollama,
         apiBase: ollamaBase ? normalizeProviderBase("ollama", ollamaBase, config.providers.ollama.apiBase) : config.providers.ollama.apiBase,
@@ -158,11 +143,6 @@ function applyEnv(config: LocalProvidersConfig): LocalProvidersConfig {
 function normalizeProviderBase(provider: LocalProviderId, value: string, fallback: string): string {
   const trimmed = value.trim();
   if (!trimmed) return fallback;
-  if (provider === "lmstudio") {
-    if (trimmed.endsWith("/v1")) return trimmed;
-    if (trimmed.endsWith("/api/v1")) return trimmed.replace(/\/api\/v1$/, "/v1");
-    return `${trimmed.replace(/\/$/, "")}/v1`;
-  }
   if (provider === "ollama") {
     let clean = trimmed;
     if (clean.endsWith("/v1")) {

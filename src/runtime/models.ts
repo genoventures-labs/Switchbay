@@ -1,7 +1,4 @@
 import {
-  getLmStudioApiKey,
-  getLmStudioBase,
-  getLmStudioNativeBase,
   type CloudProvider,
   type RuntimeLane,
 } from "../config/env";
@@ -9,37 +6,19 @@ import { getCloudProviderConfig } from "./cloud-providers";
 import { loadCloudModelCatalog } from "./cloud-model-catalog";
 import { getActiveLocalProvider, getLocalProviderConfig } from "./local-providers";
 
-export type RuntimeModelProvider = Exclude<CloudProvider, "auto"> | "lmstudio" | "lmstudio-mcp" | "ollama";
+export type RuntimeModelProvider = Exclude<CloudProvider, "auto"> | "ollama";
 
 export type RuntimeModelOption = {
   id: string;
   label: string;
   lane: RuntimeLane;
   provider: RuntimeModelProvider;
-  source: "preset" | "env" | "custom" | "lmstudio" | "ollama";
+  source: "preset" | "env" | "custom" | "ollama";
 };
 
 export type RuntimeModelList = {
   models: RuntimeModelOption[];
   notice?: string;
-};
-
-export type LmStudioPullOptions = {
-  model: string;
-  quantization?: string | null;
-  fetchImpl?: FetchLike;
-  pollDelayMs?: number;
-  maxPolls?: number;
-};
-
-export type LmStudioPullResult = {
-  model: string;
-  requestedModel: string;
-  downloadStatus: string;
-  jobId?: string;
-  loadStatus: string;
-  instanceId?: string;
-  loadTimeSeconds?: number;
 };
 
 const OPENAI_PRESETS: RuntimeModelOption[] = [
@@ -59,22 +38,6 @@ const GOOGLE_PRESETS: RuntimeModelOption[] = [
   { id: "gemini-3.5-flash", label: "Gemini 3.5 Flash", lane: "cloud", provider: "google", source: "preset" },
   { id: "gemini-3.5-flash-lite", label: "Gemini 3.5 Flash-Lite", lane: "cloud", provider: "google", source: "preset" },
 ];
-
-type LmStudioModelsResponse = {
-  data?: Array<{
-    id?: string;
-    object?: string;
-    owned_by?: string;
-  }>;
-};
-
-type LmStudioNativeModelsResponse = {
-  models?: Array<{
-    key?: string;
-    display_name?: string;
-    loaded_instances?: unknown[];
-  }>;
-};
 
 type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 
@@ -108,11 +71,7 @@ export async function listRuntimeModels(lane: RuntimeLane, localProvider = getAc
     return { models: getCloudModelPresetsForLane(lane) };
   }
 
-  if (lane === "local" && localProvider === "ollama") {
-    return listOllamaModels();
-  }
-
-  return listLmStudioModels(undefined, lane);
+  return listOllamaModels();
 }
 
 type OllamaTagsResponse = {
@@ -160,136 +119,7 @@ export async function listOllamaModels(fetchImpl: FetchLike = fetch): Promise<Ru
   }
 }
 
-export async function listLmStudioModels(
-  fetchImpl: FetchLike = fetch,
-  lane: Extract<RuntimeLane, "local" | "local-mcp"> = "local",
-): Promise<RuntimeModelList> {
-  const provider: RuntimeModelProvider = lane === "local-mcp" ? "lmstudio-mcp" : "lmstudio";
-  const apiBase = getLocalProviderConfig("lmstudio").apiBase || getLmStudioBase();
-  const nativeBase = getLmStudioNativeBase();
-  const headers: Record<string, string> = {};
-  const apiKey = getLmStudioApiKey();
-  if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
 
-  try {
-    const nativeResult = await listLmStudioNativeModels(nativeBase, lane, provider, headers, fetchImpl);
-    if (nativeResult.models.length > 0 || nativeResult.notice) {
-      return nativeResult;
-    }
-
-    const response = await fetchImpl(`${apiBase}/models`, { headers });
-    const body = await response.text().catch(() => "");
-    if (!response.ok) {
-      return {
-        models: [],
-        notice: formatLmStudioModelFetchError(apiBase, response.status, body, Boolean(apiKey)),
-      };
-    }
-
-    let parsed: LmStudioModelsResponse;
-    try {
-      parsed = JSON.parse(body) as LmStudioModelsResponse;
-    } catch {
-      return {
-        models: [],
-        notice: formatLmStudioModelFetchError(apiBase, response.status, body, Boolean(apiKey)),
-      };
-    }
-
-    const models = (parsed.data ?? [])
-      .map((model) => model.id?.trim())
-      .filter((id): id is string => Boolean(id))
-      .map((id) => ({
-        id,
-        label: id,
-        lane,
-        provider,
-        source: "lmstudio" as const,
-      }));
-
-    return {
-      models: uniqueModels(models),
-      notice: models.length === 0
-        ? `LM Studio returned no models from ${nativeBase}/models or ${apiBase}/models. Load a model in LM Studio, then reopen /model.`
-        : undefined,
-    };
-  } catch (error: any) {
-    return {
-      models: [],
-      notice: `Could not reach LM Studio at ${apiBase}: ${error.message}`,
-    };
-  }
-}
-
-export async function pullLmStudioModel(options: LmStudioPullOptions): Promise<LmStudioPullResult> {
-  const requestedModel = options.model.trim();
-  const model = normalizeLmStudioPullModel(requestedModel);
-  if (!model) throw new Error("LM Studio model id or Hugging Face URL is required.");
-
-  const fetchImpl = options.fetchImpl ?? fetch;
-  const nativeBase = getLmStudioNativeBase();
-  const headers = lmStudioJsonHeaders();
-  const downloadPayload: Record<string, unknown> = { model };
-  const quantization = options.quantization?.trim();
-  if (quantization) downloadPayload.quantization = quantization;
-
-  try {
-    const started = await postLmStudioJson(`${nativeBase}/models/download`, downloadPayload, headers, fetchImpl);
-    const jobId = typeof started.job_id === "string" ? started.job_id : undefined;
-    let downloadStatus = String(started.status ?? "unknown");
-
-    if (jobId && (downloadStatus === "downloading" || downloadStatus === "paused")) {
-      const maxPolls = options.maxPolls ?? 180;
-      const pollDelayMs = options.pollDelayMs ?? 2000;
-      for (let i = 0; i < maxPolls; i++) {
-        if (pollDelayMs > 0) await Bun.sleep(pollDelayMs);
-        const status = await getLmStudioJson(`${nativeBase}/models/download/status/${encodeURIComponent(jobId)}`, headers, fetchImpl);
-        downloadStatus = String(status.status ?? downloadStatus);
-        if (downloadStatus === "completed" || downloadStatus === "failed") break;
-      }
-    }
-
-    if (downloadStatus !== "completed" && downloadStatus !== "already_downloaded") {
-      throw new Error(`LM Studio download did not complete. Status: ${downloadStatus}${jobId ? ` (${jobId})` : ""}.`);
-    }
-
-    const loaded = await postLmStudioJson(`${nativeBase}/models/load`, {
-      model,
-      echo_load_config: true,
-    }, headers, fetchImpl);
-
-    return {
-      model,
-      requestedModel,
-      downloadStatus,
-      jobId,
-      loadStatus: String(loaded.status ?? "unknown"),
-      instanceId: typeof loaded.instance_id === "string" ? loaded.instance_id : undefined,
-      loadTimeSeconds: typeof loaded.load_time_seconds === "number" ? loaded.load_time_seconds : undefined,
-    };
-  } catch (error: any) {
-    throw new Error(formatLmStudioPullError({
-      base: nativeBase,
-      message: error.message,
-      model,
-      requestedModel,
-    }));
-  }
-}
-
-export function normalizeLmStudioPullModel(value: string): string {
-  const trimmed = value.trim();
-  if (!trimmed) return "";
-  try {
-    const url = new URL(trimmed);
-    if (url.hostname === "lmstudio.ai" && url.pathname.startsWith("/models/")) {
-      return decodeURIComponent(url.pathname.replace(/^\/models\//, "").replace(/\/$/, ""));
-    }
-  } catch {
-    // Not a URL; use it as entered.
-  }
-  return trimmed;
-}
 
 export function normalizeOllamaHuggingFaceModel(target: string, quantization?: string | null): string {
   const trimmed = target.trim();
@@ -412,186 +242,7 @@ export async function pullOllamaModel(options: OllamaPullOptions): Promise<{ mod
   return { model, status: lastStatus };
 }
 
-async function listLmStudioNativeModels(
-  nativeBase: string,
-  lane: Extract<RuntimeLane, "local" | "local-mcp">,
-  provider: RuntimeModelProvider,
-  headers: Record<string, string>,
-  fetchImpl: FetchLike,
-): Promise<RuntimeModelList> {
-  try {
-    const response = await fetchImpl(`${nativeBase}/models`, { headers });
-    const body = await response.text().catch(() => "");
-    if (!response.ok) {
-      return { models: [], notice: formatLmStudioModelFetchError(nativeBase, response.status, body, Boolean(headers.Authorization)) };
-    }
 
-    let parsed: LmStudioNativeModelsResponse;
-    try {
-      parsed = JSON.parse(body) as LmStudioNativeModelsResponse;
-    } catch {
-      return { models: [], notice: undefined };
-    }
-
-    const models = (parsed.models ?? [])
-      .map((model) => ({
-        id: model.key?.trim() ?? "",
-        label: model.display_name?.trim() || model.key?.trim() || "",
-      }))
-      .filter((model): model is { id: string; label: string } => Boolean(model.id))
-      .map((model) => ({
-        id: model.id,
-        label: model.label,
-        lane,
-        provider,
-        source: "lmstudio" as const,
-      }));
-
-    return { models: uniqueModels(models) };
-  } catch {
-    return { models: [] };
-  }
-}
-
-function formatLmStudioModelFetchError(
-  apiBase: string,
-  status: number,
-  body: string,
-  hasApiKey: boolean,
-): string {
-  const trimmed = body.trim();
-  const lower = trimmed.toLowerCase();
-  const authLike =
-    status === 401 ||
-    status === 403 ||
-    lower.includes("api key") ||
-    lower.includes("unauthorized") ||
-    lower.includes("forbidden") ||
-    lower.includes("bearer");
-
-  if (authLike || !hasApiKey) {
-    return [
-      `LM Studio needs an API key for ${apiBase}/models.`,
-      "Generate one in LM Studio and set SWITCHBAY_LMSTUDIO_API_KEY.",
-      trimmed ? `Server said: ${trimmed.slice(0, 120)}` : "",
-    ].filter(Boolean).join(" ");
-  }
-
-  return [
-    `LM Studio model fetch returned ${status}, but not JSON.`,
-    trimmed ? `Server said: ${trimmed.slice(0, 120)}` : "",
-  ].filter(Boolean).join(" ");
-}
-
-function lmStudioJsonHeaders(): Record<string, string> {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  const apiKey = getLmStudioApiKey();
-  if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
-  return headers;
-}
-
-async function postLmStudioJson(
-  url: string,
-  payload: Record<string, unknown>,
-  headers: Record<string, string>,
-  fetchImpl: FetchLike,
-): Promise<Record<string, unknown>> {
-  const response = await fetchImpl(url, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(payload),
-  });
-  return parseLmStudioJsonResponse(url, response);
-}
-
-async function getLmStudioJson(
-  url: string,
-  headers: Record<string, string>,
-  fetchImpl: FetchLike,
-): Promise<Record<string, unknown>> {
-  const response = await fetchImpl(url, { headers });
-  return parseLmStudioJsonResponse(url, response);
-}
-
-async function parseLmStudioJsonResponse(url: string, response: Response): Promise<Record<string, unknown>> {
-  const body = await response.text().catch(() => "");
-  let parsed: unknown = {};
-  if (body.trim()) {
-    try {
-      parsed = JSON.parse(body);
-    } catch {
-      parsed = { message: body.trim() };
-    }
-  }
-
-  if (!response.ok) {
-    const message = extractLmStudioError(parsed) || body.trim() || response.statusText;
-    throw new Error(`LM Studio API error ${response.status} at ${url}: ${message}`);
-  }
-
-  return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-    ? parsed as Record<string, unknown>
-    : {};
-}
-
-function extractLmStudioError(parsed: unknown): string | null {
-  if (!parsed || typeof parsed !== "object") return null;
-  const error = (parsed as Record<string, unknown>).error;
-  if (error && typeof error === "object") {
-    const message = (error as Record<string, unknown>).message;
-    if (typeof message === "string") return message;
-  }
-  const message = (parsed as Record<string, unknown>).message;
-  return typeof message === "string" ? message : null;
-}
-
-function formatLmStudioPullError(input: {
-  base: string;
-  message: string;
-  model: string;
-  requestedModel: string;
-}): string {
-  const lines = [
-    input.message,
-    "",
-    `LM Studio native API: ${input.base}`,
-    input.requestedModel !== input.model
-      ? `Normalized model target: ${input.model}`
-      : `Model target: ${input.model}`,
-  ];
-
-  const lower = input.message.toLowerCase();
-  if (
-    lower.includes("unable to connect") ||
-    lower.includes("fetch") ||
-    lower.includes("network") ||
-    lower.includes("typo in the url") ||
-    lower.includes("connection")
-  ) {
-    lines.push(
-      "",
-      "LM Studio reported a network/catalog download failure. That usually means the machine running LM Studio cannot reach the model source, the model is not in LM Studio's catalog, or the URL is not an exact Hugging Face model URL.",
-    );
-  }
-
-  if (!input.model.includes("/") && !input.model.startsWith("http")) {
-    lines.push("", "Short names like `gemma-3-1b` are usually not enough. Use an LM Studio catalog id like `google/gemma-3-1b` or an exact Hugging Face URL.");
-  }
-
-  lines.push(
-    "",
-    "Accepted forms:",
-    "- LM Studio catalog id, e.g. `ibm/granite-4-micro`",
-    "- Exact Hugging Face URL, e.g. `https://huggingface.co/lmstudio-community/gpt-oss-20b-GGUF`",
-    "- LM Studio catalog page URLs are normalized to catalog ids before sending.",
-    "",
-    "Debug commands:",
-    "- `switchbay local-provider`",
-    "- `switchbay models --lane lmstudio`",
-  );
-
-  return lines.join("\n");
-}
 
 function envModelOption(
   id: string,

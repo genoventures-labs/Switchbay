@@ -14,18 +14,17 @@ import { describeToolbox, loadToolboxInventory, readToolboxSkill } from "./src/t
 import { addMemoryNote, describeMemory, listMemoryNotes, readMemoryFacts, refreshMemory } from "./src/memory/store";
 import { describeKnowledgeIndex, formatKnowledgeSearchResults, refreshKnowledgeIndex, searchKnowledgeIndex } from "./src/knowledge/store";
 import { describeLatestTrace, latestTraceExportPath, saveTraceRecord } from "./src/trace/store";
-import { createDefaultLmStudioMcpConfig, describeLmStudioMcpConfig, loadLmStudioMcpConfig, saveLmStudioMcpConfig } from "./src/runtime/lmstudio-mcp-config";
+import { createDefaultSwitchbayMcpConfig, describeSwitchbayMcpConfig, loadSwitchbayMcpConfig, saveSwitchbayMcpConfig } from "./src/runtime/mcp-config";
 import { describeTrustedMcpCatalog } from "./src/runtime/mcp-catalog";
 import { ANSI_COLORS as CLR } from "./src/tui/theme";
 import { describePlugins, loadPluginInventory, readPlugin } from "./src/plugins/registry";
-import { listRuntimeModels, normalizeLmStudioPullModel, pullLmStudioModel, type RuntimeModelOption } from "./src/runtime/models";
+import { listRuntimeModels, type RuntimeModelOption } from "./src/runtime/models";
 import { describeLocalProviders, getActiveLocalProvider, normalizeLocalProvider, setActiveLocalProvider, type LocalProviderId } from "./src/runtime/local-providers";
 import { formatRouteTag } from "./src/runtime/route-display";
 import { describeCloudProviders, normalizeCloudProvider, setActiveCloudProvider } from "./src/runtime/cloud-providers";
 import { addDailyTask, clearDailyBoard, completeDailyTask, describeDailyBoard } from "./src/operator/daily-board";
 import { formatFrictionRadar, runFrictionRadar } from "./src/operator/radar";
 import { buildQuickHandoff } from "./src/operator/handoff";
-import { getLmStudioNativeBase } from "./src/config/env";
 import { addCloudModel, inferCloudModelProvider } from "./src/runtime/cloud-model-catalog";
 import type { CloudProviderId } from "./src/runtime/cloud-providers";
 import { findAgent, loadAllAgents, saveAgentDefinition, type AgentScope } from "./src/agent/agents";
@@ -67,9 +66,9 @@ ${CLR.accent}${CLR.bold}Models and Lanes:${CLR.reset}
   ${CLR.bold}switchbay cloud-provider${CLR.reset}           Show cloud provider/router config
   ${CLR.bold}switchbay cloud-provider set${CLR.reset} <id>  Switch cloud provider: ${CLR.accentBright}auto | openai | anthropic | google${CLR.reset}
   ${CLR.bold}switchbay local-provider${CLR.reset}           Show local provider config
-  ${CLR.bold}switchbay local-provider set${CLR.reset} <id>  Switch local provider: ${CLR.accentBright}lmstudio | ollama${CLR.reset}
+  ${CLR.bold}switchbay local-provider set${CLR.reset} <id>  Switch local provider: ${CLR.accentBright}ollama${CLR.reset}
   ${CLR.bold}switchbay mcp${CLR.reset}                      Show Switchbay MCP bridge config
-  ${CLR.bold}switchbay mcp init${CLR.reset}                 Create ~/.switchbay/lmstudio.mcp.json
+  ${CLR.bold}switchbay mcp init${CLR.reset}                 Create default Switchbay MCP config
   ${CLR.bold}switchbay mcp catalog${CLR.reset}              List trusted MCP config options
 
 ${CLR.accent}${CLR.bold}Context and Memory:${CLR.reset}
@@ -123,11 +122,60 @@ ${CLR.accent}${CLR.bold}Options:${CLR.reset}
   ${CLR.bold}--resume${CLR.reset} <val>         Resume last saved session, or specific ID/Index (0=latest)
   ${CLR.bold}--new${CLR.reset}                  Force a fresh session even if a saved one exists
   ${CLR.bold}--purge${CLR.reset} <duration>     Purge sessions older than duration (1d, 5d, 2w, etc.)
+  ${CLR.bold}-d, --detach${CLR.reset}               Run the API server in the background (detached mode)
 `);
     return;
   }
 
   if (options.subcommand === "serve") {
+    const port = Number(Bun.env.SWITCHBAY_API_PORT ?? 7349);
+    const host = Bun.env.SWITCHBAY_API_HOST ?? "127.0.0.1";
+
+    // Fast port check in foreground
+    try {
+      const net = require("node:net");
+      await new Promise<void>((resolve, reject) => {
+        const testServer = net.createServer();
+        testServer.once("error", reject);
+        testServer.once("listening", () => {
+          testServer.close();
+          resolve();
+        });
+        testServer.listen(port, host);
+      });
+    } catch (err: any) {
+      if (err?.code === "EADDRINUSE") {
+        console.error(`\n${CLR.error}Error: Port is already in use.${CLR.reset}`);
+        console.error("The Switchbay background service or another instance is likely already running.");
+        console.error("You can:");
+        console.error("  1. Check service status:   switchbay service status");
+        console.error("  2. Uninstall the service:  switchbay service uninstall");
+        console.error("  3. Run on another port:    SWITCHBAY_API_PORT=7350 switchbay serve\n");
+        process.exit(1);
+      }
+    }
+
+    if (options.detach) {
+      const bin = process.argv[0];
+      const script = process.argv[1];
+      const spawnArgs = [bin, script, "serve"];
+      if (options.surface !== DEFAULTS.surface) spawnArgs.push("--surface", options.surface);
+      if (options.profile !== DEFAULTS.profile) spawnArgs.push("--profile", options.profile);
+      if (options.mode !== DEFAULTS.mode) spawnArgs.push("--mode", options.mode);
+      if (options.lane) spawnArgs.push("--lane", options.lane);
+
+      const child = Bun.spawn(spawnArgs, {
+        stdout: "ignore",
+        stderr: "ignore",
+        stdin: "ignore",
+      });
+      child.unref();
+
+      console.log(`\n${CLR.accent}⏺${CLR.reset} Switchbay API server started in background (detached).`);
+      console.log(`URL: http://${host}:${port}\n`);
+      return;
+    }
+
     const { startApiServer } = await import("./src/api/server");
     try {
       const server = startApiServer();
@@ -658,9 +706,9 @@ async function runMcpCommand(action: "status" | "init" | "catalog") {
   try {
     const cwd = process.cwd();
     if (action === "init") {
-      const path = await saveLmStudioMcpConfig(createDefaultLmStudioMcpConfig(), cwd);
-      console.log(`Created LM Studio MCP config at ${path}`);
-      console.log("Edit it to match the MCP servers installed in LM Studio, then run `switchbay --lane mcp` or `/lane mcp`.");
+      const path = await saveSwitchbayMcpConfig(createDefaultSwitchbayMcpConfig(), cwd);
+      console.log(`Created Switchbay MCP config at ${path}`);
+      console.log("Edit it to match the MCP servers installed, then run `switchbay --lane cloud-mcp` or `/lane mcp`.");
       return;
     }
     if (action === "catalog") {
@@ -668,7 +716,7 @@ async function runMcpCommand(action: "status" | "init" | "catalog") {
       return;
     }
 
-    console.log(describeLmStudioMcpConfig(await loadLmStudioMcpConfig(cwd)));
+    console.log(describeSwitchbayMcpConfig(await loadSwitchbayMcpConfig(cwd)));
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`switchbay mcp: ${msg}`);
@@ -680,7 +728,7 @@ async function runLocalProviderCommand(action: "status" | "set", target: string 
   if (action === "set") {
     const provider = normalizeLocalProvider(target);
     if (!provider) {
-      console.error("switchbay local-provider: set requires `lmstudio` or `ollama`.");
+      console.error("switchbay local-provider: set requires `ollama`.");
       process.exit(1);
     }
     setActiveLocalProvider(provider);
@@ -828,114 +876,51 @@ function isCloudProviderAlias(value: string | null): boolean {
 }
 
 async function runModelPullCommand(rawLane: string | null, target: string | null, quantization: string | null) {
-  const lane = normalizeRuntimeLane(rawLane ?? "local");
-  const localProvider = normalizeLocalProvider(rawLane) ?? getActiveLocalProvider();
-  if (lane !== "local" && lane !== "local-mcp") {
-    console.error("switchbay model pull: local pulls require the local lane. Use `switchbay model pull <model>` or `switchbay model pull local <model>`.");
-    process.exit(1);
-  }
+  const lane = "local";
   if (!target?.trim()) {
     console.error("switchbay model pull: requires a model catalog id or Hugging Face URL.");
     console.error("Example: switchbay model pull ibm/granite-4-micro");
-    console.error("Example: switchbay model pull https://huggingface.co/lmstudio-community/gpt-oss-20b-GGUF --quant Q4_K_M");
+    console.error("Example: switchbay model pull https://huggingface.co/bartowski/Llama-3-8B-Instruct-Gradient-1048k-GGUF --quant Q4_K_M");
     process.exit(1);
   }
 
   try {
-    if (localProvider === "ollama") {
-      const { normalizeOllamaHuggingFaceModel, pullOllamaModel } = await import("./src/runtime/models");
-      const targetModel = normalizeOllamaHuggingFaceModel(target, quantization);
-      console.log(`Pulling ${targetModel} through Ollama...`);
-      try {
-        let lastPercent = -1;
-        const result = await pullOllamaModel({
-          model: targetModel,
-          onProgress: (progress) => {
-            if (progress.completed !== undefined && progress.total !== undefined && progress.total > 0) {
-              const percent = Math.floor((progress.completed / progress.total) * 100);
-              if (percent !== lastPercent) {
-                lastPercent = percent;
-                process.stdout.write(`\rPulling... ${percent}% (${progress.status})`);
-              }
-            } else {
-              process.stdout.write(`\rPulling... ${progress.status}`);
-            }
-          }
-        });
-        process.stdout.write("\n");
-        setSelectedRuntimeModel("local", { id: result.model, provider: "ollama" });
-        setActiveLocalProvider("ollama");
-        console.log(`Pulled: ${result.status}`);
-        console.log(`Selected ${result.model} for Ollama.`);
-      } catch (error: any) {
-        console.error(`Ollama pull API failed: ${error.message}`);
-        console.log("");
-        await runOllamaCliFallback(targetModel);
-        setSelectedRuntimeModel("local", { id: targetModel, provider: "ollama" });
-        setActiveLocalProvider("ollama");
-      }
-      return;
-    }
-    console.log(`Pulling ${target} through LM Studio...`);
-    console.log(`LM Studio native API: ${getLmStudioNativeBase()}`);
+    const { normalizeOllamaHuggingFaceModel, pullOllamaModel } = await import("./src/runtime/models");
+    const targetModel = normalizeOllamaHuggingFaceModel(target, quantization);
+    console.log(`Pulling ${targetModel} through Ollama...`);
     try {
-      const result = await pullLmStudioModel({ model: target, quantization });
-      if (result.requestedModel !== result.model) {
-        console.log(`Normalized target: ${result.model}`);
-      }
-      setSelectedRuntimeModel(lane, {
-        id: result.instanceId ?? result.model,
-        provider: lane === "local-mcp" ? "lmstudio-mcp" : "lmstudio",
+      let lastPercent = -1;
+      const result = await pullOllamaModel({
+        model: targetModel,
+        onProgress: (progress) => {
+          if (progress.completed !== undefined && progress.total !== undefined && progress.total > 0) {
+            const percent = Math.floor((progress.completed / progress.total) * 100);
+            if (percent !== lastPercent) {
+              lastPercent = percent;
+              process.stdout.write(`\rPulling... ${percent}% (${progress.status})`);
+            }
+          } else {
+            process.stdout.write(`\rPulling... ${progress.status}`);
+          }
+        }
       });
-      console.log(`Downloaded: ${result.downloadStatus}${result.jobId ? ` (${result.jobId})` : ""}`);
-      console.log(`Loaded: ${result.loadStatus}${result.instanceId ? ` as ${result.instanceId}` : ""}`);
-      if (result.loadTimeSeconds !== undefined) {
-        console.log(`Load time: ${result.loadTimeSeconds}s`);
-      }
-      console.log(`Selected ${result.instanceId ?? result.model} for ${getRuntimeLaneLabel(lane)}.`);
+      process.stdout.write("\n");
+      setSelectedRuntimeModel("local", { id: result.model, provider: "ollama" });
+      setActiveLocalProvider("ollama");
+      console.log(`Pulled: ${result.status}`);
+      console.log(`Selected ${result.model} for Ollama.`);
     } catch (error: any) {
-      if (!isLmStudioPullFallbackCandidate(error.message)) throw error;
-      const model = normalizeLmStudioPullModel(target);
-      console.error(error.message);
+      console.error(`Ollama pull API failed: ${error.message}`);
       console.log("");
-      console.log("Trying LM Studio CLI fallback: `lms get`.");
-      console.log("This may prompt for download confirmation.");
-      await runLmStudioCliFallback(model, lane);
+      await runOllamaCliFallback(targetModel);
+      setSelectedRuntimeModel("local", { id: targetModel, provider: "ollama" });
+      setActiveLocalProvider("ollama");
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`switchbay model pull: ${msg}`);
     process.exit(1);
   }
-}
-
-function isLmStudioPullFallbackCandidate(message: string): boolean {
-  const lower = message.toLowerCase();
-  return lower.includes("unable to connect") ||
-    lower.includes("network/catalog download failure") ||
-    lower.includes("model is not in lm studio's catalog");
-}
-
-async function runLmStudioCliFallback(model: string, lane: ReturnType<typeof normalizeRuntimeLane>) {
-  if (!model) throw new Error("LM Studio CLI fallback needs a model id.");
-
-  await runInheritedCommand(["lms", "get", model]);
-
-  const host = lmStudioHostArg();
-  const loadCommand = host ? ["lms", "load", model, "--host", host] : ["lms", "load", model];
-  try {
-    await runInheritedCommand(loadCommand);
-  } catch (error: any) {
-    console.log("");
-    console.log(`Downloaded with lms, but automatic load did not complete: ${error.message}`);
-    console.log(`Try manually: ${loadCommand.map(shellQuote).join(" ")}`);
-  }
-
-  setSelectedRuntimeModel(lane, {
-    id: model,
-    provider: lane === "local-mcp" ? "lmstudio-mcp" : "lmstudio",
-  });
-  console.log(`Selected ${model} for ${getRuntimeLaneLabel(lane)}.`);
 }
 
 async function runOllamaCliFallback(model: string) {
@@ -959,33 +944,7 @@ async function runOllamaCliFallback(model: string) {
   }
 }
 
-async function runInheritedCommand(command: string[]): Promise<void> {
-  try {
-    const proc = Bun.spawn(command, {
-      stdin: "inherit",
-      stdout: "inherit",
-      stderr: "inherit",
-    });
-    const exitCode = await proc.exited;
-    if (exitCode !== 0) {
-      throw new Error(`${command.map(shellQuote).join(" ")} exited with ${exitCode}`);
-    }
-  } catch (error: any) {
-    if (error?.code === "ENOENT" || /ENOENT|not found/i.test(error.message)) {
-      throw new Error("LM Studio CLI `lms` was not found. Open LM Studio once, then run `lms --help` to confirm it is installed.");
-    }
-    throw error;
-  }
-}
 
-function lmStudioHostArg(): string | null {
-  try {
-    const url = new URL(getLmStudioNativeBase());
-    return url.host;
-  } catch {
-    return null;
-  }
-}
 
 function shellQuote(value: string): string {
   return /^[A-Za-z0-9_./:=@-]+$/.test(value) ? value : JSON.stringify(value);

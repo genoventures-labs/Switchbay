@@ -2,12 +2,12 @@ import { existsSync } from "node:fs";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import os from "node:os";
-import { getLmStudioModel, getLmStudioNativeBase } from "../config/env";
 import { userConfigPath } from "../config/paths";
 
-export const LMSTUDIO_MCP_CONFIG_FILE = "lmstudio.mcp.json";
+export const SWITCHBAY_MCP_CONFIG_FILE = "mcp.json";
+export const LEGACY_MCP_CONFIG_FILE = "lmstudio.mcp.json";
 
-export type LmStudioMcpIntegration =
+export type SwitchbayMcpIntegration =
   | string
   | {
       type: "plugin";
@@ -22,60 +22,64 @@ export type LmStudioMcpIntegration =
       headers?: Record<string, string>;
     };
 
-export type LmStudioMcpConfig = {
+export type SwitchbayMcpConfig = {
   enabled?: boolean;
-  nativeBase?: string;
-  model?: string;
-  systemPrompt?: string;
-  contextLength?: number;
-  integrations?: LmStudioMcpIntegration[];
+  integrations?: SwitchbayMcpIntegration[];
   mcpServers?: Record<string, unknown>;
 };
 
-export type LmStudioMcpConfigStatus = {
-  config: LmStudioMcpConfig;
+export type SwitchbayMcpConfigStatus = {
+  config: SwitchbayMcpConfig;
   exists: boolean;
   path: string;
-  integrations: LmStudioMcpIntegration[];
+  integrations: SwitchbayMcpIntegration[];
 };
 
-export function lmStudioMcpConfigPath(cwd = process.cwd()): string {
+export function switchbayMcpConfigPath(cwd = process.cwd()): string {
   void cwd;
-  const configured = Bun.env.SWITCHBAY_LMSTUDIO_MCP_CONFIG?.trim();
+  const configured = Bun.env.SWITCHBAY_MCP_CONFIG?.trim() || Bun.env.SWITCHBAY_LMSTUDIO_MCP_CONFIG?.trim();
   if (configured) return resolve(configured.replace(/^~/, os.homedir()));
-  return userConfigPath(LMSTUDIO_MCP_CONFIG_FILE);
+  return userConfigPath(SWITCHBAY_MCP_CONFIG_FILE);
 }
 
-export async function loadLmStudioMcpConfig(cwd = process.cwd()): Promise<LmStudioMcpConfigStatus> {
-  const path = lmStudioMcpConfigPath(cwd);
+export async function loadSwitchbayMcpConfig(cwd = process.cwd()): Promise<SwitchbayMcpConfigStatus> {
+  const path = switchbayMcpConfigPath(cwd);
   if (!existsSync(path)) {
-    const config = createDefaultLmStudioMcpConfig();
-    return { config, exists: false, path, integrations: resolveLmStudioMcpIntegrations(config) };
+    const legacyPath = userConfigPath(LEGACY_MCP_CONFIG_FILE);
+    if (existsSync(legacyPath)) {
+      try {
+        const raw = await readFile(legacyPath, "utf-8");
+        const parsed = JSON.parse(raw) as SwitchbayMcpConfig;
+        return { config: parsed, exists: true, path: legacyPath, integrations: resolveSwitchbayMcpIntegrations(parsed) };
+      } catch {
+        // Fall through to defaults
+      }
+    }
+    const config = createDefaultSwitchbayMcpConfig();
+    return { config, exists: false, path, integrations: resolveSwitchbayMcpIntegrations(config) };
   }
 
   const raw = await readFile(path, "utf-8");
-  const parsed = JSON.parse(raw) as LmStudioMcpConfig;
-  return { config: parsed, exists: true, path, integrations: resolveLmStudioMcpIntegrations(parsed) };
+  const parsed = JSON.parse(raw) as SwitchbayMcpConfig;
+  return { config: parsed, exists: true, path, integrations: resolveSwitchbayMcpIntegrations(parsed) };
 }
 
-export async function saveLmStudioMcpConfig(config: LmStudioMcpConfig, cwd = process.cwd()): Promise<string> {
-  const path = lmStudioMcpConfigPath(cwd);
+export async function saveSwitchbayMcpConfig(config: SwitchbayMcpConfig, cwd = process.cwd()): Promise<string> {
+  const path = switchbayMcpConfigPath(cwd);
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, `${JSON.stringify(config, null, 2)}\n`, "utf-8");
   return path;
 }
 
-export function createDefaultLmStudioMcpConfig(): LmStudioMcpConfig {
+export function createDefaultSwitchbayMcpConfig(): SwitchbayMcpConfig {
   return {
     enabled: true,
-    nativeBase: getLmStudioNativeBase(),
-    model: getLmStudioModel(),
     integrations: [],
     mcpServers: {},
   };
 }
 
-export function resolveLmStudioMcpIntegrations(config: LmStudioMcpConfig): LmStudioMcpIntegration[] {
+export function resolveSwitchbayMcpIntegrations(config: SwitchbayMcpConfig): SwitchbayMcpIntegration[] {
   if (Array.isArray(config.integrations) && config.integrations.length > 0) {
     return config.integrations;
   }
@@ -86,30 +90,24 @@ export function resolveLmStudioMcpIntegrations(config: LmStudioMcpConfig): LmStu
     .map((name) => `mcp/${name}`);
 }
 
-export function describeLmStudioMcpConfig(status: LmStudioMcpConfigStatus): string {
+export function describeSwitchbayMcpConfig(status: SwitchbayMcpConfigStatus): string {
   const integrations = status.integrations.length
     ? status.integrations.map((item) => `- \`${formatIntegrationLabel(item)}\``).join("\n")
     : "- No integrations configured yet.";
 
   return [
-    "**LM Studio Native MCP Lane (legacy/experimental)**",
+    "**Switchbay MCP Bridge Configuration**",
     "",
     `Config: \`${status.path}\`${status.exists ? "" : " (not created yet)"}`,
-    `Native API: \`${status.config.nativeBase ?? getLmStudioNativeBase()}\``,
-    `Model: \`${status.config.model ?? getLmStudioModel()}\``,
     `Enabled: \`${status.config.enabled === false ? "false" : "true"}\``,
     "",
     "Integrations:",
     integrations,
-    "",
-    status.integrations.length
-      ? "Use `/lane native-mcp` to test LM Studio's native MCP chat API. Use `/mcp on` for Switchbay's own bridge."
-      : "Add LM Studio-installed MCP server ids like `mcp/<server-label>` to `integrations`, then use `/lane native-mcp`.",
   ].join("\n");
 }
 
 export function buildSwitchbayMcpPromptBlock(
-  status: LmStudioMcpConfigStatus,
+  status: SwitchbayMcpConfigStatus,
   modelLane = "cloud",
 ): string {
   const integrations = status.integrations.length
@@ -122,7 +120,7 @@ export function buildSwitchbayMcpPromptBlock(
     "SWITCHBAY MCP BRIDGE:",
     `Model lane: ${modelLane}`,
     `Config: ${status.path}${status.exists ? "" : " (not created yet)"}`,
-    "Switchbay owns MCP/tool execution for this turn. Do not call LM Studio's native MCP chat API unless the runtime lane is explicitly local-mcp.",
+    "Switchbay owns MCP/tool execution for this turn.",
     "Use Switchbay's local tool bridge for tool execution and treat configured MCP integrations as allowed tool intent.",
     "Configured MCP integrations:",
     integrations,
@@ -134,11 +132,11 @@ export function buildSwitchbayMcpPromptBlock(
   ].join("\n");
 }
 
-export function buildCloudMcpPromptBlock(status: LmStudioMcpConfigStatus): string {
+export function buildCloudMcpPromptBlock(status: SwitchbayMcpConfigStatus): string {
   return buildSwitchbayMcpPromptBlock(status, "cloud");
 }
 
-export function formatIntegrationLabel(item: LmStudioMcpIntegration): string {
+export function formatIntegrationLabel(item: SwitchbayMcpIntegration): string {
   if (typeof item === "string") return item;
   if (item.type === "plugin") return item.id;
   return `${item.server_label} (${item.server_url})`;

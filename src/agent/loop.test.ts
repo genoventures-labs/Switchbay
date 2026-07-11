@@ -12,7 +12,7 @@ import {
   executeTurn,
   extractAssistantText,
   generateEngineManifest,
-  generateLmStudioMcpConfig,
+  generateSwitchbayMcpConfig,
   generatePluginDefinition,
   generateRuleDefinition,
   generateSkillDefinition,
@@ -199,24 +199,22 @@ test("generateRuleDefinition produces a user rule draft", async () => {
   }
 });
 
-test("generateLmStudioMcpConfig produces a user MCP config draft", async () => {
+test("generateSwitchbayMcpConfig produces a user MCP config draft", async () => {
   const { client } = createMockClient([
     createResponse(`{
   "enabled": true,
-  "nativeBase": "http://192.168.1.50:1234/api/v1",
-  "model": "qwen-local",
   "integrations": ["mcp/playwright"],
   "mcpServers": {
     "playwright": { "note": "Already installed in LM Studio." }
   }
 }`),
   ]);
-  const previous = Bun.env.SWITCHBAY_LMSTUDIO_MCP_CONFIG;
-  const configPath = join(await mkdtemp(join(tmpdir(), "switchbay-mcp-draft-")), "lmstudio.mcp.json");
-  Bun.env.SWITCHBAY_LMSTUDIO_MCP_CONFIG = configPath;
+  const previous = Bun.env.SWITCHBAY_MCP_CONFIG;
+  const configPath = join(await mkdtemp(join(tmpdir(), "switchbay-mcp-draft-")), "mcp.json");
+  Bun.env.SWITCHBAY_MCP_CONFIG = configPath;
 
   try {
-    const draft = await generateLmStudioMcpConfig(client, "dev", {
+    const draft = await generateSwitchbayMcpConfig(client, "dev", {
       name: "Browser MCP",
       purpose: "Let local models use browser tools.",
       servers: "playwright",
@@ -224,24 +222,23 @@ test("generateLmStudioMcpConfig produces a user MCP config draft", async () => {
       notes: "Use http://192.168.1.50:1234.",
     });
 
-    expect(draft.id).toBe("lmstudio-mcp");
+    expect(draft.id).toBe("mcp");
     expect(draft.savePath).toBe(configPath);
     const parsed = JSON.parse(draft.content);
     expect(parsed.integrations).toEqual(["mcp/playwright"]);
-    expect(parsed.nativeBase).toBe("http://192.168.1.50:1234/api/v1");
   } finally {
     if (previous === undefined) {
-      delete Bun.env.SWITCHBAY_LMSTUDIO_MCP_CONFIG;
+      delete Bun.env.SWITCHBAY_MCP_CONFIG;
     } else {
-      Bun.env.SWITCHBAY_LMSTUDIO_MCP_CONFIG = previous;
+      Bun.env.SWITCHBAY_MCP_CONFIG = previous;
     }
   }
 });
 
-test("generateLmStudioMcpConfig refuses unknown MCP servers", async () => {
+test("generateSwitchbayMcpConfig refuses unknown MCP servers", async () => {
   const { client } = createMockClient([]);
 
-  await expect(generateLmStudioMcpConfig(client, "dev", {
+  await expect(generateSwitchbayMcpConfig(client, "dev", {
     name: "Mystery MCP",
     purpose: "Use a custom imaginary accounting server.",
     servers: "dragon-saddle",
@@ -358,7 +355,7 @@ test("buildTurn injects Switchbay MCP guidance for cloud-mcp lane", async () => 
     const system = turn.request.messages.find((message) => message.role === "system")?.content ?? "";
     expect(system).toContain("Runtime Lane: cloud-mcp");
     expect(system).toContain("SWITCHBAY MCP BRIDGE");
-    expect(system).toContain("Do not call LM Studio's native MCP chat API");
+    expect(system).toContain("Model lane: cloud-mcp");
   } finally {
     if (previous === undefined) {
       delete Bun.env.SWITCHBAY_CONFIG_DIR;

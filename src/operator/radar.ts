@@ -1,7 +1,7 @@
 import { getRuntimeLane, getToolMode, type RuntimeLane, type ToolMode } from "../config/env";
 import { getActiveCloudProvider, hasCloudProviderKey } from "../runtime/cloud-providers";
 import { getActiveLocalProvider, getLocalProviderConfig } from "../runtime/local-providers";
-import { loadLmStudioMcpConfig } from "../runtime/lmstudio-mcp-config";
+import { loadSwitchbayMcpConfig } from "../runtime/mcp-config";
 import { loadLatestTrace } from "../trace/store";
 import { loadDailyBoard, DAILY_ACTIVE_LIMIT } from "./daily-board";
 import { runCommand } from "../tools/shell";
@@ -124,7 +124,7 @@ function cloudKeySignal(lane: RuntimeLane): RadarSignal {
 }
 
 async function localProviderSignal(lane: RuntimeLane): Promise<RadarSignal> {
-  if (lane !== "local" && lane !== "local-mcp") {
+  if (lane !== "local") {
     return {
       severity: "clean",
       title: "Local provider",
@@ -132,9 +132,9 @@ async function localProviderSignal(lane: RuntimeLane): Promise<RadarSignal> {
     };
   }
 
-  const provider = lane === "local-mcp" ? "lmstudio" : getActiveLocalProvider();
+  const provider = "ollama";
   const config = getLocalProviderConfig(provider);
-  const url = provider === "ollama" ? `${config.apiBase}/tags` : `${config.apiBase}/models`;
+  const url = `${config.apiBase}/tags`;
   try {
     const response = await fetch(url, { signal: AbortSignal.timeout(1200) });
     if (!response.ok) {
@@ -155,14 +155,14 @@ async function localProviderSignal(lane: RuntimeLane): Promise<RadarSignal> {
       severity: "blocker",
       title: "Local provider unreachable",
       detail: `Could not reach ${config.label} at ${url}: ${error.message}`,
-      next: provider === "ollama" ? "switchbay local-provider set lmstudio" : "switchbay local-provider set ollama",
+      next: "switchbay local-provider",
     };
   }
 }
 
 async function mcpSignal(cwd: string, lane: RuntimeLane, toolMode: ToolMode): Promise<RadarSignal> {
   const usesSwitchbayMcp = toolMode === "switchbay-mcp" || lane === "cloud-mcp";
-  if (!usesSwitchbayMcp && lane !== "local-mcp") {
+  if (!usesSwitchbayMcp) {
     return {
       severity: "clean",
       title: "MCP",
@@ -170,7 +170,7 @@ async function mcpSignal(cwd: string, lane: RuntimeLane, toolMode: ToolMode): Pr
     };
   }
 
-  const status = await loadLmStudioMcpConfig(cwd);
+  const status = await loadSwitchbayMcpConfig(cwd);
   if (!status.exists) {
     return {
       severity: "warning",

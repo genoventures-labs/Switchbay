@@ -2,7 +2,6 @@ export const DEFAULTS = {
   openAiModel: "gpt-5.5",
   anthropicModel: "claude-sonnet-4-5",
   googleModel: "gemini-3.5-flash",
-  lmStudioModel: "qwen2.5-7b-instruct",
   ollamaModel: "llama3.2",
   surface: "dev",
   profile: "switchbay",
@@ -13,7 +12,6 @@ export const DEFAULTS = {
   anthropicBase: "https://api.anthropic.com/v1",
   googleBase: "https://generativelanguage.googleapis.com/v1beta/openai",
   cloudProvider: "auto",
-  lmStudioBase: "http://127.0.0.1:1234/v1",
   ollamaBase: "http://localhost:11434/api",
 } as const;
 

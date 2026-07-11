@@ -31,7 +31,7 @@ import { buildMemoryPromptBlock } from "../memory/store";
 import { buildKnowledgePromptBlock } from "../knowledge/store";
 import { buildGuidesPromptBlock, generateRuleDraft, type RuleDraftAnswers, type PendingRuleDraft } from "../context/guides";
 import type { RuntimeLane, ToolMode } from "../config/env";
-import { buildSwitchbayMcpPromptBlock, loadLmStudioMcpConfig } from "../runtime/lmstudio-mcp-config";
+import { buildSwitchbayMcpPromptBlock, loadSwitchbayMcpConfig } from "../runtime/mcp-config";
 import {
   type AgentMode,
   createThoughtFrame,
@@ -42,7 +42,7 @@ import {
 import { loadWorkspaceSnapshot, type WorkspaceSnapshot } from "../session/workspace";
 import { listProjectFiles } from "../tools/files";
 import { runCommand } from "../tools/shell";
-import { createDefaultLmStudioMcpConfig, lmStudioMcpConfigPath } from "../runtime/lmstudio-mcp-config";
+import { createDefaultSwitchbayMcpConfig, switchbayMcpConfigPath } from "../runtime/mcp-config";
 import { describeTrustedMcpCatalog, matchTrustedMcpCatalog, TRUSTED_MCP_CATALOG } from "../runtime/mcp-catalog";
 import { normalizePluginManifest, pluginManifestTemplate } from "../plugins/registry";
 
@@ -316,7 +316,7 @@ Brief:
   return { id: normalized.id, name: normalized.name, content, savePath };
 }
 
-export async function generateLmStudioMcpConfig(
+export async function generateSwitchbayMcpConfig(
   _client: ChatRuntimeClient,
   _surface: string,
   answers: { name: string; purpose: string; servers: string; integrations: string; notes: string },
@@ -326,10 +326,6 @@ export async function generateLmStudioMcpConfig(
     answers.purpose,
     answers.servers,
     answers.integrations,
-  ].join(" ");
-  const requested = [
-    requestedForCatalog,
-    answers.notes,
   ].join(" ");
   const matched = uniqueTrustedMcpMatches([
     ...matchTrustedMcpCatalog(requestedForCatalog),
@@ -346,12 +342,11 @@ export async function generateLmStudioMcpConfig(
       "Trusted options:",
       describeTrustedMcpCatalog(),
       "",
-      "Best next step: install/enable the desired MCP server in LM Studio, give it a stable server label in LM Studio's mcp.json, then ask Bay for one of the trusted options or add the exact integration id manually to `~/.switchbay/lmstudio.mcp.json`.",
+      "Best next step: add the exact integration id manually to `~/.switchbay/mcp.json`.",
     ].join("\n"));
   }
 
   const parsed = {
-    ...(extractLmStudioNativeBase(requested) ? { nativeBase: extractLmStudioNativeBase(requested) } : {}),
     integrations: matched.map((entry) => entry.integration),
     mcpServers: Object.fromEntries(matched.map((entry) => [
       entry.id,
@@ -361,33 +356,19 @@ export async function generateLmStudioMcpConfig(
         note: entry.installHint,
       },
     ])),
-    systemPrompt: [
-      "Use only the configured LM Studio MCP integrations.",
-      "If an integration is not installed or enabled in LM Studio, say which integration is missing.",
-      answers.notes ? `User notes: ${answers.notes}` : "",
-    ].filter(Boolean).join("\n"),
   };
   const normalized = {
-    ...createDefaultLmStudioMcpConfig(),
+    ...createDefaultSwitchbayMcpConfig(),
     ...parsed,
     enabled: true,
   };
   const content = `${JSON.stringify(normalized, null, 2)}\n`;
   return {
-    id: "lmstudio-mcp",
-    name: answers.name || "LM Studio MCP",
+    id: "mcp",
+    name: answers.name || "Switchbay MCP",
     content,
-    savePath: lmStudioMcpConfigPath(process.cwd()),
+    savePath: switchbayMcpConfigPath(process.cwd()),
   };
-}
-
-function extractLmStudioNativeBase(value: string): string | null {
-  const match = value.match(/https?:\/\/[^\s,]+/i);
-  const raw = match?.[0]?.replace(/[).]+$/, "");
-  if (!raw) return null;
-  if (raw.endsWith("/api/v1")) return raw;
-  if (raw.endsWith("/v1")) return raw.replace(/\/v1$/, "/api/v1");
-  return `${raw.replace(/\/$/, "")}/api/v1`;
 }
 
 function parseIntegrationHints(value: string): string[] {
@@ -574,7 +555,7 @@ export async function buildTurn(input: {
     ? "switchbay-mcp"
     : "standard";
   const switchbayMcpBlock = effectiveToolMode === "switchbay-mcp"
-    ? buildSwitchbayMcpPromptBlock(await loadLmStudioMcpConfig(cwd), input.runtimeLane ?? "cloud")
+    ? buildSwitchbayMcpPromptBlock(await loadSwitchbayMcpConfig(cwd), input.runtimeLane ?? "cloud")
     : "";
 
   let systemPrompt = `You are a local-first coding agent running inside a terminal switchbay.

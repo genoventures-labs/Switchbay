@@ -2,19 +2,23 @@ import packageJson from "../../package.json";
 
 /**
  * Checks if a newer version of Switchbay is available on GitHub.
+ * Uses the Releases API so we only report versions that are actually
+ * published and installable — not CI auto-bumps on main that haven't
+ * been released yet.
  * Returns the version string of the update if available, or null.
  */
 export async function checkForUpdate(): Promise<string | null> {
   try {
     const current = packageJson.version;
-    const res = await fetch("https://raw.githubusercontent.com/genoventures-labs/Switchbay/main/package.json", {
-      headers: { "User-Agent": "Switchbay-TUI" },
-      signal: AbortSignal.timeout(2000), // 2 seconds timeout to prevent hanging on startup
+    const res = await fetch("https://api.github.com/repos/genoventures-labs/Switchbay/releases/latest", {
+      headers: { "User-Agent": "Switchbay-TUI", "Accept": "application/vnd.github+json" },
+      signal: AbortSignal.timeout(3000),
     });
     if (!res.ok) return null;
     const data = await res.json();
-    const latest = data.version;
-    if (latest && latest !== current) {
+    // tag_name is like "v1.6.9" — strip the leading 'v'
+    const latest = typeof data.tag_name === "string" ? data.tag_name.replace(/^v/, "") : null;
+    if (latest && latest !== current && !data.draft && !data.prerelease) {
       return latest;
     }
   } catch {

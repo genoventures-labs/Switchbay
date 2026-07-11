@@ -154,6 +154,7 @@ export function SwitchbayApp({
   const [rightRailCollapsed, setRightRailCollapsed] = useState(false);
   const [dailyBoard, setDailyBoard] = useState<DailyBoard>(() => loadDailyBoard());
   const [pendingUpdateVersion, setPendingUpdateVersion] = useState<string | null>(null);
+  const [pendingSkillsUpdate, setPendingSkillsUpdate] = useState(false);
   
   const didHydrateRef = useRef(false);
   const didShowStartupOverviewRef = useRef(false);
@@ -814,7 +815,7 @@ export function SwitchbayApp({
     }
 
     const timer = setTimeout(() => {
-      import("../runtime/update").then(({ checkForUpdate }) => {
+      import("../runtime/update").then(({ checkForUpdate, checkForToolboxUpdate }) => {
         checkForUpdate().then((latest) => {
           if (latest) {
             import("../../package.json").then((pkg) => {
@@ -824,13 +825,23 @@ export function SwitchbayApp({
               });
               setPendingUpdateVersion(latest);
             });
+          } else {
+            checkForToolboxUpdate(state.workspace?.cwd ?? process.cwd()).then((skillsUpdate) => {
+              if (skillsUpdate) {
+                dispatch({
+                  type: "assistant/appended",
+                  message: `✨ **Skills Update Available**\n\nNew toolbox skills are available in the remote repository!\n\nWould you like to sync them now?\n\n**y** to sync skills · **n** to ignore`,
+                });
+                setPendingSkillsUpdate(true);
+              }
+            }).catch(() => {});
           }
         }).catch(() => {});
       }).catch(() => {});
     }, 1000);
 
     return () => clearTimeout(timer);
-  }, [initialQuery, didHydrateRef.current]);
+  }, [initialQuery, didHydrateRef.current, state.workspace]);
 
   async function performTuiUpdate(latest: string) {
     const { existsSync } = await import("node:fs");
@@ -861,6 +872,24 @@ export function SwitchbayApp({
     });
     child.unref();
     process.exit(0);
+  }
+
+  async function performSkillsUpdate() {
+    try {
+      const { syncToolboxRepo, loadToolboxInventory } = await import("../toolbox/hub");
+      const result = await syncToolboxRepo();
+      dispatch({
+        type: "assistant/appended",
+        message: `✓ **Skills Synced Successfully!**\n\n${result}`,
+      });
+      const inventory = await loadToolboxInventory(state.workspace?.cwd ?? process.cwd());
+      setAvailableSkills(inventory.skills);
+    } catch (e: any) {
+      dispatch({
+        type: "assistant/appended",
+        message: `x **Skills Sync Failed:** ${e.message}`,
+      });
+    }
   }
 
   async function handleResumeSession(id: string) {
@@ -1148,6 +1177,23 @@ export function SwitchbayApp({
       if (intent === "cancel") {
         setPendingUpdateVersion(null);
         dispatch({ type: "assistant/appended", message: "Update ignored." });
+        setQuerySync("");
+        return;
+      }
+    }
+
+    // Pending skills update confirmation
+    if (pendingSkillsUpdate) {
+      const intent = parseApprovalIntent(trimmedVal);
+      if (intent === "apply" || intent === "always") {
+        setPendingSkillsUpdate(false);
+        setQuerySync("");
+        void performSkillsUpdate();
+        return;
+      }
+      if (intent === "cancel") {
+        setPendingSkillsUpdate(false);
+        dispatch({ type: "assistant/appended", message: "Skills update ignored." });
         setQuerySync("");
         return;
       }

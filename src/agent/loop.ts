@@ -697,12 +697,36 @@ export async function executeTurn(input: {
   let emptyReplyRetries = 0;
   const MAX_EMPTY_REPLY_RETRIES = 1;
 
+  const { loadEngineRegistry } = await import("../engines/registry");
+  const registry = await loadEngineRegistry(input.cwd ?? process.cwd());
+  const hasGumOps = registry.engines.some((e) => e.id === "gumops");
+  const hasThinkapse = registry.engines.some((e) => e.id === "thinkapse");
+
+  let filteredTools = AGENT_TOOLS;
+  if (!hasGumOps || !hasThinkapse) {
+    filteredTools = AGENT_TOOLS.filter((t) => {
+      const name = t.function?.name ?? "";
+      if (!hasGumOps && (
+        name.startsWith("gumops_") ||
+        name.startsWith("gumroad_") ||
+        name.startsWith("facebook_") ||
+        name.startsWith("shopify_")
+      )) {
+        return false;
+      }
+      if (!hasThinkapse && name.startsWith("thinkapse_")) {
+        return false;
+      }
+      return true;
+    });
+  }
+
   for (let iteration = 0; iteration < MAX_ITERATIONS; iteration += 1) {
     if (input.signal?.aborted) throw new DOMException("Turn cancelled", "AbortError");
     const request: ChatCompletionRequest = {
       ...input.turn.request,
       messages,
-      tools: AGENT_TOOLS,
+      tools: filteredTools,
       tool_choice: "auto",
     };
 

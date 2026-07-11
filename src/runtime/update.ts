@@ -22,3 +22,34 @@ export async function checkForUpdate(): Promise<string | null> {
   }
   return null;
 }
+
+/**
+ * Checks if a newer version of the Toolbox Skills repository is available on GitHub.
+ * Returns true if a sync/update is available.
+ */
+export async function checkForToolboxUpdate(cwd = process.cwd()): Promise<boolean> {
+  try {
+    const { loadToolboxInventory } = await import("../toolbox/hub");
+    const inventory = await loadToolboxInventory(cwd);
+    const res = await fetch("https://api.github.com/repos/genoventures-labs/Engine-Toolboxes/commits/main", {
+      headers: { "User-Agent": "Switchbay-TUI" },
+      signal: AbortSignal.timeout(2000),
+    });
+    if (!res.ok) return false;
+    const data = await res.json();
+    const remoteSha = data.sha;
+    if (!remoteSha) return false;
+
+    if (!inventory.exists || !inventory.head) {
+      return true; // Needs clone or sync
+    }
+
+    const localShortSha = inventory.head.split(" ")[0];
+    if (localShortSha && !remoteSha.startsWith(localShortSha)) {
+      return true; // Update available
+    }
+  } catch {
+    // Fail silently
+  }
+  return false;
+}

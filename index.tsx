@@ -743,6 +743,58 @@ async function runUpdateCommand() {
     console.log(`${CLR.accent}⏺${CLR.reset} ${CLR.bold}Switchbay Git Updater${CLR.reset}`);
     console.log("Updating from local git repository...");
 
+    // 0. Check for uncommitted changes
+    const gitStatus = Bun.spawnSync(["git", "status", "--porcelain"]);
+    const hasUncommitted = gitStatus.stdout.toString().trim().length > 0;
+
+    if (hasUncommitted) {
+      console.log(`\n${CLR.accent}⚠${CLR.reset} ${CLR.bold}You have uncommitted local changes.${CLR.reset}`);
+      const readline = require("node:readline");
+      const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+      const comment = await new Promise<string>((resolve) => {
+        rl.question("Enter commit message for your changes (or press Enter to skip commit): ", resolve);
+      });
+      rl.close();
+
+      if (comment.trim()) {
+        console.log("Adding and committing changes...");
+        const gitAdd = Bun.spawn(["git", "add", "."], { stdout: "inherit", stderr: "inherit" });
+        await gitAdd.exited;
+
+        const gitCommit = Bun.spawn(["git", "commit", "-m", comment.trim()], { stdout: "inherit", stderr: "inherit" });
+        await gitCommit.exited;
+      } else {
+        console.log("Skipping commit. Proceeding with update...");
+      }
+    }
+
+    // Check for unpushed commits
+    const branchResult = Bun.spawnSync(["git", "branch", "--show-current"]);
+    const branchName = branchResult.stdout.toString().trim();
+
+    if (branchName) {
+      const upstreamResult = Bun.spawnSync(["git", "rev-parse", "--abbrev-ref", "@{u}"]);
+      const hasUpstream = upstreamResult.status === 0;
+
+      let hasUnpushed = false;
+      if (hasUpstream) {
+        const unpushedResult = Bun.spawnSync(["git", "log", "@{u}..HEAD", "--oneline"]);
+        hasUnpushed = unpushedResult.stdout.toString().trim().length > 0;
+      } else {
+        hasUnpushed = true;
+      }
+
+      if (hasUnpushed) {
+        console.log("Pushing local commits to remote...");
+        const pushArgs = hasUpstream ? ["git", "push"] : ["git", "push", "-u", "origin", branchName];
+        const gitPush = Bun.spawn(pushArgs, { stdout: "inherit", stderr: "inherit" });
+        const pushCode = await gitPush.exited;
+        if (pushCode !== 0) {
+          console.warn(`${CLR.error}Warning: git push failed. Proceeding with update...${CLR.reset}`);
+        }
+      }
+    }
+
     // 1. git pull
     console.log("Running git pull...");
     const gitPull = Bun.spawn(["git", "pull"], { stdout: "inherit", stderr: "inherit" });

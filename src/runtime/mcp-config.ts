@@ -5,7 +5,18 @@ import os from "node:os";
 import { userConfigPath } from "../config/paths";
 
 export const SWITCHBAY_MCP_CONFIG_FILE = "mcp.json";
-export const LEGACY_MCP_CONFIG_FILE = "lmstudio.mcp.json";
+export type McpServerConfig = {
+  enabled?: boolean;
+  url?: string;
+  command?: string;
+  args?: string[];
+  cwd?: string;
+  env?: Record<string, string>;
+  headers?: Record<string, string>;
+  allowed_tools?: string[];
+  approval?: "auto" | "always";
+  timeout_ms?: number;
+};
 
 export type SwitchbayMcpIntegration =
   | string
@@ -25,7 +36,7 @@ export type SwitchbayMcpIntegration =
 export type SwitchbayMcpConfig = {
   enabled?: boolean;
   integrations?: SwitchbayMcpIntegration[];
-  mcpServers?: Record<string, unknown>;
+  mcpServers?: Record<string, McpServerConfig>;
 };
 
 export type SwitchbayMcpConfigStatus = {
@@ -37,7 +48,7 @@ export type SwitchbayMcpConfigStatus = {
 
 export function switchbayMcpConfigPath(cwd = process.cwd()): string {
   void cwd;
-  const configured = Bun.env.SWITCHBAY_MCP_CONFIG?.trim() || Bun.env.SWITCHBAY_LMSTUDIO_MCP_CONFIG?.trim();
+  const configured = Bun.env.SWITCHBAY_MCP_CONFIG?.trim();
   if (configured) return resolve(configured.replace(/^~/, os.homedir()));
   return userConfigPath(SWITCHBAY_MCP_CONFIG_FILE);
 }
@@ -45,16 +56,6 @@ export function switchbayMcpConfigPath(cwd = process.cwd()): string {
 export async function loadSwitchbayMcpConfig(cwd = process.cwd()): Promise<SwitchbayMcpConfigStatus> {
   const path = switchbayMcpConfigPath(cwd);
   if (!existsSync(path)) {
-    const legacyPath = userConfigPath(LEGACY_MCP_CONFIG_FILE);
-    if (existsSync(legacyPath)) {
-      try {
-        const raw = await readFile(legacyPath, "utf-8");
-        const parsed = JSON.parse(raw) as SwitchbayMcpConfig;
-        return { config: parsed, exists: true, path: legacyPath, integrations: resolveSwitchbayMcpIntegrations(parsed) };
-      } catch {
-        // Fall through to defaults
-      }
-    }
     const config = createDefaultSwitchbayMcpConfig();
     return { config, exists: false, path, integrations: resolveSwitchbayMcpIntegrations(config) };
   }
@@ -62,6 +63,21 @@ export async function loadSwitchbayMcpConfig(cwd = process.cwd()): Promise<Switc
   const raw = await readFile(path, "utf-8");
   const parsed = JSON.parse(raw) as SwitchbayMcpConfig;
   return { config: parsed, exists: true, path, integrations: resolveSwitchbayMcpIntegrations(parsed) };
+}
+
+export function resolveMcpServerConfigs(config: SwitchbayMcpConfig): Record<string, McpServerConfig> {
+  const servers: Record<string, McpServerConfig> = { ...(config.mcpServers ?? {}) };
+  for (const integration of config.integrations ?? []) {
+    if (typeof integration === "object" && integration.type === "ephemeral_mcp") {
+      servers[integration.server_label] = {
+        url: integration.server_url,
+        headers: integration.headers,
+        allowed_tools: integration.allowed_tools,
+        approval: "always",
+      };
+    }
+  }
+  return servers;
 }
 
 export async function saveSwitchbayMcpConfig(config: SwitchbayMcpConfig, cwd = process.cwd()): Promise<string> {
@@ -120,14 +136,14 @@ export function buildSwitchbayMcpPromptBlock(
     "SWITCHBAY MCP BRIDGE:",
     `Model lane: ${modelLane}`,
     `Config: ${status.path}${status.exists ? "" : " (not created yet)"}`,
-    "Switchbay owns MCP/tool execution for this turn.",
-    "Use Switchbay's local tool bridge for tool execution and treat configured MCP integrations as allowed tool intent.",
+    "Switchbay owns MCP client connections and tool execution for this turn.",
+    "Configured stdio and Streamable HTTP servers are initialized; allowed discovered tools are exposed with mcp__server__tool names.",
     "Configured MCP integrations:",
     integrations,
     "",
     "Switchbay MCP bridge rules:",
-    "- If the user asks for configured MCP/browser/file/fetch behavior, use the matching Switchbay tool calls when available.",
-    "- If a requested MCP server is not configured or no matching Switchbay bridge tool exists, say exactly what is missing.",
+    "- Use only MCP tools actually present in the model tool list after discovery.",
+    "- If a requested server is not configured, fails connection, or exposes no allowed matching tool, say exactly what is missing.",
     "- Do not invent MCP server ids, tool names, plugin handles, or external capabilities.",
   ].join("\n");
 }

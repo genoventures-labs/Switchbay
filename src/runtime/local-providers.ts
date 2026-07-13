@@ -3,7 +3,7 @@ import path from "node:path";
 import { DEFAULTS } from "../config/defaults";
 import { userConfigPath } from "../config/paths";
 
-export type LocalProviderId = "ollama";
+export type LocalProviderId = "ollama" | "ollama-cloud";
 
 export type LocalProviderConfig = {
   id: LocalProviderId;
@@ -28,6 +28,12 @@ const DEFAULT_CONFIG: LocalProvidersConfig = {
       apiBase: DEFAULTS.ollamaBase,
       model: DEFAULTS.ollamaModel,
     },
+    "ollama-cloud": {
+      id: "ollama-cloud",
+      label: "Ollama Cloud",
+      apiBase: "https://ollama.com/api",
+      model: "gpt-oss:120b",
+    },
   },
 };
 
@@ -40,8 +46,11 @@ export function localProvidersConfigPath(): string {
 export function normalizeLocalProvider(value?: string | null): LocalProviderId | null {
   const normalized = value?.trim().toLowerCase();
   if (!normalized) return null;
-  if (normalized === "ollama" || normalized === "ol" || normalized === "huggingface" || normalized === "hf" || normalized === "hf.co") {
+  if (normalized === "ollama" || normalized === "ol" || normalized === "hf.co") {
     return "ollama";
+  }
+  if (normalized === "ollama-cloud" || normalized === "ollama_cloud" || normalized === "oc" || normalized === "ollama.com") {
+    return "ollama-cloud";
   }
   return null;
 }
@@ -71,7 +80,7 @@ export function saveLocalProvidersConfig(config: LocalProvidersConfig): void {
 }
 
 export function getActiveLocalProvider(): LocalProviderId {
-  return "ollama";
+  return normalizeLocalProvider(Bun.env.SWITCHBAY_LOCAL_PROVIDER) ?? loadLocalProvidersConfig().active;
 }
 
 export function setActiveLocalProvider(provider: LocalProviderId): LocalProvidersConfig {
@@ -95,7 +104,7 @@ export function describeLocalProviders(): string {
     "",
     ...rows,
     "",
-    "Switch with `/lane ollama`, `/lane hf`, or `switchbay local-provider set ollama`.",
+    "Switch with `/lane ollama`, `/lane ollama-cloud`, or `switchbay local-provider set ollama|ollama-cloud`.",
   ].join("\n");
 }
 
@@ -106,8 +115,9 @@ export function invalidateLocalProvidersConfig(): void {
 function normalizeConfig(parsed: Partial<LocalProvidersConfig>): LocalProvidersConfig {
   const providers = {
     ollama: normalizeProvider(parsed.providers?.ollama, DEFAULT_CONFIG.providers.ollama),
+    "ollama-cloud": normalizeProvider(parsed.providers?.["ollama-cloud"], DEFAULT_CONFIG.providers["ollama-cloud"]),
   };
-  const active = "ollama";
+  const active = normalizeLocalProvider(parsed.active) ?? DEFAULT_CONFIG.active;
   return applyEnv({ active, providers });
 }
 
@@ -127,14 +137,21 @@ function applyEnv(config: LocalProvidersConfig): LocalProvidersConfig {
   const lmModel = Bun.env.SWITCHBAY_LMSTUDIO_MODEL || Bun.env.LMSTUDIO_DEFAULT_MODEL;
   const ollamaBase = Bun.env.SWITCHBAY_OLLAMA_BASE || Bun.env.OLLAMA_API_BASE || Bun.env.OLLAMA_HOST || lmBase;
   const ollamaModel = Bun.env.SWITCHBAY_OLLAMA_MODEL || Bun.env.OLLAMA_MODEL || lmModel;
+  const ollamaCloudBase = Bun.env.SWITCHBAY_OLLAMA_CLOUD_BASE || Bun.env.OLLAMA_CLOUD_BASE;
+  const ollamaCloudModel = Bun.env.SWITCHBAY_OLLAMA_CLOUD_MODEL || Bun.env.OLLAMA_CLOUD_MODEL;
   return {
     ...config,
-    active: "ollama",
+    active: normalizeLocalProvider(Bun.env.SWITCHBAY_LOCAL_PROVIDER) ?? config.active,
     providers: {
       ollama: {
         ...config.providers.ollama,
         apiBase: ollamaBase ? normalizeProviderBase("ollama", ollamaBase, config.providers.ollama.apiBase) : config.providers.ollama.apiBase,
         model: ollamaModel?.trim() || config.providers.ollama.model,
+      },
+      "ollama-cloud": {
+        ...config.providers["ollama-cloud"],
+        apiBase: ollamaCloudBase ? normalizeProviderBase("ollama-cloud", ollamaCloudBase, config.providers["ollama-cloud"].apiBase) : config.providers["ollama-cloud"].apiBase,
+        model: ollamaCloudModel?.trim() || config.providers["ollama-cloud"].model,
       },
     },
   };
@@ -143,7 +160,7 @@ function applyEnv(config: LocalProvidersConfig): LocalProvidersConfig {
 function normalizeProviderBase(provider: LocalProviderId, value: string, fallback: string): string {
   const trimmed = value.trim();
   if (!trimmed) return fallback;
-  if (provider === "ollama") {
+  if (provider === "ollama" || provider === "ollama-cloud") {
     let clean = trimmed;
     if (clean.endsWith("/v1")) {
       clean = clean.replace(/\/v1$/, "");

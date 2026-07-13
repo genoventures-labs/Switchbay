@@ -14,7 +14,7 @@ function readFirstEnv(...keys: string[]): string | undefined {
   return undefined;
 }
 
-export type RuntimeLane = "cloud" | "cloud-mcp" | "local";
+export type RuntimeLane = "cloud" | "cloud-mcp" | "local" | "openrouter" | "huggingface";
 export type ToolMode = "standard" | "switchbay-mcp";
 export type CloudProvider = "auto" | "openai" | "anthropic" | "google";
 
@@ -23,19 +23,15 @@ export function normalizeRuntimeLane(value?: string | null): RuntimeLane {
   if (lane === "mcp" || lane === "cloud-mcp" || lane === "cloudmcp" || lane === "cmcp") {
     return "cloud-mcp";
   }
+  if (lane === "openrouter" || lane === "open-router" || lane === "or") return "openrouter";
+  if (lane === "huggingface" || lane === "hugging-face" || lane === "hf" || lane === "hf-cloud") return "huggingface";
   if (
     lane === "local" ||
     lane === "ollama" ||
-    lane === "huggingface" ||
-    lane === "hf" ||
+    lane === "ollama-cloud" ||
+    lane === "ollama_cloud" ||
     lane === "hf.co" ||
-    lane === "lm" ||
-    lane === "lmstudio" ||
-    lane === "lm-studio" ||
-    lane === "native-mcp" ||
-    lane === "local-mcp" ||
-    lane === "lm-mcp" ||
-    lane === "lmstudio-mcp"
+    lane === "local-mcp"
   ) {
     return "local";
   }

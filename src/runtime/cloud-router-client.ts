@@ -18,7 +18,7 @@ type CloudRouterClientOptions = {
   google?: ChatRuntimeClient;
 };
 
-type RoutingIntent = "vision" | "structured_output" | "code_work" | "tool_work" | "general";
+type RoutingIntent = "vision" | "structured_output" | "code_work" | "tool_work" | "research" | "general";
 
 type CloudRoutingDecision = {
   provider: ProviderName;
@@ -126,10 +126,11 @@ function chooseProvider(request: ChatCompletionRequest): CloudRoutingDecision {
     };
   }
 
-  const wantsCode = classified.intent === "code_work" || classified.intent === "tool_work";
-  const provider = wantsCode
+  const provider = classified.intent === "code_work" || classified.intent === "tool_work"
     ? firstAvailable(["anthropic", "openai", "google"])
-    : firstAvailable(["openai", "google", "anthropic"]);
+    : classified.intent === "research"
+      ? firstAvailable(["google", "openai", "anthropic"])
+      : firstAvailable(["openai", "google", "anthropic"]);
   return {
     provider,
     model: getCloudProviderConfig(provider).model,
@@ -154,18 +155,24 @@ function assertProviderConfigured(provider: ProviderName): void {
 }
 
 function classifyIntent(request: ChatCompletionRequest): { intent: RoutingIntent; reason: string } {
-  const text = request.messages.map(messageText).join("\n").toLowerCase();
+  const latestUserMessage = [...request.messages].reverse().find((message) => message.role === "user");
+  const text = latestUserMessage ? messageText(latestUserMessage).toLowerCase() : "";
 
   if (containsImageReferenceText(text)) {
     return { intent: "vision", reason: "Image references favor OpenAI vision input." };
   }
 
-  if (/\b(json|schema|strict|format|classify|route|summari[sz]e|short|title)\b/.test(text)) {
-    return { intent: "structured_output", reason: "Structured/summary keywords favor OpenAI." };
-  }
-
   if (/\b(code|repo|repository|diff|patch|debug|fix|bug|test|build|refactor|implement|typescript|tsx|bun|shell|filesystem|workspace)\b/.test(text)) {
     return { intent: "code_work", reason: "Code/workspace keywords favor Anthropic." };
+  }
+
+  if (/\b(json|schema|strict(?:ly)?|structured output|return only|respond only)\b/.test(text) ||
+      /\b(format|classify|summari[sz]e|title)\b.{0,40}\b(as|into|with|using)\b/.test(text)) {
+    return { intent: "structured_output", reason: "Explicit structured-output instruction favors OpenAI." };
+  }
+
+  if (/\b(research|compare|analy[sz]e|investigate|synthesize|long context|many files|large document|deep dive)\b/.test(text)) {
+    return { intent: "research", reason: "Research and long-context work favors Gemini." };
   }
 
   if (request.tools?.length) {

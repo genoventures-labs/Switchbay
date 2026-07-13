@@ -31,6 +31,7 @@ export type TraceRecord = {
     lane: RuntimeLane;
     toolMode: ToolMode;
     model?: string | null;
+    provider?: string | null;
   };
   workspace: {
     cwd: string;
@@ -95,7 +96,8 @@ export async function saveTraceRecord(input: {
     runtime: {
       lane: input.runtimeLane,
       toolMode: input.toolMode,
-      model: input.turn.request.model ?? null,
+      model: input.executedTurn.response.meta?.model ?? input.turn.request.model ?? null,
+      provider: input.executedTurn.response.meta?.provider ?? null,
     },
     workspace: {
       cwd: input.workspace?.cwd ?? input.cwd,

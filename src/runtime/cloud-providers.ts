@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { DEFAULTS } from "../config/defaults";
 import { userConfigPath } from "../config/paths";
+import { readConfiguredSecret } from "../config/secrets";
 
 export type CloudProviderId = "openai" | "anthropic" | "google";
 export type CloudProviderMode = "auto" | CloudProviderId;
@@ -105,8 +106,10 @@ export function getCloudProviderConfig(provider: CloudProviderId): CloudProvider
 }
 
 export function getCloudProviderApiKey(provider: CloudProviderId): string | undefined {
-  const key = Bun.env[getCloudProviderConfig(provider).apiKeyEnv]?.trim();
-  return key || undefined;
+  const keyName = getCloudProviderConfig(provider).apiKeyEnv;
+  return provider === "google"
+    ? readConfiguredSecret(keyName, "GEMINI_API_KEY")
+    : readConfiguredSecret(keyName);
 }
 
 export function hasCloudProviderKey(provider: CloudProviderId): boolean {
@@ -128,7 +131,27 @@ export function describeCloudProviders(): string {
     "",
     ...rows,
     "",
-    "Switch with `/lane openai`, `/lane anthropic`, `/lane google`, or `switchbay cloud-provider set auto|openai|anthropic|google`.",
+    "Switch with `/lane openai`, `/lane anthropic`, `/lane gemini`, or `switchbay cloud-provider set auto|openai|anthropic|gemini`.",
+  ].join("\n");
+}
+
+export function describeAutoModelPool(): string {
+  const intents: Record<CloudProviderId, string> = {
+    openai: "structured output · summaries · vision",
+    anthropic: "code · tools · workspace implementation",
+    google: "research · comparison · long-context synthesis",
+  };
+  const rows = (["openai", "anthropic", "google"] as CloudProviderId[]).map((id) => {
+    const provider = getCloudProviderConfig(id);
+    const ready = hasCloudProviderKey(id) ? "ready" : `missing ${provider.apiKeyEnv}`;
+    return `  ${id === "google" ? "gemini" : id.padEnd(9)} ${provider.model} · ${ready}\n             ${intents[id]}`;
+  });
+  return [
+    "Trusted cloud auto pool",
+    ...rows,
+    "",
+    "Explicit-only contained lanes: huggingface · openrouter · ollama-cloud",
+    "Trusted local lane: ollama",
   ].join("\n");
 }
 

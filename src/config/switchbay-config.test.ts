@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { getOperatorConfig, invalidateConfigCache, loadSwitchbayConfig } from "./switchbay-config";
+import { clearSelectedRuntimeModel, getOperatorConfig, getSelectedRuntimeModel, invalidateConfigCache, loadSwitchbayConfig, setSelectedRuntimeModel } from "./switchbay-config";
 
 const savedEnv = {
   SWITCHBAY_CONFIG_DIR: Bun.env.SWITCHBAY_CONFIG_DIR,
@@ -52,4 +52,12 @@ test("operator env flags override config values", () => {
     startupOverview: false,
     dailyBoard: false,
   });
+});
+
+test("clearing a selected model restores an unpinned lane", () => {
+  setSelectedRuntimeModel("cloud", { id: "gpt-5.5", provider: "openai" });
+  expect(getSelectedRuntimeModel("cloud")?.id).toBe("gpt-5.5");
+
+  clearSelectedRuntimeModel("cloud");
+  expect(getSelectedRuntimeModel("cloud")).toBeNull();
 });

@@ -5,6 +5,7 @@ import { invalidateLocalProvidersConfig } from "./local-providers";
 const savedEnv = {
   SWITCHBAY_OLLAMA_BASE: Bun.env.SWITCHBAY_OLLAMA_BASE,
   SWITCHBAY_OLLAMA_MODEL: Bun.env.SWITCHBAY_OLLAMA_MODEL,
+  OLLAMA_API_KEY: Bun.env.OLLAMA_API_KEY,
 };
 
 afterEach(() => {
@@ -13,6 +14,25 @@ afterEach(() => {
     else Bun.env[key] = value;
   }
   invalidateLocalProvidersConfig();
+});
+
+test("Ollama Cloud client uses the hosted API with bearer authentication", async () => {
+  Bun.env.OLLAMA_API_KEY = "test-cloud-key";
+  invalidateLocalProvidersConfig();
+  let request: { url: string; authorization: string | null } | null = null;
+  const client = new OllamaClient({
+    provider: "ollama-cloud",
+    model: "gpt-oss:120b",
+    fetchImpl: async (url, init) => {
+      request = { url: String(url), authorization: new Headers(init?.headers).get("authorization") };
+      return Response.json({ model: "gpt-oss:120b", message: { role: "assistant", content: "cloud answer" }, done: true });
+    },
+  });
+
+  const response = await client.createChatCompletion("dev", { messages: [{ role: "user", content: "hello" }] });
+  expect(request).toEqual({ url: "https://ollama.com/api/chat", authorization: "Bearer test-cloud-key" });
+  expect(response.meta?.provider).toBe("ollama-cloud");
+  expect(response.meta?.model).toBe("gpt-oss:120b");
 });
 
 test("Ollama client normalizes chat responses", async () => {

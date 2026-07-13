@@ -79,7 +79,15 @@ export function ModelDrawer({
               {selected ? (
                 <Box paddingLeft={2}>
                   <Text color={TUI_COLORS.muted}>
-                    {item.lane === "local"
+                    {item.provider === "huggingface"
+                      ? "Hugging Face contained lane"
+                      : item.provider === "openrouter"
+                      ? "OpenRouter lane"
+                      : item.provider === "ollama-cloud"
+                      ? "Ollama Cloud lane"
+                      : item.provider === "auto"
+                      ? "Routes each turn across trusted OpenAI, Anthropic, and Gemini lanes"
+                      : item.lane === "local"
                       ? "Ollama local lane"
                       : item.lane === "cloud-mcp"
                         ? "Cloud + Switchbay MCP bridge"

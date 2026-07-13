@@ -140,7 +140,7 @@ async function loadSkillsFromRoot(root: string, source: ToolboxSkill["source"]):
     try {
       const absolute = path.join(root, file);
       const content = await fs.readFile(absolute, "utf-8");
-      skills.push(parseSkillMarkdown(content, file, source));
+      skills.push(parseSkillMarkdown(content, absolute, source));
     } catch {
       // Skip malformed or unreadable skill files.
     }

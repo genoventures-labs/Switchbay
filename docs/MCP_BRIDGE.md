@@ -1,22 +1,20 @@
 # Switchbay MCP Bridge
 
-The Switchbay MCP bridge is Switchbay's own tool-intent layer. It lets you tell a cloud or local model that certain MCP-style capabilities (browser, filesystem, GitHub, etc.) are available — and routes those tool calls through Switchbay's local tool bridge, not through a third-party MCP server runtime.
-
-It is **not** a full MCP protocol implementation. It is a config-driven intent map: you declare what integrations are available, Bay knows to use them, and Switchbay handles execution locally.
+The Switchbay MCP bridge is a full MCP client runtime shared by cloud models, Ollama, the TUI, CLI, local API, and SDK. It connects to local stdio servers or remote Streamable HTTP endpoints, initializes each server, discovers tools with `tools/list`, exposes namespaced tools to Bay, and executes `tools/call` through Switchbay policy.
 
 ---
 
 ## What It Is (and Isn't)
 
-| | Switchbay MCP Bridge | Full MCP Server |
+| | Switchbay MCP Bridge | MCP Server |
 |---|---|---|
-| Protocol | Switchbay's own tool bridge | Model Context Protocol spec |
-| Execution | Runs locally via Switchbay | External server process |
-| Config | `~/.switchbay/mcp.json` | Per-app server config |
-| Models | Cloud and local | Depends on the server |
-| Trusted IDs | Curated catalog only | Any server you define |
+| Role | MCP host/client | Provides tools |
+| Transports | stdio and Streamable HTTP | stdio or Streamable HTTP |
+| Config | `~/.switchbay/mcp.json` | Server-specific |
+| Models | Every Switchbay model lane | Model-independent |
+| Safety | allowlists, HTTPS/loopback rules, timeouts, approval policy | Server annotations are untrusted input |
 
-The bridge tells Bay *what* is conceptually available. Switchbay then executes it through the same local tool bridge it uses for everything else — file reads, shell commands, engine calls — no extra daemon needed.
+Discovered tools are exposed as `mcp__<server>__<tool>` to prevent collisions. A configured server defaults to `approval: "always"`, which blocks execution; set `approval: "auto"` only after reviewing the server and its allowed tools.
 
 ---
 
@@ -70,50 +68,45 @@ Override with:
 export SWITCHBAY_MCP_CONFIG=/path/to/your/mcp.json
 ```
 
-**Backward compat:** If `mcp.json` doesn't exist but `~/.switchbay/lmstudio.mcp.json` does, Switchbay loads that automatically.
+Switchbay uses only the canonical `~/.switchbay/mcp.json` configuration.
 
 ### Config Format
 
 ```json
 {
   "enabled": true,
-  "integrations": [
-    "mcp/playwright",
-    "mcp/filesystem",
-    "mcp/github"
-  ],
   "mcpServers": {
-    "playwright": {
-      "name": "Playwright",
-      "description": "Browser automation, page inspection, screenshots, and basic web testing."
+    "local-tools": {
+      "command": "bunx",
+      "args": ["@example/local-mcp-server", "/path/to/allowed/workspace"],
+      "allowed_tools": ["read_file", "search"],
+      "approval": "auto",
+      "timeout_ms": 30000
     },
-    "filesystem": {
-      "name": "Filesystem",
-      "description": "Scoped file and directory access through an MCP server."
+    "github": {
+      "url": "https://example.com/mcp",
+      "headers": {
+        "Authorization": "Bearer ${GITHUB_MCP_TOKEN}"
+      },
+      "allowed_tools": ["get_issue", "list_pull_requests"],
+      "approval": "auto"
     }
   }
 }
 ```
 
-`integrations` is the canonical list Bay reads. `mcpServers` is an optional metadata block — Switchbay derives the integration list from either field, preferring `integrations` when both are present.
+Each server must define exactly one transport: `command` for stdio or `url` for Streamable HTTP. Remote URLs require HTTPS; plain HTTP is accepted only for loopback hosts. `${ENV_VAR}` placeholders are expanded in URLs, arguments, headers, and server environment without printing resolved secrets.
 
 ---
 
-## Trusted Catalog
+## Safety Policy
 
-Bay will only generate configs from the trusted catalog. It will not invent server IDs, plugin handles, or capabilities that aren't in this list.
-
-| Integration ID | Name | Description |
-|---|---|---|
-| `mcp/playwright` | Playwright | Browser automation, page inspection, screenshots, and basic web testing |
-| `mcp/filesystem` | Filesystem | Scoped file and directory access |
-| `mcp/github` | GitHub | Repository, issue, and pull-request workflows |
-| `mcp/memory` | Memory | Simple persistent memory |
-| `mcp/fetch` | Fetch | HTTP fetch/read access for URLs |
-| `mcp/sequential-thinking` | Sequential Thinking | Structured step-by-step planning |
-| `mcp/postgres` | Postgres | Read/query Postgres databases |
-
-If you request something outside this list, Bay refuses and tells you to add the integration ID manually to `~/.switchbay/mcp.json` instead of hallucinating one.
+- `allowed_tools` is enforced after discovery and again by the namespaced reverse map.
+- Tool descriptions and annotations never override Switchbay policy.
+- Calls are denied unless the server explicitly opts into `approval: "auto"`.
+- Connections and calls have bounded timeouts; returned content is size-limited.
+- Server processes and HTTP sessions are closed at the end of the turn.
+- Failed servers produce warnings and do not disable ordinary local tools.
 
 ---
 
@@ -164,18 +157,18 @@ SWITCHBAY MCP BRIDGE:
 Model lane: cloud
 Config: ~/.switchbay/mcp.json
 Switchbay owns MCP/tool execution for this turn.
-Use Switchbay's local tool bridge for tool execution and treat configured MCP integrations as allowed tool intent.
+Configured MCP servers are initialized and their allowed tools are exposed as namespaced model tools.
 Configured MCP integrations:
 - mcp/playwright
 - mcp/filesystem
 
 Switchbay MCP bridge rules:
-- If the user asks for configured MCP/browser/file/fetch behavior, use the matching Switchbay tool calls when available.
-- If a requested MCP server is not configured or no matching Switchbay bridge tool exists, say exactly what is missing.
+- Use only tools actually returned by MCP discovery.
+- If a requested MCP server fails connection or has no allowed matching tool, say exactly what is missing.
 - Do not invent MCP server ids, tool names, plugin handles, or external capabilities.
 ```
 
-Bay reads this before any tool work. It knows what's allowed, executes through Switchbay's bridge, and tells you plainly if something isn't configured rather than making it up.
+Bay receives the discovered definitions alongside Switchbay's local tools and engine tools. MCP execution results return through the same tool-message loop, so the model can continue the turn using real server output.
 
 ---
 

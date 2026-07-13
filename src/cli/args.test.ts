@@ -47,6 +47,17 @@ test("parses one-shot query after lane option", () => {
   expect(parsed.initialQuery).toBe("Reply with one short sentence saying the cloud lane works.");
 });
 
+test("parses an explicit vision image argument", () => {
+  const parsed = parseCliArgs(["bun", "index.tsx", "--vision", "./screen.png", "inspect", "the", "layout"]);
+  expect(parsed.subcommand).toBe("run");
+  expect(parsed.visionPath).toBe("./screen.png");
+  expect(parsed.initialQuery).toBe("inspect the layout");
+
+  const imageOnly = parseCliArgs(["bun", "index.tsx", "--image", "https://example.com/screen.png"]);
+  expect(imageOnly.visionPath).toBe("https://example.com/screen.png");
+  expect(imageOnly.initialQuery).toBe("Inspect this image.");
+});
+
 test("parses Workspace Knowledge helper commands", () => {
   const status = parseCliArgs(["bun", "index.tsx", "knowledge"]);
   expect(status.subcommand).toBe("knowledge");
@@ -257,6 +268,17 @@ test("parses cloud provider lane aliases for model commands", () => {
   expect(gemini.modelTarget).toBe("gemini-3.5-flash");
 });
 
+test("parses explicit hosted provider lane aliases", () => {
+  const openrouter = parseCliArgs(["bun", "index.tsx", "model", "openrouter", "anthropic/claude-example"]);
+  expect(openrouter.modelLane).toBe("openrouter");
+  expect(openrouter.modelTarget).toBe("anthropic/claude-example");
+  expect(normalizeRuntimeLane("openrouter")).toBe("openrouter");
+  expect(normalizeRuntimeLane("ollama-cloud")).toBe("local");
+  const huggingface = parseCliArgs(["bun", "index.tsx", "model", "hf", "Qwen/example"]);
+  expect(huggingface.modelLane).toBe("hf");
+  expect(normalizeRuntimeLane("hf")).toBe("huggingface");
+});
+
 test("parses Trace helper commands", () => {
   const last = parseCliArgs(["bun", "index.tsx", "trace"]);
   expect(last.subcommand).toBe("trace");
@@ -265,6 +287,13 @@ test("parses Trace helper commands", () => {
   const exportTrace = parseCliArgs(["bun", "index.tsx", "trace", "export"]);
   expect(exportTrace.subcommand).toBe("trace");
   expect(exportTrace.traceAction).toBe("export");
+});
+
+test("parses terminal visualization commands", () => {
+  expect(parseCliArgs(["bun", "index.tsx", "usage"]).subcommand).toBe("usage");
+  const graph = parseCliArgs(["bun", "index.tsx", "graph", "trace"]);
+  expect(graph.subcommand).toBe("graph");
+  expect(graph.graphAction).toBe("trace");
 });
 
 test("parses operator helper commands", () => {
@@ -285,10 +314,10 @@ test("normalizes cloud MCP runtime lane aliases", () => {
   expect(normalizeRuntimeLane("cloud-mcp")).toBe("cloud-mcp");
   expect(normalizeRuntimeLane("cloudmcp")).toBe("cloud-mcp");
   expect(normalizeRuntimeLane("cmcp")).toBe("cloud-mcp");
-  expect(normalizeRuntimeLane("native-mcp")).toBe("local");
+  expect(normalizeRuntimeLane("native-mcp")).toBe("cloud");
   expect(normalizeRuntimeLane("ollama")).toBe("local");
-  expect(normalizeRuntimeLane("huggingface")).toBe("local");
-  expect(normalizeRuntimeLane("hf")).toBe("local");
+  expect(normalizeRuntimeLane("huggingface")).toBe("huggingface");
+  expect(normalizeRuntimeLane("hf")).toBe("huggingface");
   expect(normalizeRuntimeLane("hf.co")).toBe("local");
   expect(normalizeRuntimeLane("openai")).toBe("cloud");
   expect(normalizeRuntimeLane("claude")).toBe("cloud");

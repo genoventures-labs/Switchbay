@@ -39,7 +39,8 @@ import {
   refreshKnowledgeIndex,
   searchKnowledgeIndex,
 } from "../knowledge/store";
-import { describeLatestTrace, latestTraceExportPath } from "../trace/store";
+import { describeLatestTrace, latestTraceExportPath, loadLatestTrace } from "../trace/store";
+import { formatTraceGraph, formatUsage, listTraceRecords } from "../telemetry/usage";
 import { describePlugins, readPlugin } from "../plugins/registry";
 import { addWhitelistedLocation, resolveLocationInput } from "../config/switchbay-config";
 import { fuzzyMatchLocations, listTravelLocations, travelTo } from "../tools/travel";
@@ -100,7 +101,10 @@ export async function tryLocalCommand(
   const trimmed = input.trim();
 
   if (!trimmed.startsWith("/")) {
-    const workspaceHopIntent = parseConversationalWorkspaceHopIntent(trimmed);
+    const addressedToBay = startsWithBayOpener(trimmed);
+    const agentActivation = await parseConversationalAgentActivation(trimmed, options.workspace?.cwd);
+    if (agentActivation) return agentActivation;
+    const workspaceHopIntent = addressedToBay ? null : parseConversationalWorkspaceHopIntent(trimmed);
     if (workspaceHopIntent) {
       const result = await handleWorkspaceCommand(`/workspace hop ${workspaceHopIntent.query}`, options);
       if (result.handled && result.travel && workspaceHopIntent.followUp) {
@@ -109,15 +113,7 @@ export async function tryLocalCommand(
       return result;
     }
 
-    const creationIntent = parseConversationalCreationIntent(trimmed);
-    if (creationIntent === "agent") return { handled: true, openCreateAgent: true };
-    if (creationIntent === "engine") return { handled: true, openCreateEngine: true };
-    if (creationIntent === "mcp") return { handled: true, openCreateMcp: true };
-    if (creationIntent === "rule") return { handled: true, openCreateRule: true };
-    if (creationIntent === "skill") return { handled: true, openCreateSkill: true };
-    if (creationIntent === "plugin") return { handled: true, openCreatePlugin: true };
-
-    const workspaceReferenceIntent = parseConversationalWorkspaceReferenceIntent(trimmed);
+    const workspaceReferenceIntent = addressedToBay ? null : parseConversationalWorkspaceReferenceIntent(trimmed);
     if (workspaceReferenceIntent) {
       const result = await handleWorkspaceCommand(`/workspace hop ${workspaceReferenceIntent.query}`, options);
       if (result.handled && result.travel) {
@@ -295,7 +291,7 @@ export async function tryLocalCommand(
 
   if (trimmed.startsWith("/agent ")) {
     const agentCandidateId = trimmed.slice(7).trim();
-    const allAgents = await loadAllAgents();
+    const allAgents = await loadAllAgents(options.workspace?.cwd);
     const match = findAgent(agentCandidateId, allAgents);
     if (match) {
       const wasActive = options.activeAgentId === match.id;
@@ -351,6 +347,18 @@ export async function tryLocalCommand(
     return handleTraceCommand(trimmed, options);
   }
 
+  if (trimmed === "/usage") {
+    const cwd = options.workspace?.cwd ?? process.cwd();
+    return { handled: true, assistantMessage: formatUsage(await listTraceRecords(cwd)) };
+  }
+
+  if (trimmed === "/graph" || trimmed.startsWith("/graph ")) {
+    const action = trimmed.slice("/graph".length).trim().toLowerCase();
+    if (action && action !== "trace") return { handled: true, assistantMessage: "Usage: `/graph trace`" };
+    const cwd = options.workspace?.cwd ?? process.cwd();
+    return { handled: true, assistantMessage: formatTraceGraph((await loadLatestTrace(cwd))?.record ?? null) };
+  }
+
   if (trimmed === "/radar") {
     return {
       handled: true,
@@ -402,6 +410,39 @@ export async function tryLocalCommand(
   }
 
   return { handled: false };
+}
+
+async function parseConversationalAgentActivation(
+  input: string,
+  cwd?: string,
+): Promise<LocalCommandResult | null> {
+  const normalized = input.replace(/^(?:(?:hey|yo|ok|okay)\s+)?(?:bay|switchbay)\b\s*[,\s:;!-]*/i, "").trim();
+  const activation = normalized.match(/^(?:please\s+)?(?:use|activate|switch to|work as)\s+(?:the\s+)?(.+)$/i);
+  if (!activation?.[1]) return null;
+
+  const agents = await loadAllAgents(cwd);
+  const remainder = activation[1];
+  const match = [...agents]
+    .sort((a, b) => Math.max(b.name.length, b.id.length) - Math.max(a.name.length, a.id.length))
+    .find((agent) => {
+      const escapedName = agent.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const escapedId = agent.id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      return new RegExp(`^(?:${escapedName}|${escapedId})(?:\\b|(?=[.,;]))`, "i").test(remainder);
+    });
+  if (!match) return null;
+
+  const agentPrefix = new RegExp(`^(?:${match.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}|${match.id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "i");
+  const followUp = remainder.replace(agentPrefix, "").replace(/^[\s.,;:!-]+/, "").trim();
+  return {
+    handled: true,
+    activateAgent: match.id,
+    assistantMessage: `${match.emoji} **${match.name}** activated.`,
+    ...(followUp ? { followUpInput: followUp } : {}),
+  };
+}
+
+function startsWithBayOpener(input: string): boolean {
+  return /^(?:(?:hey|yo|ok|okay)\s+)?(?:bay|switchbay)\b\s*[,\s:;!-]*/i.test(input.trim());
 }
 
 async function handleTraceCommand(
@@ -915,25 +956,6 @@ function parseTaskDoneIntent(normalized: string): number | null {
     normalized.match(/^task\s+(\d+)\s+(?:done|complete|finished)$/i);
   const id = Number.parseInt(match?.[1] ?? "", 10);
   return Number.isInteger(id) && id > 0 ? id : null;
-}
-
-function parseConversationalCreationIntent(input: string): "agent" | "engine" | "mcp" | "rule" | "skill" | "plugin" | null {
-  const normalized = input
-    .toLowerCase()
-    .replace(/^[,\s]*(hey|yo|ok|okay)?\s*(bay|switchbay)[,\s:;-]*/i, "")
-    .replace(/[.!?]+$/g, "")
-    .trim();
-
-  const wantsCreate = /\b(create|make|build|add|setup|set up|scaffold|draft|generate)\b/.test(normalized);
-  if (!wantsCreate) return null;
-
-  if (/\b(agent|specialist|persona)\b/.test(normalized)) return "agent";
-  if (/\b(mcp|mcp config|mcp lane|tool server|tool servers)\b/.test(normalized)) return "mcp";
-  if (/\b(engine|engine builder|engine manifest|tool engine)\b/.test(normalized)) return "engine";
-  if (/\b(rule|rules|operating rule|behavior rule|always remember to|never do|must always|must never)\b/.test(normalized)) return "rule";
-  if (/\b(plugin|plugins|bundle|crate|pack)\b/.test(normalized)) return "plugin";
-  if (/\b(skill|toolbox skill|workflow|checklist)\b/.test(normalized)) return "skill";
-  return null;
 }
 
 async function handlePluginsCommand(

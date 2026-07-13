@@ -55,7 +55,6 @@ export type ChatCompletionResponse = {
     router_mode?: string;
     using?: string;
     done_reason?: string;
-    lmstudio_tool_calls?: string[];
     sass_factor?: number;
   };
 };

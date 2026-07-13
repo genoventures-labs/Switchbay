@@ -10,6 +10,8 @@ type OpenAiClientOptions = {
   apiKey?: string;
   fetchImpl?: typeof fetch;
   provider?: Extract<CloudProviderId, "openai" | "google">;
+  apiLabel?: string;
+  extraHeaders?: Record<string, string>;
 };
 
 export class OpenAiClient {
@@ -17,6 +19,8 @@ export class OpenAiClient {
   private readonly apiKey?: string;
   private readonly fetchImpl: typeof fetch;
   private readonly provider: Extract<CloudProviderId, "openai" | "google">;
+  private readonly apiLabel: string;
+  private readonly extraHeaders: Record<string, string>;
 
   constructor(options: OpenAiClientOptions = {}) {
     this.provider = options.provider ?? "openai";
@@ -24,6 +28,8 @@ export class OpenAiClient {
     this.apiBase = options.apiBase ?? config.apiBase;
     this.apiKey = options.apiKey ?? getCloudProviderApiKey(this.provider);
     this.fetchImpl = options.fetchImpl ?? fetch;
+    this.apiLabel = options.apiLabel ?? getCloudProviderConfig(this.provider).label;
+    this.extraHeaders = options.extraHeaders ?? {};
   }
 
   async createChatCompletion(
@@ -44,6 +50,7 @@ export class OpenAiClient {
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${this.apiKey}`,
+        ...this.extraHeaders,
       },
       body: JSON.stringify({
         model: request.model ?? getCloudProviderConfig(this.provider).model,
@@ -56,7 +63,7 @@ export class OpenAiClient {
 
     if (!response.ok) {
       const body = await response.text().catch(() => "");
-      throw new Error(`${getCloudProviderConfig(this.provider).label} API error: ${response.status}${body ? ` - ${body}` : ""}`);
+      throw new Error(`${this.apiLabel} API error: ${response.status}${body ? ` - ${body}` : ""}`);
     }
 
     if (!useStream) {

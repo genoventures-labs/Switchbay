@@ -10,7 +10,9 @@ export type CliOptions = {
   resume: string | boolean; // string (id/index) or true (latest)
   newSession: boolean;
   purge: string | null;
-  subcommand: "run" | "serve" | "service" | "update" | "version" | "help" | "engines" | "skills" | "toolbox" | "plugins" | "agents" | "memory" | "knowledge" | "trace" | "radar" | "handoff" | "mcp" | "models" | "model" | "local-provider" | "cloud-provider" | "agenda" | "task";
+  visionPath?: string | null;
+  subcommand: "run" | "serve" | "service" | "update" | "version" | "help" | "engines" | "skills" | "toolbox" | "plugins" | "agents" | "memory" | "knowledge" | "trace" | "usage" | "graph" | "radar" | "handoff" | "mcp" | "models" | "model" | "local-provider" | "cloud-provider" | "agenda" | "task";
+  graphAction?: "trace";
   serviceAction?: "install" | "status" | "restart" | "uninstall";
   engineAction: "status" | "sync" | "list" | "templates";
   toolboxAction: "status" | "sync" | "list" | "templates" | "read";
@@ -54,6 +56,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
   let resume: string | boolean = false;
   let newSession = false;
   let purge: string | null = null;
+  let visionPath: string | null = null;
   const positional: string[] = [];
 
   for (let i = 0; i < args.length; i++) {
@@ -66,6 +69,10 @@ export function parseCliArgs(argv: string[]): CliOptions {
       mode = args[++i] ?? DEFAULTS.mode;
     } else if (arg === "--lane") {
       lane = args[++i] ?? null;
+    } else if (arg === "--vision" || arg === "--image") {
+      const target = args[++i];
+      if (!target || target.startsWith("-")) throw new Error(`${arg} requires an image path or URL`);
+      visionPath = target;
     } else if (arg === "--hop") {
       hop = args[++i] ?? null;
     } else if (arg === "--resume") {
@@ -353,6 +360,20 @@ export function parseCliArgs(argv: string[]): CliOptions {
         modelTarget: null,
         modelLane: null,
       };
+    } else if (arg === "usage") {
+      return {
+        surface, profile, mode, lane, initialQuery: "", hop, resume, newSession, purge,
+        subcommand: "usage", engineAction: "status", toolboxAction: "status", toolboxSkill: null,
+        memoryAction: "status", memoryNote: null, knowledgeAction: "status", knowledgeQuery: null,
+        traceAction: "last", mcpAction: "status", modelTarget: null, modelLane: null,
+      };
+    } else if (arg === "graph") {
+      return {
+        surface, profile, mode, lane, initialQuery: "", hop, resume, newSession, purge,
+        subcommand: "graph", graphAction: "trace", engineAction: "status", toolboxAction: "status", toolboxSkill: null,
+        memoryAction: "status", memoryNote: null, knowledgeAction: "status", knowledgeQuery: null,
+        traceAction: "last", mcpAction: "status", modelTarget: null, modelLane: null,
+      };
     } else if (arg === "trace") {
       const action = args[i + 1];
       const traceAction = action === "export" ? "export" : "last";
@@ -603,11 +624,12 @@ export function parseCliArgs(argv: string[]): CliOptions {
     profile,
     mode,
     lane,
-    initialQuery: positional.join(" "),
+    initialQuery: positional.join(" ") || (visionPath ? "Inspect this image." : ""),
     hop,
     resume,
     newSession,
     purge,
+    visionPath,
     subcommand: "run",
     engineAction: "status",
     toolboxAction: "status",
@@ -765,8 +787,15 @@ function isLaneAlias(value: string | null): boolean {
     value === "mcp" ||
     value === "local" ||
     value === "ollama" ||
+    value === "ollama-cloud" ||
+    value === "ollama_cloud" ||
+    value === "openrouter" ||
+    value === "open-router" ||
+    value === "or" ||
     value === "huggingface" ||
+    value === "hugging-face" ||
     value === "hf" ||
+    value === "hf-cloud" ||
     value === "hf.co" ||
     value === "openai" ||
     value === "open-ai" ||

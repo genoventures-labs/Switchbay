@@ -33,13 +33,25 @@ async function install(): Promise<string> {
   if (!built.ok) throw new Error(built.stderr || "Failed to build Switchbay service bundle.");
   try { await readFile(token, "utf8"); } catch { await writeFile(token, randomBytes(32).toString("hex") + "\n", { mode: 0o600 }); }
   await chmod(token, 0o600);
-  const providerEnv = ["OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GOOGLE_API_KEY", "SWITCHBAY_LMSTUDIO_API_KEY"]
-    .flatMap(name => Bun.env[name]?.trim() ? [`${name}=${JSON.stringify(Bun.env[name])}`] : []);
-  if (providerEnv.length) { await writeFile(envFile, providerEnv.join("\n") + "\n", { mode: 0o600 }); await chmod(envFile, 0o600); }
+  const providerNames = ["OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GOOGLE_API_KEY", "OLLAMA_API_KEY", "OPENROUTER_API_KEY", "HF_TOKEN"];
+  let existingEnv = "";
+  try { existingEnv = await readFile(envFile, "utf8"); } catch {}
+  const providerEnv = new Map(existingEnv.split("\n").flatMap(line => {
+    const match = line.match(/^([A-Z0-9_]+)=(.*)$/);
+    return match?.[1] ? [[match[1], match[2] ?? ""] as const] : [];
+  }));
+  for (const name of providerNames) {
+    const value = Bun.env[name]?.trim();
+    if (value) providerEnv.set(name, JSON.stringify(value));
+  }
+  if (providerEnv.size) {
+    await writeFile(envFile, [...providerEnv].map(([name, value]) => `${name}=${value}`).join("\n") + "\n", { mode: 0o600 });
+    await chmod(envFile, 0o600);
+  }
   await writeFile(plist, servicePlist(bun), { mode: 0o644 });
   await chmod(plist, 0o644);
   await launchctl(["bootout", `${target}/${LABEL}`], true);
-  await launchctl(["bootstrap", target, plist]);
+  await bootstrapWithRetry();
   await launchctl(["enable", `${target}/${LABEL}`]);
   await launchctl(["kickstart", "-k", `${target}/${LABEL}`]);
   await waitUntilReady();
@@ -47,6 +59,13 @@ async function install(): Promise<string> {
 }
 
 async function ensureLoaded() { const result = await runCommand(["launchctl", "print", `${target}/${LABEL}`]); if (!result.ok) await launchctl(["bootstrap", target, plist]); }
+async function bootstrapWithRetry() {
+  const first = await runCommand(["launchctl", "bootstrap", target, plist]);
+  if (first.ok) return;
+  await Bun.sleep(250);
+  const second = await runCommand(["launchctl", "bootstrap", target, plist]);
+  if (!second.ok) throw new Error(second.stderr || first.stderr || "launchctl bootstrap failed");
+}
 async function waitUntilReady() { for (let attempt = 0; attempt < 30; attempt++) { try { if ((await fetch("http://127.0.0.1:7349/health")).ok) return; } catch {} await Bun.sleep(100); } throw new Error(`Switchbay service did not become ready. Check ${join(root, "api.error.log")}.`); }
 async function launchctl(args: string[], ignoreFailure = false) { const result = await runCommand(["launchctl", ...args]); if (!result.ok && !ignoreFailure) throw new Error(result.stderr || `launchctl ${args[0]} failed`); }
 function servicePlist(bun: string) { const esc = (v: string) => v.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;"); return `<?xml version="1.0" encoding="UTF-8"?>

@@ -12,7 +12,7 @@ Pick a lane to get started:
   export ANTHROPIC_API_KEY=...
   export SWITCHBAY_LANE=cloud
 
-Or use LM Studio locally:
+Or use Ollama locally:
 
   export SWITCHBAY_LANE=local
 

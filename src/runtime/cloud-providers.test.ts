@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import {
   cloudProvidersConfigPath,
+  describeAutoModelPool,
   getActiveCloudProvider,
   getCloudProviderConfig,
   invalidateCloudProvidersConfig,
@@ -65,4 +66,13 @@ test("lets env override configured defaults", () => {
 
   expect(getCloudProviderConfig("openai").model).toBe("gpt-test-json");
   expect(getCloudProviderConfig("google").model).toBe("gemini-test-json");
+});
+
+test("auto model pool explains trusted routing and contained lanes", () => {
+  const description = describeAutoModelPool();
+  expect(description).toContain("Trusted cloud auto pool");
+  expect(description).toContain("structured output · summaries · vision");
+  expect(description).toContain("code · tools · workspace implementation");
+  expect(description).toContain("research · comparison · long-context synthesis");
+  expect(description).toContain("Explicit-only contained lanes: huggingface · openrouter · ollama-cloud");
 });

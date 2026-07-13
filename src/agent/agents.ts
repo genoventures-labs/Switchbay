@@ -276,7 +276,8 @@ function formatAgentPrompt(input: { name: string; specialty: string; approach: s
 }
 
 export function findAgent(id: string, agents: Agent[]): Agent | undefined {
-  return agents.find(a => a.id === id);
+  const normalized = id.trim().toLowerCase().replace(/\s+/g, "-");
+  return agents.find(a => a.id.toLowerCase() === normalized || a.name.toLowerCase() === id.trim().toLowerCase());
 }
 
 export function agentSystemPrompt(agent: Agent): string {

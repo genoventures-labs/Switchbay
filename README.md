@@ -91,6 +91,8 @@ bun link
 switchbay --help
 ```
 
+Linux Mint users can install the CLI and persistent local API together with the [Linux Mint installer](docs/LINUX_MINT_INSTALL.md).
+
 Run as a persistent background service so the local API is always available:
 
 ```bash
@@ -144,6 +146,20 @@ export GOOGLE_API_KEY=...
 # Local via Ollama
 export SWITCHBAY_LANE=local
 export SWITCHBAY_OLLAMA_MODEL=llama3.2
+
+# Hosted open models via Ollama Cloud
+export OLLAMA_API_KEY=...
+switchbay --lane ollama-cloud "analyze this repository"
+
+# Explicit model selection through OpenRouter (never used by auto-routing)
+export OPENROUTER_API_KEY=...
+export SWITCHBAY_OPENROUTER_MODEL=openai/gpt-5.2
+switchbay --lane openrouter "review this change"
+
+# Hosted Hugging Face inference (explicit/contained lane only)
+export HF_TOKEN=...
+export SWITCHBAY_HF_MODEL=openai/gpt-oss-120b:groq
+switchbay --lane huggingface "inspect this change"
 ```
 
 Pull and manage models without leaving Switchbay:
@@ -156,14 +172,23 @@ switchbay model pull https://huggingface.co/lmstudio-community/gpt-oss-20b-GGUF 
 TUI lane controls — instant, mid-session, no restart:
 
 ```text
-/lane openai · /lane anthropic · /lane google · /lane ollama
+/lane openai · /lane anthropic · /lane gemini · /lane huggingface · /lane openrouter · /lane ollama · /lane ollama-cloud
 ```
 
-Auto-routing picks the right cloud model by intent — code-heavy work goes to Anthropic, structured tasks to OpenAI, vision to OpenAI vision. Every completed turn logs the decision:
+Pin a one-shot image turn directly to OpenAI vision:
+
+```bash
+switchbay --vision ./screenshot.png "inspect this layout"
+switchbay --vision https://example.com/screen.png "describe the UI issue"
+```
+
+Auto-routing picks the right cloud model by intent — code-heavy work goes to Anthropic, structured tasks and vision go to OpenAI, and research or long-context synthesis goes to Gemini. Every completed turn logs the decision:
 
 ```text
 Using: cloud/anthropic/claude-sonnet-4-5 · intent=code_work · mode=auto
 ```
+
+Trust zones stay explicit: automatic routing is limited to OpenAI, Anthropic, and Gemini; local work stays on Ollama; Hugging Face, OpenRouter, and Ollama Cloud run only when directly selected.
 
 Full reference: [MODEL_LANES.md](docs/MODEL_LANES.md)
 

@@ -29,7 +29,7 @@ export type OperatorConfig = {
 
 export type SelectedRuntimeModel = {
   id: string;
-  provider?: Exclude<CloudProvider, "auto"> | "lmstudio" | "lmstudio-mcp" | "ollama";
+  provider?: Exclude<CloudProvider, "auto"> | "ollama" | "ollama-cloud" | "openrouter" | "huggingface";
 };
 
 const DEFAULTS: SwitchbayConfig = {
@@ -121,6 +121,15 @@ export function setSelectedRuntimeModel(lane: RuntimeLane, model: SelectedRuntim
   return next;
 }
 
+export function clearSelectedRuntimeModel(lane: RuntimeLane): SwitchbayConfig {
+  const config = loadSwitchbayConfig();
+  const selectedModels = { ...config.selected_models };
+  delete selectedModels[lane];
+  const next = { ...config, selected_models: selectedModels };
+  saveSwitchbayConfig(next);
+  return next;
+}
+
 export function getOperatorConfig(): OperatorConfig {
   return applyOperatorEnv(loadSwitchbayConfig().operator);
 }
@@ -144,7 +153,7 @@ function stripWrappingQuotes(value: string): string {
 function normalizeSelectedModels(value: unknown): Partial<Record<RuntimeLane, SelectedRuntimeModel>> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   const result: Partial<Record<RuntimeLane, SelectedRuntimeModel>> = {};
-  for (const lane of ["cloud", "cloud-mcp", "local", "local-mcp"] as RuntimeLane[]) {
+  for (const lane of ["cloud", "cloud-mcp", "local", "openrouter", "huggingface"] as RuntimeLane[]) {
     const raw = (value as Record<string, unknown>)[lane];
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
     const id = String((raw as Record<string, unknown>).id ?? "").trim();
@@ -152,7 +161,7 @@ function normalizeSelectedModels(value: unknown): Partial<Record<RuntimeLane, Se
     const provider = String((raw as Record<string, unknown>).provider ?? "").trim();
     result[lane] = {
       id,
-      provider: provider === "openai" || provider === "anthropic" || provider === "google" || provider === "lmstudio" || provider === "lmstudio-mcp" || provider === "ollama"
+      provider: provider === "openai" || provider === "anthropic" || provider === "google" || provider === "ollama" || provider === "ollama-cloud" || provider === "openrouter" || provider === "huggingface"
         ? provider
         : undefined,
     };

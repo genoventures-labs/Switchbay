@@ -31,12 +31,12 @@ export async function runSwitchbayTurn(input: TurnRequest, options: { requestId?
   const client = createRuntimeClient(runtimeLane, selected
     ? {
         model: selected.id,
-        provider: selected.provider === "openai" || selected.provider === "anthropic" ? selected.provider : cloudProvider === "openai" || cloudProvider === "anthropic" ? cloudProvider : null,
+        provider: selected.provider === "openai" || selected.provider === "anthropic" || selected.provider === "google" ? selected.provider : cloudProvider === "openai" || cloudProvider === "anthropic" || cloudProvider === "google" ? cloudProvider : null,
         localProvider,
       }
     : {
         localProvider,
-        provider: cloudProvider === "openai" || cloudProvider === "anthropic" ? cloudProvider : null,
+        provider: cloudProvider === "openai" || cloudProvider === "anthropic" || cloudProvider === "google" ? cloudProvider : null,
       });
   const workspace = await loadWorkspaceSnapshot(cwd);
 

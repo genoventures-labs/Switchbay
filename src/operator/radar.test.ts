@@ -12,6 +12,8 @@ const savedEnv = {
   OPENAI_API_KEY: Bun.env.OPENAI_API_KEY,
   ANTHROPIC_API_KEY: Bun.env.ANTHROPIC_API_KEY,
   GOOGLE_API_KEY: Bun.env.GOOGLE_API_KEY,
+  GEMINI_API_KEY: Bun.env.GEMINI_API_KEY,
+  SWITCHBAY_IGNORE_SERVICE_ENV: Bun.env.SWITCHBAY_IGNORE_SERVICE_ENV,
 };
 
 let tempDir = "";
@@ -23,6 +25,8 @@ beforeEach(() => {
   delete Bun.env.OPENAI_API_KEY;
   delete Bun.env.ANTHROPIC_API_KEY;
   delete Bun.env.GOOGLE_API_KEY;
+  delete Bun.env.GEMINI_API_KEY;
+  Bun.env.SWITCHBAY_IGNORE_SERVICE_ENV = "1";
   invalidateCloudProvidersConfig();
   invalidateLocalProvidersConfig();
 });

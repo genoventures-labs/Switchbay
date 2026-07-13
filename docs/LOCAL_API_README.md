@@ -236,7 +236,7 @@ export type ApiErrorResponse = {
 export type TurnRequest = {
   input: string;
   workspace?: string;
-  lane?: "cloud" | "local" | "mcp" | "cloud-mcp" | "native-mcp" | "local-mcp";
+  lane?: "cloud" | "local" | "mcp" | "cloud-mcp" | "local-mcp";
   mode?: string;
   profile?: string;
   surface?: string;

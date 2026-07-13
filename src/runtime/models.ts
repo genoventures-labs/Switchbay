@@ -5,15 +5,16 @@ import {
 import { getCloudProviderConfig } from "./cloud-providers";
 import { loadCloudModelCatalog } from "./cloud-model-catalog";
 import { getActiveLocalProvider, getLocalProviderConfig } from "./local-providers";
+import { readConfiguredSecret } from "../config/secrets";
 
-export type RuntimeModelProvider = Exclude<CloudProvider, "auto"> | "ollama";
+export type RuntimeModelProvider = CloudProvider | "ollama" | "ollama-cloud" | "openrouter" | "huggingface";
 
 export type RuntimeModelOption = {
   id: string;
   label: string;
   lane: RuntimeLane;
   provider: RuntimeModelProvider;
-  source: "preset" | "env" | "custom" | "ollama";
+  source: "auto" | "preset" | "env" | "custom" | "ollama" | "ollama-cloud" | "openrouter" | "huggingface";
 };
 
 export type RuntimeModelList = {
@@ -68,10 +69,62 @@ export function getCloudModelPresetsForLane(lane: Extract<RuntimeLane, "cloud" |
 
 export async function listRuntimeModels(lane: RuntimeLane, localProvider = getActiveLocalProvider()): Promise<RuntimeModelList> {
   if (lane === "cloud" || lane === "cloud-mcp") {
-    return { models: getCloudModelPresetsForLane(lane) };
+    return {
+      models: [
+        { id: "auto", label: "Auto · trusted cloud routing", lane, provider: "auto", source: "auto" },
+        ...getCloudModelPresetsForLane(lane),
+      ],
+    };
   }
 
-  return listOllamaModels();
+  if (lane === "openrouter") return listOpenRouterModels();
+  if (lane === "huggingface") return listHuggingFaceModels();
+
+  return listOllamaModels(undefined, localProvider);
+}
+
+export async function listHuggingFaceModels(fetchImpl: FetchLike = fetch): Promise<RuntimeModelList> {
+  const key = readConfiguredSecret("HF_TOKEN", "HUGGINGFACE_API_KEY");
+  if (!key) return { models: [], notice: "Set HF_TOKEN to list hosted Hugging Face chat models." };
+  try {
+    const response = await fetchImpl(`${Bun.env.SWITCHBAY_HF_BASE?.trim() ?? "https://router.huggingface.co/v1"}/models`, {
+      headers: { Authorization: `Bearer ${key}` },
+    });
+    const body = await response.text();
+    if (!response.ok) return { models: [], notice: `Hugging Face model listing returned ${response.status}: ${body.slice(0, 160)}` };
+    const parsed = JSON.parse(body) as { data?: Array<{ id?: string; name?: string; context_length?: number }> };
+    const models = (parsed.data ?? []).flatMap((item) => {
+      const id = item.id?.trim();
+      if (!id) return [];
+      const context = item.context_length ? ` · ${Math.round(item.context_length / 1000)}k ctx` : "";
+      return [{ id, label: `${item.name?.trim() || id}${context}`, lane: "huggingface" as const, provider: "huggingface" as const, source: "huggingface" as const }];
+    });
+    return { models: uniqueModels(models) };
+  } catch (error: any) {
+    return { models: [], notice: `Could not reach Hugging Face Inference Providers: ${error.message}` };
+  }
+}
+
+export async function listOpenRouterModels(fetchImpl: FetchLike = fetch): Promise<RuntimeModelList> {
+  const key = readConfiguredSecret("OPENROUTER_API_KEY");
+  if (!key) return { models: [], notice: "Set OPENROUTER_API_KEY to list OpenRouter models." };
+  try {
+    const response = await fetchImpl(`${Bun.env.SWITCHBAY_OPENROUTER_BASE?.trim() ?? "https://openrouter.ai/api/v1"}/models`, {
+      headers: { Authorization: `Bearer ${key}` },
+    });
+    const body = await response.text();
+    if (!response.ok) return { models: [], notice: `OpenRouter model listing returned ${response.status}: ${body.slice(0, 160)}` };
+    const parsed = JSON.parse(body) as { data?: Array<{ id?: string; name?: string; context_length?: number }> };
+    const models = (parsed.data ?? []).flatMap((item) => {
+      const id = item.id?.trim();
+      if (!id) return [];
+      const context = item.context_length ? ` · ${Math.round(item.context_length / 1000)}k ctx` : "";
+      return [{ id, label: `${item.name?.trim() || id}${context}`, lane: "openrouter" as const, provider: "openrouter" as const, source: "openrouter" as const }];
+    });
+    return { models: uniqueModels(models) };
+  } catch (error: any) {
+    return { models: [], notice: `Could not reach OpenRouter: ${error.message}` };
+  }
 }
 
 type OllamaTagsResponse = {
@@ -85,10 +138,12 @@ type OllamaTagsResponse = {
   }>;
 };
 
-export async function listOllamaModels(fetchImpl: FetchLike = fetch): Promise<RuntimeModelList> {
-  const config = getLocalProviderConfig("ollama");
+export async function listOllamaModels(fetchImpl: FetchLike = fetch, provider: "ollama" | "ollama-cloud" = "ollama"): Promise<RuntimeModelList> {
+  const config = getLocalProviderConfig(provider);
   try {
-    const response = await fetchImpl(`${config.apiBase}/tags`);
+    const response = await fetchImpl(`${config.apiBase}/tags`, {
+      headers: provider === "ollama-cloud" ? { Authorization: `Bearer ${readConfiguredSecret("OLLAMA_API_KEY") ?? ""}` } : undefined,
+    });
     const body = await response.text().catch(() => "");
     if (!response.ok) {
       return { models: [], notice: `Ollama model fetch returned ${response.status}: ${body.trim() || response.statusText}` };
@@ -106,16 +161,16 @@ export async function listOllamaModels(fetchImpl: FetchLike = fetch): Promise<Ru
           id,
           label: details ? `${id} (${details})` : id,
           lane: "local" as const,
-          provider: "ollama" as const,
-          source: "ollama" as const,
+          provider,
+          source: provider,
         }];
       });
     return {
       models: uniqueModels(models),
-      notice: models.length ? undefined : `Ollama returned no models from ${config.apiBase}/tags. Pull one with \`switchbay model pull ollama <model>\`.`,
+      notice: models.length ? undefined : `${config.label} returned no models from ${config.apiBase}/tags.`,
     };
   } catch (error: any) {
-    return { models: [], notice: `Could not reach Ollama at ${config.apiBase}: ${error.message}` };
+    return { models: [], notice: `Could not reach ${config.label} at ${config.apiBase}: ${error.message}` };
   }
 }
 

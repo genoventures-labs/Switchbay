@@ -10,10 +10,14 @@ test("command palette lists only implemented command families", () => {
   expect(commands).toContain("/lane openai");
   expect(commands).toContain("/lane anthropic");
   expect(commands).toContain("/lane google");
+  expect(commands).toContain("/lane gemini");
+  expect(commands).toContain("/lane openrouter");
+  expect(commands).toContain("/lane huggingface");
   expect(commands).toContain("/lane mcp");
   expect(commands).toContain("/lane ollama");
-  expect(commands).toContain("/lane lmstudio");
-  expect(commands).toContain("/lane native-mcp");
+  expect(commands).toContain("/lane ollama-cloud");
+  expect(commands).not.toContain("/lane lmstudio");
+  expect(commands).not.toContain("/lane native-mcp");
   expect(commands).toContain("/model");
   expect(commands).toContain("/model cloud-mcp");
   expect(commands).toContain("/mcp");
@@ -31,6 +35,8 @@ test("command palette lists only implemented command families", () => {
   expect(commands).toContain("/index");
   expect(commands).toContain("/search");
   expect(commands).toContain("/trace");
+  expect(commands).toContain("/usage");
+  expect(commands).toContain("/graph trace");
   expect(commands).toContain("/trace export");
   expect(commands).toContain("/radar");
   expect(commands).toContain("/handoff");
@@ -41,6 +47,7 @@ test("command palette lists only implemented command families", () => {
   expect(commands).toContain("/workspace list");
   expect(commands).toContain("/workspace add");
   expect(commands).toContain("/workspace hop");
+  expect(getCommandMatches("/collapse").map((item) => item.command)).toEqual(["/collapse"]);
   expect(commands).toContain("/hop");
   expect(commands).toContain("/engines");
   expect(commands).toContain("/engine-bay");

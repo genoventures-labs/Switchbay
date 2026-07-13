@@ -1,11 +1,13 @@
 import { getDebugEmptyResponses } from "../config/env";
 import { getLocalProviderConfig } from "./local-providers";
 import type { ChatCompletionRequest, ChatCompletionResponse } from "./types";
+import { readConfiguredSecret } from "../config/secrets";
 
 type OllamaClientOptions = {
   apiBase?: string;
   model?: string;
   fetchImpl?: (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
+  provider?: "ollama" | "ollama-cloud";
 };
 
 type OllamaChatResponse = {
@@ -29,9 +31,11 @@ export class OllamaClient {
   private readonly apiBase: string;
   private readonly model?: string;
   private readonly fetchImpl: (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
+  private readonly provider: "ollama" | "ollama-cloud";
 
   constructor(options: OllamaClientOptions = {}) {
-    const config = getLocalProviderConfig("ollama");
+    this.provider = options.provider ?? "ollama";
+    const config = getLocalProviderConfig(this.provider);
     this.apiBase = options.apiBase ?? config.apiBase;
     this.model = options.model ?? config.model;
     this.fetchImpl = options.fetchImpl ?? fetch;
@@ -47,7 +51,10 @@ export class OllamaClient {
     const useStream = typeof options.onToken === "function";
     const response = await this.fetchImpl(`${this.apiBase}/chat`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(this.provider === "ollama-cloud" ? { Authorization: `Bearer ${readConfiguredSecret("OLLAMA_API_KEY") ?? ""}` } : {}),
+      },
       body: JSON.stringify({
         model: request.model ?? this.model,
         messages: request.messages.map((msg) => {
@@ -79,13 +86,13 @@ export class OllamaClient {
 
     if (!response.ok) {
       const body = await response.text().catch(() => "");
-      throw new Error(`Ollama API error: ${response.status}${body ? ` - ${body}` : ""}`);
+      throw new Error(`${this.provider === "ollama-cloud" ? "Ollama Cloud" : "Ollama"} API error: ${response.status}${body ? ` - ${body}` : ""}`);
     }
 
     if (!useStream) {
       const rawText = await response.text();
       const parsed = JSON.parse(rawText) as OllamaChatResponse;
-      const normalized = normalizeOllamaResponse(parsed);
+      const normalized = normalizeOllamaResponse(parsed, this.provider);
       normalized._rawText = rawText;
       if (getDebugEmptyResponses() && !normalized.choices?.[0]?.message?.content) {
         console.error("[switchbay] empty-looking Ollama response:");
@@ -94,11 +101,11 @@ export class OllamaClient {
       return normalized;
     }
 
-    return streamOllamaResponse(response, options.onToken!);
+    return streamOllamaResponse(response, options.onToken!, this.provider);
   }
 }
 
-function normalizeOllamaResponse(parsed: OllamaChatResponse): ChatCompletionResponse {
+function normalizeOllamaResponse(parsed: OllamaChatResponse, provider: "ollama" | "ollama-cloud"): ChatCompletionResponse {
   const toolCalls = parsed.message?.tool_calls?.map((toolCall, index) => ({
     id: `ollama_tool_${index}`,
     type: "function" as const,
@@ -120,14 +127,14 @@ function normalizeOllamaResponse(parsed: OllamaChatResponse): ChatCompletionResp
       },
     ],
     meta: {
-      provider: "ollama",
+      provider,
       model: parsed.model,
       done_reason: parsed.done_reason,
     },
   };
 }
 
-async function streamOllamaResponse(response: Response, onToken: (token: string) => void): Promise<ChatCompletionResponse> {
+async function streamOllamaResponse(response: Response, onToken: (token: string) => void, provider: "ollama" | "ollama-cloud"): Promise<ChatCompletionResponse> {
   const reader = response.body!.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
@@ -183,7 +190,7 @@ async function streamOllamaResponse(response: Response, onToken: (token: string)
       },
     ],
     meta: {
-      provider: "ollama",
+      provider,
       model: last.model,
       done_reason: last.done_reason,
     },

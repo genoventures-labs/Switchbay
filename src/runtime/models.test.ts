@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { getCloudModelPresets, listRuntimeModels, listOllamaModels, pullOllamaModel, normalizeOllamaHuggingFaceModel } from "./models";
+import { getCloudModelPresets, listRuntimeModels, listOllamaModels, listOpenRouterModels, listHuggingFaceModels, pullOllamaModel, normalizeOllamaHuggingFaceModel } from "./models";
 import { invalidateLocalProvidersConfig } from "./local-providers";
 import { addCloudModel, invalidateCloudModelCatalog } from "./cloud-model-catalog";
 import { invalidateCloudProvidersConfig } from "./cloud-providers";
@@ -15,6 +15,8 @@ const savedEnv = {
   SWITCHBAY_LOCAL_PROVIDER: Bun.env.SWITCHBAY_LOCAL_PROVIDER,
   SWITCHBAY_OLLAMA_BASE: Bun.env.SWITCHBAY_OLLAMA_BASE,
   SWITCHBAY_OLLAMA_MODEL: Bun.env.SWITCHBAY_OLLAMA_MODEL,
+  OPENROUTER_API_KEY: Bun.env.OPENROUTER_API_KEY,
+  HF_TOKEN: Bun.env.HF_TOKEN,
 };
 
 let tempDir = "";
@@ -24,6 +26,34 @@ beforeEach(() => {
   Bun.env.SWITCHBAY_CONFIG_DIR = tempDir;
   invalidateCloudProvidersConfig();
   invalidateCloudModelCatalog();
+});
+
+test("lists hosted Hugging Face models without adding them to trusted auto", async () => {
+  Bun.env.HF_TOKEN = "hf_test";
+  const result = await listHuggingFaceModels(async (url, init) => {
+    expect(String(url)).toBe("https://router.huggingface.co/v1/models");
+    expect(new Headers(init?.headers).get("authorization")).toBe("Bearer hf_test");
+    return Response.json({ data: [{ id: "Qwen/example:hf-inference", name: "Qwen Example", context_length: 64000 }] });
+  });
+  expect(result.models[0]).toMatchObject({ id: "Qwen/example:hf-inference", lane: "huggingface", provider: "huggingface" });
+  expect(getCloudModelPresets().some((model) => model.provider === "huggingface")).toBe(false);
+});
+
+test("lists explicit OpenRouter models without adding them to cloud auto", async () => {
+  Bun.env.OPENROUTER_API_KEY = "test-openrouter";
+  const result = await listOpenRouterModels(async (url, init) => {
+    expect(String(url)).toBe("https://openrouter.ai/api/v1/models");
+    expect(new Headers(init?.headers).get("authorization")).toBe("Bearer test-openrouter");
+    return Response.json({ data: [{ id: "openai/example", name: "Example", context_length: 128000 }] });
+  });
+  expect(result.models).toEqual([{
+    id: "openai/example",
+    label: "Example · 128k ctx",
+    lane: "openrouter",
+    provider: "openrouter",
+    source: "openrouter",
+  }]);
+  expect(getCloudModelPresets().some((model) => model.provider === "openrouter")).toBe(false);
 });
 
 afterEach(() => {

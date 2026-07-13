@@ -27,6 +27,7 @@ test("saveTraceRecord writes a latest trace with knowledge and tool receipts", a
   const executedTurn: ExecutedTurn = {
     response: {
       choices: [{ message: { role: "assistant", content: "Done." }, finish_reason: "stop" }],
+      meta: { provider: "gemini", model: "gemini-2.5-flash" },
     },
     toolExecutions: [
       {
@@ -60,6 +61,8 @@ test("saveTraceRecord writes a latest trace with knowledge and tool receipts", a
   const latest = await loadLatestTrace(cwd);
   expect(latest?.record.context.knowledgeSources).toEqual(["README.md:1-3 [docs, score 4]"]);
   expect(latest?.record.actions.tools[0]?.summary).toBe("Read README.md");
+  expect(latest?.record.runtime.provider).toBe("gemini");
+  expect(latest?.record.runtime.model).toBe("gemini-2.5-flash");
 
   const description = await describeLatestTrace(cwd);
   expect(description).toContain("Trace Ledger: Latest Turn");

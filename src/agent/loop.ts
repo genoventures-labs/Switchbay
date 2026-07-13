@@ -14,7 +14,9 @@ import type {
   ChatCompletionRequest,
   ChatCompletionResponse,
   ChatMessage,
+  ToolDefinition as RuntimeToolDefinition,
 } from "../runtime/types";
+import { createMcpToolRuntime } from "../runtime/mcp-client";
 import {
   AGENT_TOOLS,
   type AgentToolExecution,
@@ -26,12 +28,14 @@ import {
   agentSystemPrompt,
   buildAgentDefinition,
 } from "./agents";
-import { buildToolboxPromptBlock } from "../toolbox/hub";
+import { buildToolboxPromptBlock, loadToolboxInventory } from "../toolbox/hub";
+import { loadEngineRegistry } from "../engines/registry";
 import { buildMemoryPromptBlock } from "../memory/store";
 import { buildKnowledgePromptBlock } from "../knowledge/store";
 import { buildGuidesPromptBlock, generateRuleDraft, type RuleDraftAnswers, type PendingRuleDraft } from "../context/guides";
 import type { RuntimeLane, ToolMode } from "../config/env";
-import { buildSwitchbayMcpPromptBlock, loadSwitchbayMcpConfig } from "../runtime/mcp-config";
+import { buildSwitchbayMcpPromptBlock, formatIntegrationLabel, loadSwitchbayMcpConfig } from "../runtime/mcp-config";
+import { loadPluginInventory } from "../plugins/registry";
 import {
   type AgentMode,
   createThoughtFrame,
@@ -348,14 +352,7 @@ export async function generateSwitchbayMcpConfig(
 
   const parsed = {
     integrations: matched.map((entry) => entry.integration),
-    mcpServers: Object.fromEntries(matched.map((entry) => [
-      entry.id,
-      {
-        name: entry.name,
-        description: entry.description,
-        note: entry.installHint,
-      },
-    ])),
+    mcpServers: {},
   };
   const normalized = {
     ...createDefaultSwitchbayMcpConfig(),
@@ -407,6 +404,7 @@ export type BuiltTurn = {
   pendingPlan: string[];
   request: ChatCompletionRequest;
   resolvedProfile: string;
+  toolMode?: ToolMode;
 };
 
 export type ExecutedTurn = {
@@ -550,6 +548,7 @@ export async function buildTurn(input: {
   }
 
   const toolboxBlock = await buildToolboxPromptBlock();
+  const capabilityDirectoryBlock = await buildCapabilityDirectoryPromptBlock(cwd, input.activeAgentId);
   const guidesBlock = await buildGuidesPromptBlock(cwd);
   const effectiveToolMode: ToolMode = input.toolMode === "switchbay-mcp" || input.runtimeLane === "cloud-mcp"
     ? "switchbay-mcp"
@@ -564,7 +563,7 @@ Current Profile: ${input.profile}
 Current Workspace: ${cwd}
 Runtime Lane: ${input.runtimeLane ?? "cloud"}
 Tool Mode: ${effectiveToolMode}
-Assistant Callsign: Bay${oriMdBlock}${memoryBlock}${knowledgeBlock}${pinsBlock}${agentBlock}${toolboxBlock}${guidesBlock}${switchbayMcpBlock}
+Assistant Callsign: Bay${oriMdBlock}${memoryBlock}${knowledgeBlock}${pinsBlock}${agentBlock}${capabilityDirectoryBlock}${toolboxBlock}${guidesBlock}${switchbayMcpBlock}
 
 GROUNDING RULES:
 1. You are running inside a local development tool.
@@ -576,6 +575,8 @@ GROUNDING RULES:
 7. Be extremely concise and direct.
 8. If the user addresses Bay, they are addressing this assistant inside Switchbay.
 9. DO NOT NARRATE your tool usage or internal reasoning steps in your final response to the user. (e.g. avoid "I have checked the files and found..."). Just state the findings or provide the answer directly.
+10. If a user asks to enter, inspect, or continue in another project, call workspace_hop before reading files or running commands there. Finding a path is not the same as changing the active workspace.
+11. If grounding tools fail, report the failure and stop. Never fabricate a repository snapshot, package metadata, git state, or file contents after failed reads or commands.
 `;
   // Proactively embed live workspace context so the model can answer questions about
   // the project, recent changes, and git state without server-side tool calls.
@@ -649,7 +650,57 @@ You have access to tools that execute on the user's local machine via this app's
       messages,
     },
     resolvedProfile: input.profile,
+    toolMode: effectiveToolMode,
   };
+}
+
+async function buildCapabilityDirectoryPromptBlock(cwd: string, activeAgentId?: string | null): Promise<string> {
+  const [agents, toolbox, registry, plugins, mcp] = await Promise.all([
+    loadAllAgents(cwd),
+    loadToolboxInventory(cwd),
+    loadEngineRegistry(cwd),
+    loadPluginInventory(cwd),
+    loadSwitchbayMcpConfig(cwd),
+  ]);
+  const agentLines = agents.map((agent) =>
+    `- ${agent.id}: ${agent.name}${agent.id === activeAgentId ? " [ACTIVE]" : ""} — ${agent.description}${agent.path ? ` — file: ${agent.path}` : " — built-in instructions already available"}`
+  );
+  const skillLines = toolbox.skills.map((skill) =>
+    `- ${skill.id}: ${skill.name} — ${skill.description} — file: ${skill.path}`
+  );
+  const engineLines = registry.engines.map((engine) =>
+    `- ${engine.id}: ${engine.name} — ${engine.description} — tools: ${engine.tools.map((tool) => tool.name).join(", ") || "none"}${engine.cwd ? ` — dir: ${engine.cwd}` : ""}`
+  );
+  const pluginLines = plugins.plugins.map((plugin) => {
+    const manifest = plugin.manifest;
+    const assets = [
+      manifest.agents.length ? `agents:${manifest.agents.length}` : "",
+      manifest.skills.length ? `skills:${manifest.skills.length}` : "",
+      manifest.engines.length ? `engines:${manifest.engines.length}` : "",
+      manifest.guides.length ? `guides:${manifest.guides.length}` : "",
+      manifest.knowledge.length ? `knowledge:${manifest.knowledge.length}` : "",
+      manifest.mcp.length ? `mcp:${manifest.mcp.length}` : "",
+    ].filter(Boolean).join(", ") || "no assets";
+    return `- ${manifest.id}: ${manifest.name} [${manifest.enabled ? "enabled" : "disabled"}] — ${manifest.description || "Switchbay plugin"} — manifest: ${plugin.manifestPath} — ${assets}`;
+  });
+  const mcpLines = mcp.integrations.map((integration) => `- ${formatIntegrationLabel(integration)} — config: ${mcp.path}`);
+
+  return `\n\nCAPABILITY DIRECTORY (authoritative inventory; inspect before claiming a capability is absent):
+Agents:\n${agentLines.join("\n") || "- none"}
+Skills:\n${skillLines.join("\n") || "- none"}
+Engines:\n${engineLines.join("\n") || "- none"}
+Plugins:\n${pluginLines.join("\n") || `- none — directory: ${plugins.path}`}
+MCP Integrations:\n${mcpLines.join("\n") || `- none — config: ${mcp.path}`}
+
+CAPABILITY SELECTION RULES:
+1. Distinguish agents (specialist operating instructions), skills (reusable methods), engines (executable tool packages), plugins (bundles that contribute assets), and MCP integrations (configured external tool bridges).
+2. When the user names one, match it against this directory before guessing its type. Never report an agent as a missing engine.
+3. For an unassigned task, choose the smallest relevant capability set. Read a listed file with read_file when its detailed instructions are needed; list its containing directory when discovery is useful.
+4. Follow selected agent or skill instructions for the current turn. Invoke engine tools only when execution is needed.
+5. Plugins are containers: inspect their manifest and then use the contributed agent, skill, engine, guide, knowledge, or MCP asset. Disabled plugins are discoverable but not usable.
+6. MCP integrations are usable only when configured and the active tool bridge exposes the needed operation. Never invent an MCP tool from its name alone.
+7. Rules, quick-starts, memory, workspace knowledge, and templates are context resources, not agents or engines. Consult them without mislabeling them as an executed capability.
+8. In the user-facing response, disclose material capability use on one compact line: "Using: agent/<id> · skill/<id> · engine/<id> · plugin/<id> · mcp/<id>". Omit categories not used. Do not claim a capability you did not inspect or apply.`;
 }
 
 function parseInlineToolCalls(text: string): Array<{ id: string; type: "function"; function: { name: string; arguments: string } }> {
@@ -687,11 +738,13 @@ export async function executeTurn(input: {
   turn: BuiltTurn;
   onStep?: (title: string) => void;
   onToken?: (token: string) => void;
+  onStreamReset?: (draft: string) => void;
   onTokens?: (count: number) => void;
   maxIterations?: number;
   signal?: AbortSignal;
 }): Promise<ExecutedTurn> {
   const toolExecutions: AgentToolExecution[] = [];
+  let currentCwd = input.cwd ?? process.cwd();
   const messages: ChatMessage[] = [...input.turn.request.messages];
   const MAX_ITERATIONS = input.maxIterations ?? 24;
   let emptyReplyRetries = 0;
@@ -702,7 +755,7 @@ export async function executeTurn(input: {
   const hasGumOps = registry.engines.some((e) => e.id === "gumops");
   const hasThinkapse = registry.engines.some((e) => e.id === "thinkapse");
 
-  let filteredTools = AGENT_TOOLS;
+  let filteredTools: RuntimeToolDefinition[] = AGENT_TOOLS;
   if (!hasGumOps || !hasThinkapse) {
     filteredTools = AGENT_TOOLS.filter((t) => {
       const name = t.function?.name ?? "";
@@ -721,6 +774,12 @@ export async function executeTurn(input: {
     });
   }
 
+  const mcpRuntime = input.turn.toolMode === "switchbay-mcp"
+    ? await createMcpToolRuntime(input.cwd ?? process.cwd())
+    : null;
+  if (mcpRuntime) filteredTools = [...filteredTools, ...mcpRuntime.tools];
+
+  try {
   for (let iteration = 0; iteration < MAX_ITERATIONS; iteration += 1) {
     if (input.signal?.aborted) throw new DOMException("Turn cancelled", "AbortError");
     const request: ChatCompletionRequest = {
@@ -776,6 +835,11 @@ export async function executeTurn(input: {
       return { response, toolExecutions };
     }
 
+
+    // Providers may stream a short preamble before deciding to call tools.
+    // That draft is not the final answer, so remove it before the tool round.
+    input.onStreamReset?.(cleanedText);
+
     messages.push({
       role: "assistant",
       content: inlineToolCalls.length > 0 ? cleanedText : (assistantMessage?.content ?? ""),
@@ -806,9 +870,10 @@ export async function executeTurn(input: {
         input.onStep(`${label}...`);
       }
 
-      const result = await executeToolCall(toolName, args, {
-        cwd: input.cwd || process.cwd(),
-      });
+      const result = mcpRuntime?.owns(toolName)
+        ? await mcpRuntime.call(toolName, args, input.signal)
+        : await executeToolCall(toolName, args, { cwd: currentCwd });
+      if (result.travel?.toPath) currentCwd = result.travel.toPath;
 
       toolExecutions.push({
         tool: toolName,
@@ -838,6 +903,9 @@ export async function executeTurn(input: {
     response: { choices: [{ message: { role: "assistant", content: summary }, finish_reason: "length" }] },
     toolExecutions,
   };
+  } finally {
+    await mcpRuntime?.close();
+  }
 }
 
 function summarizeToolLimit(objective: string, toolExecutions: AgentToolExecution[]): string {

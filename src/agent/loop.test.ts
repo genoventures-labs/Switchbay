@@ -205,7 +205,7 @@ test("generateSwitchbayMcpConfig produces a user MCP config draft", async () => 
   "enabled": true,
   "integrations": ["mcp/playwright"],
   "mcpServers": {
-    "playwright": { "note": "Already installed in LM Studio." }
+    "playwright": { "note": "Already configured on the external MCP server." }
   }
 }`),
   ]);
@@ -255,6 +255,26 @@ test("tool fallback returns the first useful tool body", () => {
   expect(fallback).toBe("Working tree clean.");
 });
 
+test("model-tool registry describes native tools and specialist resources", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "switchbay-model-tool-registry-"));
+  const listed = await executeToolCall("list_model_tools", {}, { cwd });
+  expect(listed.ok).toBe(true);
+  expect(listed.body).toContain("workspace_hop\tworkspace\twrite");
+  expect(listed.body).toContain("git_push\tgit\tapproval");
+
+  const described = await executeToolCall("describe_model_tool", { name: "read_agent" }, { cwd });
+  expect(described.body).toContain('"category": "agents"');
+  expect(described.body).toContain('"policy": "read"');
+
+  const agent = await executeToolCall("read_agent", { id: "backend" }, { cwd });
+  expect(agent.ok).toBe(true);
+  expect(agent.body).toContain("Backend Engineer");
+
+  const guide = await executeToolCall("read_guide", { id: "tool-use-quick-start" }, { cwd });
+  expect(guide.ok).toBe(true);
+  expect(guide.body).toContain("Read files and list directories");
+});
+
 test("executeTurn returns a text-only response without tool work", async () => {
   const { client, calls } = createMockClient([createResponse("Plain answer.")]);
   const steps: string[] = [];
@@ -293,9 +313,23 @@ test("buildTurn injects Toolbox skills into system context", async () => {
 
   const system = turn.request.messages.find((message) => message.role === "system")?.content ?? "";
   expect(system).toContain("TOOLBOX SKILLS");
+  expect(system).toContain("CAPABILITY DIRECTORY");
+  expect(system).toContain("Agents:");
+  expect(system).toContain("Engines:");
+  expect(system).toContain("Plugins:");
+  expect(system).toContain("MCP Integrations:");
+  expect(system).toContain("Using: agent/<id> · skill/<id> · engine/<id> · plugin/<id> · mcp/<id>");
   expect(system).toContain("code-review-pass");
-  expect(system).toContain("QUICK STARTS AND RULES");
+  expect(system).toContain("QUICK GUIDE DIRECTORY");
   expect(system).toContain("tool-use-quick-start");
+  expect(system).toContain("Using: guide/<id>");
+  const guideIndex = await readFile(join(cwd, ".switchbay", "runtime", "guides", "INDEX.md"), "utf-8");
+  expect(guideIndex).toContain("Tool Use Quick Start");
+  expect(await readFile(join(cwd, ".switchbay", "runtime", "guides", "tool-use-quick-start.quickstart.md"), "utf-8")).toContain("Read files and list directories");
+  const modelToolsGuide = await readFile(join(cwd, ".switchbay", "runtime", "guides", "model-tools-quick-start.quickstart.md"), "utf-8");
+  expect(modelToolsGuide).toContain("list_model_tools");
+  expect(modelToolsGuide).toContain("workspace_hop");
+  expect(modelToolsGuide).toContain("mcp__<server>__<tool>");
 });
 
 test("buildTurn injects Workspace Knowledge hits into system context", async () => {
@@ -469,7 +503,7 @@ test("executeTurn feeds native tool results back into the next model call", asyn
   const cwd = await mkdtemp(join(tmpdir(), "switchbay-loop-tool-"));
   await writeFile(join(cwd, "demo.txt"), "file body\n", "utf-8");
   const { client, calls } = createMockClient([
-    createResponse(null, [
+    createResponse("Let me inspect the file.", [
       {
         id: "call-read",
         type: "function",
@@ -478,6 +512,8 @@ test("executeTurn feeds native tool results back into the next model call", asyn
     ]),
     createResponse("Read complete."),
   ]);
+  let streamResets = 0;
+  let actionDraft = "";
 
   const result = await executeTurn({
     client: client as ChatRuntimeClient,
@@ -485,13 +521,83 @@ test("executeTurn feeds native tool results back into the next model call", asyn
     sessionId: "test-session",
     surface: "dev",
     turn: createTurn(),
+    onStreamReset: (draft) => { streamResets += 1; actionDraft = draft; },
   });
 
   expect(result.toolExecutions).toHaveLength(1);
   expect(result.toolExecutions[0]?.body).toBe("file body\n");
   expect(extractAssistantText(result.response)).toBe("Read complete.");
   expect(calls).toHaveLength(2);
+  expect(streamResets).toBe(1);
+  expect(actionDraft).toBe("Let me inspect the file.");
   expect(calls[1]?.messages.some((message) => message.role === "tool" && message.content === "file body\n")).toBe(true);
+});
+
+test("executeTurn workspace hop changes cwd for later tools in the same turn", async () => {
+  const originalCwd = process.cwd();
+  const previousConfigDir = Bun.env.SWITCHBAY_CONFIG_DIR;
+  const configDir = await mkdtemp(join(tmpdir(), "switchbay-hop-tool-config-"));
+  const source = await mkdtemp(join(tmpdir(), "switchbay-hop-source-"));
+  const target = await mkdtemp(join(tmpdir(), "BillTend-"));
+  Bun.env.SWITCHBAY_CONFIG_DIR = configDir;
+  await writeFile(join(configDir, "config.json"), JSON.stringify({ locations: [target], auto_discover: false }));
+  await writeFile(join(target, "package.json"), JSON.stringify({ name: "billtend", version: "1.0.0" }));
+  invalidateConfigCache();
+  const { client } = createMockClient([
+    createResponse(null, [
+      { id: "call-hop", type: "function", function: { name: "workspace_hop", arguments: JSON.stringify({ query: "BillTend" }) } },
+      { id: "call-package", type: "function", function: { name: "read_json", arguments: JSON.stringify({ path: "package.json" }) } },
+    ]),
+    createResponse("BillTend loaded."),
+  ]);
+
+  try {
+    process.chdir(source);
+    const result = await executeTurn({ client: client as ChatRuntimeClient, cwd: source, sessionId: "test-session", surface: "dev", turn: createTurn() });
+    expect(result.toolExecutions[0]?.travel?.toPath).toBe(target);
+    expect(result.toolExecutions[1]?.body).toContain('"name": "billtend"');
+  } finally {
+    process.chdir(originalCwd);
+    invalidateConfigCache();
+    if (previousConfigDir === undefined) delete Bun.env.SWITCHBAY_CONFIG_DIR;
+    else Bun.env.SWITCHBAY_CONFIG_DIR = previousConfigDir;
+  }
+});
+
+test("executeTurn discovers and executes configured external MCP tools", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "switchbay-loop-mcp-"));
+  const previousConfigDir = Bun.env.SWITCHBAY_CONFIG_DIR;
+  Bun.env.SWITCHBAY_CONFIG_DIR = cwd;
+  await writeFile(join(cwd, "mcp.json"), JSON.stringify({
+    mcpServers: {
+      echo: {
+        command: process.execPath,
+        args: [join(import.meta.dir, "..", "runtime", "fixtures", "echo-mcp-server.ts")],
+        allowed_tools: ["echo"],
+        approval: "auto",
+      },
+    },
+  }));
+  const { client, calls } = createMockClient([
+    createResponse(null, [{
+      id: "call-mcp-echo",
+      type: "function",
+      function: { name: "mcp__echo__echo", arguments: JSON.stringify({ message: "from-loop" }) },
+    }]),
+    createResponse("External MCP complete."),
+  ]);
+
+  try {
+    const turn = createTurn();
+    turn.toolMode = "switchbay-mcp";
+    const result = await executeTurn({ client: client as ChatRuntimeClient, cwd, sessionId: "test-session", surface: "dev", turn });
+    expect(result.toolExecutions[0]?.body).toBe("echo:from-loop");
+    expect(calls[0]?.tools?.some((tool) => tool.function.name === "mcp__echo__echo")).toBe(true);
+    expect(calls[1]?.messages.some((message) => message.role === "tool" && message.content === "echo:from-loop")).toBe(true);
+  } finally {
+    if (previousConfigDir === undefined) delete Bun.env.SWITCHBAY_CONFIG_DIR;
+    else Bun.env.SWITCHBAY_CONFIG_DIR = previousConfigDir;
+  }
 });
 
 test("executeTurn retries one empty non-tool response", async () => {
@@ -901,7 +1007,7 @@ test("/apply is not a local slash command", async () => {
   expect(await readFile(filePath, "utf-8")).toBe("old\n");
 });
 
-test("agent commands use explicit /agent id activation", async () => {
+test("agent commands support explicit and conversational activation", async () => {
   const baseOptions = {
     client: {} as any,
     profile: "switchbay",
@@ -914,6 +1020,11 @@ test("agent commands use explicit /agent id activation", async () => {
   expect(activated.handled).toBe(true);
   expect(activated.activateAgent).toBe("backend");
 
+  const conversational = await tryLocalCommand("Bay, use Backend. Do a quick test and report errors.", baseOptions);
+  expect(conversational.handled).toBe(true);
+  expect(conversational.activateAgent).toBe("backend");
+  expect(conversational.followUpInput).toBe("Do a quick test and report errors.");
+
   const missing = await tryLocalCommand("/agent missing-agent", baseOptions);
   expect(missing.handled).toBe(true);
   expect(missing.assistantMessage).toContain("No agent found");
@@ -922,7 +1033,7 @@ test("agent commands use explicit /agent id activation", async () => {
   expect(oldDirectCommand.handled).toBe(false);
 });
 
-test("conversational creation requests open builders", async () => {
+test("creation builders are slash-command only", async () => {
   const baseOptions = {
     client: {} as any,
     profile: "switchbay",
@@ -931,29 +1042,24 @@ test("conversational creation requests open builders", async () => {
     workspace: null,
   };
 
-  const agent = await tryLocalCommand("Bay, make me a backend review agent", baseOptions);
-  expect(agent.handled).toBe(true);
-  expect(agent.openCreateAgent).toBe(true);
+  for (const request of [
+    "Bay, make me a backend review agent",
+    "let's build a custom engine for reports",
+    "Bay, make an external MCP config for browser tools",
+    "make a rule that Bay always reads spreadsheet quick starts",
+    "create a release checklist skill",
+    "For our Document Verifier agent, lets go ahead and make some skills for it as well. Once done, register them too.",
+    "Bay, create a plugin for repo ops",
+  ]) {
+    expect((await tryLocalCommand(request, baseOptions)).handled).toBe(false);
+  }
 
-  const engine = await tryLocalCommand("let's build a custom engine for reports", baseOptions);
-  expect(engine.handled).toBe(true);
-  expect(engine.openCreateEngine).toBe(true);
-
-  const mcp = await tryLocalCommand("Bay, make an LM Studio MCP config for browser tools", baseOptions);
-  expect(mcp.handled).toBe(true);
-  expect(mcp.openCreateMcp).toBe(true);
-
-  const rule = await tryLocalCommand("make a rule that Bay always reads spreadsheet quick starts", baseOptions);
-  expect(rule.handled).toBe(true);
-  expect(rule.openCreateRule).toBe(true);
-
-  const skill = await tryLocalCommand("create a release checklist skill", baseOptions);
-  expect(skill.handled).toBe(true);
-  expect(skill.openCreateSkill).toBe(true);
-
-  const plugin = await tryLocalCommand("Bay, create a plugin for repo ops", baseOptions);
-  expect(plugin.handled).toBe(true);
-  expect(plugin.openCreatePlugin).toBe(true);
+  expect((await tryLocalCommand("/create-agent", baseOptions)).openCreateAgent).toBe(true);
+  expect((await tryLocalCommand("/create-engine", baseOptions)).openCreateEngine).toBe(true);
+  expect((await tryLocalCommand("/create-mcp", baseOptions)).openCreateMcp).toBe(true);
+  expect((await tryLocalCommand("/create-rule", baseOptions)).openCreateRule).toBe(true);
+  expect((await tryLocalCommand("/create-skill", baseOptions)).openCreateSkill).toBe(true);
+  expect((await tryLocalCommand("/create-plugin", baseOptions)).openCreatePlugin).toBe(true);
 
   const normalAsk = await tryLocalCommand("explain how this engine works", baseOptions);
   expect(normalAsk.handled).toBe(false);
@@ -1107,7 +1213,7 @@ test("workspace slash commands show, add, and hop known workspaces", async () =>
     expect(hopped.travel?.workspace.cwd).toBe(target);
 
     process.chdir(originalCwd);
-    const conversationalHop = await tryLocalCommand(`Bay, hop to ${basename(target)}`, baseOptions);
+    const conversationalHop = await tryLocalCommand(`hop to ${basename(target)}`, baseOptions);
     expect(conversationalHop.handled).toBe(true);
     expect(conversationalHop.travel?.toPath).toBe(target);
     expect(conversationalHop.travel?.workspace.cwd).toBe(target);
@@ -1119,13 +1225,14 @@ test("workspace slash commands show, add, and hop known workspaces", async () =>
     expect(hopWithFollowUp.followUpInput).toBe("Bay, what's changed in git?");
 
     process.chdir(originalCwd);
-    const repoSuffixHop = await tryLocalCommand(`Bay, hop to ${basename(target)} repo. Then tell me the status`, baseOptions);
-    expect(repoSuffixHop.handled).toBe(true);
-    expect(repoSuffixHop.travel?.toPath).toBe(target);
-    expect(repoSuffixHop.followUpInput).toBe("Bay, what's changed in git?");
+    const addressedHop = await tryLocalCommand(`Bay, hop in to ${basename(target)}`, baseOptions);
+    expect(addressedHop.handled).toBe(false);
+
+    const addressedHeyHop = await tryLocalCommand(`Hey Bay, hop to ${basename(target)} repo. Then tell me the status`, baseOptions);
+    expect(addressedHeyHop.handled).toBe(false);
 
     process.chdir(originalCwd);
-    const cdHop = await tryLocalCommand(`Bay, cd to ${basename(target)}, then tell me the status of the repo`, baseOptions);
+    const cdHop = await tryLocalCommand(`cd to ${basename(target)}, then tell me the status of the repo`, baseOptions);
     expect(cdHop.handled).toBe(true);
     expect(cdHop.travel?.toPath).toBe(target);
     expect(cdHop.followUpInput).toBe("Bay, what's changed in git?");
@@ -1142,7 +1249,7 @@ test("workspace slash commands show, add, and hop known workspaces", async () =>
     );
     expect(createRepoRequest.handled).toBe(false);
 
-    const missingHop = await tryLocalCommand("Bay, hop to no-such-switchbay-workspace", baseOptions);
+    const missingHop = await tryLocalCommand("hop to no-such-switchbay-workspace", baseOptions);
     expect(missingHop.handled).toBe(true);
     expect(missingHop.travel).toBeUndefined();
     expect(missingHop.assistantMessage).toContain("No workspace matched");

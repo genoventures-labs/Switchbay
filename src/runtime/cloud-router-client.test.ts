@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, test } from "bun:test";
 import { CloudRouterClient } from "./cloud-router-client";
 import { invalidateCloudProvidersConfig } from "./cloud-providers";
 import type { ChatRuntimeClient } from "./client";
@@ -8,9 +8,15 @@ const savedEnv = {
   OPENAI_API_KEY: Bun.env.OPENAI_API_KEY,
   ANTHROPIC_API_KEY: Bun.env.ANTHROPIC_API_KEY,
   GOOGLE_API_KEY: Bun.env.GOOGLE_API_KEY,
+  GEMINI_API_KEY: Bun.env.GEMINI_API_KEY,
   SWITCHBAY_CLOUD_PROVIDER: Bun.env.SWITCHBAY_CLOUD_PROVIDER,
   SWITCHBAY_CLOUD_ROUTER: Bun.env.SWITCHBAY_CLOUD_ROUTER,
+  SWITCHBAY_IGNORE_SERVICE_ENV: Bun.env.SWITCHBAY_IGNORE_SERVICE_ENV,
 };
+
+beforeEach(() => {
+  Bun.env.SWITCHBAY_IGNORE_SERVICE_ENV = "1";
+});
 
 afterEach(() => {
   invalidateCloudProvidersConfig();
@@ -102,6 +108,28 @@ test("cloud router picks Anthropic for code work", async () => {
   expect(response.meta?.using).toContain("cloud/anthropic/");
 });
 
+test("cloud router classifies only the latest user turn", async () => {
+  Bun.env.OPENAI_API_KEY = "test-openai";
+  Bun.env.ANTHROPIC_API_KEY = "test-anthropic";
+  delete Bun.env.SWITCHBAY_CLOUD_PROVIDER;
+  const calls: string[] = [];
+  const router = new CloudRouterClient({
+    openAi: mockProvider("openai", calls),
+    anthropic: mockProvider("anthropic", calls),
+  });
+
+  const response = await router.createChatCompletion("dev", {
+    messages: [
+      { role: "user", content: "Summarize this as strict JSON." },
+      { role: "assistant", content: "Done." },
+      { role: "user", content: "I meant Node engines. Reassess the code implementation please." },
+    ],
+  });
+
+  expect(calls).toEqual(["anthropic"]);
+  expect(response.meta?.router_intent).toBe("code_work");
+});
+
 test("cloud router picks OpenAI for image references", async () => {
   Bun.env.OPENAI_API_KEY = "test-openai";
   Bun.env.ANTHROPIC_API_KEY = "test-anthropic";
@@ -140,6 +168,7 @@ test("cloud router uses Google when it is the only configured key", async () => 
   delete Bun.env.OPENAI_API_KEY;
   delete Bun.env.ANTHROPIC_API_KEY;
   Bun.env.GOOGLE_API_KEY = "test-google";
+  delete Bun.env.GEMINI_API_KEY;
   delete Bun.env.SWITCHBAY_CLOUD_PROVIDER;
   const calls: string[] = [];
   const router = new CloudRouterClient({
@@ -152,4 +181,29 @@ test("cloud router uses Google when it is the only configured key", async () => 
   expect(response.meta?.provider).toBe("google");
   expect(response.meta?.router_mode).toBe("availability");
   expect(response.meta?.using).toContain("cloud/google/");
+});
+
+test("cloud router favors Gemini for research and long-context work", async () => {
+  Bun.env.OPENAI_API_KEY = "test-openai";
+  Bun.env.ANTHROPIC_API_KEY = "test-anthropic";
+  Bun.env.GOOGLE_API_KEY = "test-google";
+  delete Bun.env.SWITCHBAY_CLOUD_PROVIDER;
+  const calls: string[] = [];
+  const router = new CloudRouterClient({
+    openAi: mockProvider("openai", calls),
+    anthropic: mockProvider("anthropic", calls),
+    google: mockProvider("google", calls),
+  });
+
+  const response = await router.createChatCompletion("dev", {
+    messages: [
+      { role: "system", content: "You are a coding agent working in a repository." },
+      { role: "user", content: "Research and synthesize these many files as a deep dive." },
+    ],
+  });
+
+  expect(calls).toEqual(["google"]);
+  expect(response.meta?.provider).toBe("google");
+  expect(response.meta?.router_intent).toBe("research");
+  expect(response.meta?.router_mode).toBe("auto");
 });

@@ -14,6 +14,10 @@ import {
 import { describeToolbox, readToolboxSkill } from "../toolbox/hub";
 import { addMemoryNote, describeMemory, refreshMemory, readMemoryFacts } from "../memory/store";
 import { formatKnowledgeSearchResults, searchKnowledgeIndex } from "../knowledge/store";
+import { fuzzyMatchLocations, listTravelLocations, travelTo } from "../tools/travel";
+import { findAgent, loadAllAgents } from "./agents";
+import { loadGuides } from "../context/guides";
+import { loadPluginInventory, readPlugin } from "../plugins/registry";
 
 // Commands that still require approval in the private-tool lane because they
 // are destructive, privileged, publishing, or have broad external impact.
@@ -33,6 +37,90 @@ export type ToolDefinition = {
 };
 
 export const AGENT_TOOLS: ToolDefinition[] = [
+  {
+    type: "function",
+    function: {
+      name: "list_model_tools",
+      description: "List Switchbay's native model tools with category and execution policy.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "describe_model_tool",
+      description: "Show the description, input schema, category, and execution policy for one native model tool.",
+      parameters: { type: "object", properties: { name: { type: "string", description: "Exact native model-tool name." } }, required: ["name"] },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "list_agents",
+      description: "List available built-in, user, workspace, and plugin agents.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "read_agent",
+      description: "Read one agent's specialist instructions by id or display name.",
+      parameters: { type: "object", properties: { id: { type: "string", description: "Agent id or display name." } }, required: ["id"] },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "list_guides",
+      description: "List merged quick guides and rules with source, kind, triggers, and file path.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "read_guide",
+      description: "Read one merged quick guide or rule by id.",
+      parameters: { type: "object", properties: { id: { type: "string", description: "Guide id." } }, required: ["id"] },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "list_plugins",
+      description: "List installed Switchbay plugins, enabled state, manifests, and contributed assets.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "read_plugin",
+      description: "Read one Switchbay plugin manifest and resolved asset status.",
+      parameters: { type: "object", properties: { id: { type: "string", description: "Plugin id or name." } }, required: ["id"] },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "list_workspaces",
+      description: "List known Switchbay workspaces that the session is allowed to enter.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "workspace_hop",
+      description: "Switch the active Switchbay session to a known workspace by fuzzy name or path. Use this before inspecting a different project.",
+      parameters: {
+        type: "object",
+        properties: { query: { type: "string", description: "Workspace name or known path." } },
+        required: ["query"],
+      },
+    },
+  },
   {
     type: "function",
     function: {
@@ -650,7 +738,7 @@ export const AGENT_TOOLS: ToolDefinition[] = [
         type: "object",
         properties: {
           query: { type: "string", description: "Question or instruction for the GumOps agent." },
-          model: { type: "string", description: "Optional LM Studio model name." },
+          model: { type: "string", description: "Optional local model name." },
           no_tools: { type: "boolean", description: "If true, ask GumOps without its own tool-enabled agent actions." },
         },
         required: ["query"],
@@ -783,8 +871,90 @@ export async function executeToolCall(
 
   try {
     switch (name) {
+      case "list_model_tools": {
+        const rows = AGENT_TOOLS.map((tool) => {
+          const metadata = modelToolMetadata(tool.function.name);
+          return `${tool.function.name}\t${metadata.category}\t${metadata.policy}\t${tool.function.description}`;
+        });
+        return { tool: name, ok: true, summary: `Listed ${rows.length} native model tools`, body: rows.join("\n") };
+      }
+
+      case "describe_model_tool": {
+        const requested = String(args.name || "").trim();
+        const definition = AGENT_TOOLS.find((tool) => tool.function.name === requested);
+        if (!definition) throw new Error(`Native model tool not found: ${requested}`);
+        return {
+          tool: name,
+          ok: true,
+          summary: `Described model tool ${requested}`,
+          body: JSON.stringify({ ...modelToolMetadata(requested), ...definition.function }, null, 2),
+        };
+      }
+
+      case "list_agents": {
+        const agents = await loadAllAgents(cwd);
+        return { tool: name, ok: true, summary: `Listed ${agents.length} agents`, body: agents.map((agent) => `${agent.id}\t${agent.source ?? "builtin"}\t${agent.name}\t${agent.description}${agent.path ? `\t${agent.path}` : ""}`).join("\n") };
+      }
+
+      case "read_agent": {
+        const agents = await loadAllAgents(cwd);
+        const agent = findAgent(String(args.id || ""), agents);
+        if (!agent) throw new Error(`Agent not found: ${args.id}`);
+        return { tool: name, ok: true, summary: `Read agent ${agent.id}`, body: [`Agent: ${agent.name} (${agent.id})`, `Source: ${agent.source ?? "builtin"}`, agent.path ? `Path: ${agent.path}` : "", "", agent.prompt].filter(Boolean).join("\n") };
+      }
+
+      case "list_guides": {
+        const guides = await loadGuides(cwd);
+        return { tool: name, ok: true, summary: `Listed ${guides.length} guides`, body: guides.map((guide) => `${guide.id}\t${guide.source}/${guide.kind}\t${guide.title}\t${guide.triggers.join(", ")}\t${guide.path}`).join("\n") };
+      }
+
+      case "read_guide": {
+        const id = String(args.id || "").trim().toLowerCase();
+        const guide = (await loadGuides(cwd)).find((entry) => entry.id.toLowerCase() === id || entry.title.toLowerCase() === id);
+        if (!guide) throw new Error(`Guide not found: ${args.id}`);
+        return { tool: name, ok: true, summary: `Read guide ${guide.id}`, body: [`Guide: ${guide.title} (${guide.id})`, `Source: ${guide.source}/${guide.kind}`, `Path: ${guide.path}`, `Triggers: ${guide.triggers.join(", ")}`, "", guide.body].join("\n") };
+      }
+
+      case "list_plugins": {
+        const inventory = await loadPluginInventory(cwd);
+        return { tool: name, ok: true, summary: `Listed ${inventory.plugins.length} plugins`, body: inventory.plugins.map((plugin) => `${plugin.manifest.id}\t${plugin.manifest.enabled ? "enabled" : "disabled"}\t${plugin.manifest.name}\t${plugin.manifestPath}`).join("\n") || "No plugins installed." };
+      }
+
+      case "read_plugin": {
+        const plugin = await readPlugin(String(args.id || ""), cwd);
+        if (!plugin) throw new Error(`Plugin not found: ${args.id}`);
+        return { tool: name, ok: true, summary: `Read plugin ${plugin.manifest.id}`, body: JSON.stringify({ manifest: plugin.manifest, root: plugin.root, manifestPath: plugin.manifestPath, missing: plugin.missing }, null, 2) };
+      }
+
+      case "list_workspaces": {
+        const locations = await listTravelLocations();
+        return {
+          tool: name,
+          ok: true,
+          summary: `Listed ${locations.length} workspaces`,
+          body: locations.length ? locations.map((location) => `${location.label}\t${location.absPath}${location.isGit ? "\tgit" : ""}`).join("\n") : "No known workspaces.",
+        };
+      }
+
+      case "workspace_hop": {
+        const query = String(args.query || "").trim();
+        if (!query) throw new Error("workspace_hop requires a query.");
+        const matches = await fuzzyMatchLocations(query);
+        if (!matches.length) throw new Error(`No known workspace matched: ${query}`);
+        const selected = matches[0]!;
+        const traveled = await travelTo(selected.absPath);
+        if (!traveled.ok || !traveled.workspace) throw new Error(traveled.error || `Could not load workspace: ${selected.absPath}`);
+        return {
+          tool: name,
+          ok: true,
+          summary: `Entered workspace ${selected.label}`,
+          body: `Active workspace changed to ${selected.label}.\nPath: ${selected.absPath}\nGit repository: ${selected.isGit ? "yes" : "no"}`,
+          travel: { toPath: selected.absPath, label: selected.label, workspace: traveled.workspace },
+        };
+      }
+
       case "read_file": {
-        const filePath = path.join(cwd, args.path);
+        const filePath = path.isAbsolute(args.path) ? args.path : path.join(cwd, args.path);
         const content = await fs.readFile(filePath, "utf-8");
         return {
           tool: name,
@@ -795,7 +965,7 @@ export async function executeToolCall(
       }
 
       case "read_json": {
-        const filePath = path.join(cwd, args.path);
+        const filePath = path.isAbsolute(args.path) ? args.path : path.join(cwd, args.path);
         const content = await fs.readFile(filePath, "utf-8");
         const parsed = JSON.parse(content);
         return {
@@ -807,7 +977,7 @@ export async function executeToolCall(
       }
 
       case "read_file_range": {
-        const filePath = path.join(cwd, args.path);
+        const filePath = path.isAbsolute(args.path) ? args.path : path.join(cwd, args.path);
         const content = await fs.readFile(filePath, "utf-8");
         const lines = content.split("\n");
         const startLine = Math.max(1, Number(args.start_line) || 1);
@@ -828,7 +998,7 @@ export async function executeToolCall(
       case "summarize_file": {
         const targetPath = String(args.path || "").trim();
         if (!targetPath) throw new Error("summarize_file requires a path.");
-        const filePath = path.join(cwd, targetPath);
+        const filePath = path.isAbsolute(targetPath) ? targetPath : path.join(cwd, targetPath);
         const stat = await fs.stat(filePath);
         if (!stat.isFile()) {
           throw new Error(`Path is not a file: ${targetPath}`);
@@ -944,14 +1114,13 @@ export async function executeToolCall(
       }
 
       case "list_directory": {
-        const targetPath = path.join(cwd, args.path || ".");
+        const requestedPath = args.path || ".";
+        const targetPath = path.isAbsolute(requestedPath) ? requestedPath : path.join(cwd, requestedPath);
         const recursive = !!args.recursive;
         
         let output = "";
         if (recursive) {
-           const result = await runCommand(["find", ".", "-maxdepth", "4", "-not", "-path", "*/.*"], targetPath);
-           if (!result.ok) throw new Error(result.stderr || result.stdout || "find failed");
-           output = result.stdout;
+           output = (await walkVisibleFiles(targetPath, 4, true)).join("\n");
         } else {
            const entries = await fs.readdir(targetPath, { withFileTypes: true });
            output = entries.map(e => `${e.name}${e.isDirectory() ? "/" : ""}`).join("\n");
@@ -967,10 +1136,7 @@ export async function executeToolCall(
 
       case "glob_files": {
         const pattern = String(args.pattern || "").trim();
-        const result = await runCommand(["find", ".", "-type", "f", "-not", "-path", "*/.*"], cwd);
-        if (!result.ok) throw new Error(result.stderr || result.stdout || "find failed");
-        const stdout = result.stdout
-          .split("\n")
+        const stdout = (await walkVisibleFiles(cwd, 12, false))
           .filter((file) => file.toLowerCase().includes(pattern.toLowerCase()))
           .slice(0, 200)
           .join("\n");
@@ -1505,6 +1671,26 @@ export async function executeToolCall(
   }
 }
 
+async function walkVisibleFiles(root: string, maxDepth: number, includeDirectories: boolean): Promise<string[]> {
+  const results: string[] = [];
+  async function visit(directory: string, relative: string, depth: number): Promise<void> {
+    if (depth > maxDepth) return;
+    const entries = await fs.readdir(directory, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.name.startsWith(".")) continue;
+      const nextRelative = relative ? `${relative}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) {
+        if (includeDirectories) results.push(`./${nextRelative}`);
+        await visit(path.join(directory, entry.name), nextRelative, depth + 1);
+      } else {
+        results.push(`./${nextRelative}`);
+      }
+    }
+  }
+  await visit(root, "", 1);
+  return results;
+}
+
 async function detectTestCommand(cwd: string): Promise<string> {
   try {
     const packageJsonPath = path.join(cwd, "package.json");
@@ -1583,4 +1769,30 @@ function stringOrDefault(value: unknown, fallback: string): string {
 function positiveNumberOrDefault(value: unknown, fallback: number): number {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function modelToolMetadata(name: string): { category: string; policy: "read" | "write" | "approval" | "external" } {
+  if (/^(list_|read_|summarize_|search_|glob_|diff_|git_(status|log|show|blame|diff)|memory_(status|facts)|knowledge_)/.test(name)) {
+    return { category: inferToolCategory(name), policy: name.startsWith("web_") ? "external" : "read" };
+  }
+  if (/^(git_push|gumroad_refund_sale)$/.test(name)) return { category: inferToolCategory(name), policy: "approval" };
+  if (/^(web_|gumroad_|gumops_)/.test(name)) return { category: inferToolCategory(name), policy: "external" };
+  return { category: inferToolCategory(name), policy: "write" };
+}
+
+function inferToolCategory(name: string): string {
+  if (name.includes("workspace")) return "workspace";
+  if (name.includes("agent")) return "agents";
+  if (name.includes("guide")) return "guides";
+  if (name.includes("plugin")) return "plugins";
+  if (name.includes("engine") || ["creative_brief", "creative_packet", "creative_tools", "name_storm", "positioning_routes", "hook_bank", "copy_draft", "critique_copy", "content_calendar"].includes(name)) return "engines";
+  if (name.includes("toolbox") || name.includes("skill")) return "skills";
+  if (name.startsWith("git_") || name.startsWith("diff_")) return "git";
+  if (name.startsWith("web_")) return "web";
+  if (name.startsWith("memory_") || name.startsWith("gumops_memory_")) return "memory";
+  if (name.startsWith("gumroad_") || name.startsWith("gumops_")) return "business";
+  if (["read_file", "read_file_range", "read_json", "summarize_file", "list_directory", "glob_files", "search_files", "create_file", "write_file", "apply_patch"].includes(name)) return "filesystem";
+  if (["run_tests", "verify", "shell"].includes(name)) return "execution";
+  if (name.includes("model_tool")) return "registry";
+  return "general";
 }

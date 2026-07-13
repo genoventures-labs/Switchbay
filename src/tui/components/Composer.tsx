@@ -120,6 +120,8 @@ export function Composer({
         <Text color={grayColor}>
           {pendingApprovalKind === "shell_command" ? (
             <Text><Text color={grayColor}>1</Text> no · <Text color={brandColor}>2</Text> yes · <Text color={brandColor}>3</Text> yes always</Text>
+          ) : pendingApprovalKind === "lane_suggestion" ? (
+            <Text><Text color={grayColor}>1</Text> stay cloud · <Text color={brandColor}>2</Text> switch local</Text>
           ) : pendingApprovalKind === "agent_draft" ? (
             <Text><Text color={grayColor}>1</Text> discard · <Text color={brandColor}>2</Text> save</Text>
           ) : pendingApprovalKind === "engine_draft" ? (

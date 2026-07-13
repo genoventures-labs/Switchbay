@@ -4,7 +4,7 @@ import { parseCliArgs } from "./src/cli/args";
 import { createRuntimeClient, getRuntimeLaneLabel } from "./src/runtime/client";
 import { getToolMode, normalizeRuntimeLane } from "./src/config/env";
 import { SwitchbayApp } from "./src/tui/app";
-import { getSelectedRuntimeModel, loadSwitchbayConfig, setSelectedRuntimeModel } from "./src/config/switchbay-config";
+import { clearSelectedRuntimeModel, getSelectedRuntimeModel, loadSwitchbayConfig, setSelectedRuntimeModel } from "./src/config/switchbay-config";
 import { fuzzyMatchLocations, travelTo } from "./src/tools/travel";
 import { listSessions, purgeSessions, loadPersistedSession, savePersistedSession } from "./src/session/persistence";
 import { buildTurn, executeTurn, extractAssistantText, refreshWorkspace, synthesizeAssistantFallback } from "./src/agent/loop";
@@ -14,6 +14,8 @@ import { describeToolbox, loadToolboxInventory, readToolboxSkill } from "./src/t
 import { addMemoryNote, describeMemory, listMemoryNotes, readMemoryFacts, refreshMemory } from "./src/memory/store";
 import { describeKnowledgeIndex, formatKnowledgeSearchResults, refreshKnowledgeIndex, searchKnowledgeIndex } from "./src/knowledge/store";
 import { describeLatestTrace, latestTraceExportPath, saveTraceRecord } from "./src/trace/store";
+import { loadLatestTrace } from "./src/trace/store";
+import { formatTraceGraph, formatUsage, listTraceRecords } from "./src/telemetry/usage";
 import { createDefaultSwitchbayMcpConfig, describeSwitchbayMcpConfig, loadSwitchbayMcpConfig, saveSwitchbayMcpConfig } from "./src/runtime/mcp-config";
 import { describeTrustedMcpCatalog } from "./src/runtime/mcp-catalog";
 import { ANSI_COLORS as CLR } from "./src/tui/theme";
@@ -21,7 +23,7 @@ import { describePlugins, loadPluginInventory, readPlugin } from "./src/plugins/
 import { listRuntimeModels, type RuntimeModelOption } from "./src/runtime/models";
 import { describeLocalProviders, getActiveLocalProvider, normalizeLocalProvider, setActiveLocalProvider, type LocalProviderId } from "./src/runtime/local-providers";
 import { formatRouteTag } from "./src/runtime/route-display";
-import { describeCloudProviders, normalizeCloudProvider, setActiveCloudProvider } from "./src/runtime/cloud-providers";
+import { describeAutoModelPool, describeCloudProviders, getActiveCloudProvider, normalizeCloudProvider, setActiveCloudProvider } from "./src/runtime/cloud-providers";
 import { addDailyTask, clearDailyBoard, completeDailyTask, describeDailyBoard } from "./src/operator/daily-board";
 import { formatFrictionRadar, runFrictionRadar } from "./src/operator/radar";
 import { buildQuickHandoff } from "./src/operator/handoff";
@@ -65,7 +67,7 @@ ${CLR.accent}${CLR.bold}Models and Lanes:${CLR.reset}
   ${CLR.bold}switchbay --lane cloud --add-model${CLR.reset} <id>
   ${CLR.bold}switchbay model pull${CLR.reset} <id|url>      Pull/load a model through the active local provider
   ${CLR.bold}switchbay cloud-provider${CLR.reset}           Show cloud provider/router config
-  ${CLR.bold}switchbay cloud-provider set${CLR.reset} <id>  Switch cloud provider: ${CLR.accentBright}auto | openai | anthropic | google${CLR.reset}
+  ${CLR.bold}switchbay cloud-provider set${CLR.reset} <id>  Switch cloud provider: ${CLR.accentBright}auto | openai | anthropic | gemini${CLR.reset}
   ${CLR.bold}switchbay local-provider${CLR.reset}           Show local provider config
   ${CLR.bold}switchbay local-provider set${CLR.reset} <id>  Switch local provider: ${CLR.accentBright}ollama${CLR.reset}
   ${CLR.bold}switchbay mcp${CLR.reset}                      Show Switchbay MCP bridge config
@@ -88,6 +90,8 @@ ${CLR.accent}${CLR.bold}Context and Memory:${CLR.reset}
   ${CLR.bold}switchbay knowledge search${CLR.reset} <query> Search sourced workspace snippets
   ${CLR.bold}switchbay trace${CLR.reset}                    Show latest turn trace
   ${CLR.bold}switchbay trace export${CLR.reset}             Print latest trace file path
+  ${CLR.bold}switchbay usage${CLR.reset}                    Graph traced turns, routes, tokens, and tools
+  ${CLR.bold}switchbay graph trace${CLR.reset}               Graph the latest agent turn flow
   ${CLR.bold}switchbay radar${CLR.reset}                    Run read-only local friction checks
   ${CLR.bold}switchbay handoff${CLR.reset}                  Print a compact next-session handoff
 
@@ -118,7 +122,8 @@ ${CLR.accent}${CLR.bold}Options:${CLR.reset}
   ${CLR.bold}-s, --surface${CLR.reset} <type>   Surface context (default: dev)
   ${CLR.bold}-p, --profile${CLR.reset} <name>   Working style (default: switchbay)
   ${CLR.bold}-m, --mode${CLR.reset} <name>      Agent mode: ${CLR.accentBright}build | design | debug${CLR.reset} (default: build)
-  ${CLR.bold}--lane${CLR.reset} <name>          Runtime lane: ${CLR.accentBright}cloud | local | mcp${CLR.reset} (default: SWITCHBAY_LANE or cloud)
+  ${CLR.bold}--lane${CLR.reset} <name>          Runtime lane: ${CLR.accentBright}cloud | local | huggingface | openrouter | ollama-cloud | mcp${CLR.reset}
+  ${CLR.bold}--vision${CLR.reset} <path|url>     Attach an image and pin this turn to OpenAI vision
   ${CLR.bold}--hop${CLR.reset} <name>           Travel to a whitelisted location before launching
   ${CLR.bold}--resume${CLR.reset} <val>         Resume last saved session, or specific ID/Index (0=latest)
   ${CLR.bold}--new${CLR.reset}                  Force a fresh session even if a saved one exists
@@ -259,6 +264,16 @@ ${CLR.accent}${CLR.bold}Options:${CLR.reset}
 
   if (options.subcommand === "trace") {
     await runTraceCommand(options.traceAction);
+    return;
+  }
+
+  if (options.subcommand === "usage") {
+    console.log(formatUsage(await listTraceRecords(process.cwd())));
+    return;
+  }
+
+  if (options.subcommand === "graph") {
+    console.log(formatTraceGraph((await loadLatestTrace(process.cwd()))?.record ?? null));
     return;
   }
 
@@ -916,10 +931,16 @@ async function runModelsCommand(rawLane: string | null) {
   try {
     const selected = getSelectedRuntimeModel(lane);
     const result = await listRuntimeModels(lane, localProvider);
-    const rows = result.models.map((model) => formatModelRow(model, selected?.id === model.id));
-    console.log(`${getRuntimeLaneLabel(lane)} models`);
+    const requestedCloudProvider = normalizeCloudProvider(rawLane);
+    const activeCloudProvider = requestedCloudProvider ?? getActiveCloudProvider();
+    const visibleModels = lane === "cloud" && activeCloudProvider !== "auto"
+      ? result.models.filter((model) => model.provider === activeCloudProvider)
+      : result.models;
+    const rows = visibleModels.map((model) => formatModelRow(model, selected?.id === model.id));
+    console.log(`${getRuntimeLaneLabel(lane)} models${lane === "cloud" ? ` · mode=${activeCloudProvider}` : ""}`);
+    if (lane === "cloud" && activeCloudProvider === "auto") console.log(`\n${describeAutoModelPool()}\n\nTrusted cloud catalog`);
     console.log(rows.length ? rows.join("\n") : "No models found.");
-    if (selected && !result.models.some((model) => model.id === selected.id)) {
+    if (selected && !visibleModels.some((model) => model.id === selected.id)) {
       console.log(`\nSelected: ${selected.id} (not returned by the current model list)`);
     }
     if (result.notice) console.log(`\n${result.notice}`);
@@ -968,6 +989,13 @@ async function runModelCommand(
       }
       if (result.notice) console.error(result.notice);
       process.exit(1);
+    }
+
+    if (match.provider === "auto") {
+      clearSelectedRuntimeModel(lane);
+      setActiveCloudProvider("auto");
+      console.log(`Cleared the ${getRuntimeLaneLabel(lane)} model pin. Trusted auto-routing is active.`);
+      return;
     }
 
     setSelectedRuntimeModel(lane, {
@@ -1115,8 +1143,8 @@ async function runCliMode(options: any, resumeId: string | null) {
   process.stdout.write(`\n${CLR.accent}⏺${CLR.reset} ${CLR.text}${CLR.bold}Switchbay${CLR.reset} ${CLR.muted}(thinking...)${CLR.reset}\n`);
   try {
     const result = await runSwitchbayTurn({
-      input: options.initialQuery,
-      lane: options.lane,
+      input: options.visionPath ? `${options.initialQuery}\n\nImage: ${options.visionPath}` : options.initialQuery,
+      lane: options.visionPath ? "openai" : options.lane,
       mode: options.mode,
       profile: options.profile,
       surface: options.surface,
@@ -1150,11 +1178,11 @@ function formatModelRow(model: RuntimeModelOption, selected: boolean): string {
 }
 
 function normalizeClientProvider(provider: string | undefined) {
-  return provider === "openai" || provider === "anthropic" ? provider : null;
+  return provider === "openai" || provider === "anthropic" || provider === "google" ? provider : null;
 }
 
 function normalizeClientCloudProvider(provider: ReturnType<typeof normalizeCloudProvider>) {
-  return provider === "openai" || provider === "anthropic" ? provider : null;
+  return provider === "openai" || provider === "anthropic" || provider === "google" ? provider : null;
 }
 
 boot().catch((err) => {

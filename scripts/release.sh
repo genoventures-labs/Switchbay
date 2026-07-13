@@ -86,9 +86,6 @@ fi
 if ! grep -q 'SWITCHBAY_MCP=on' "$TMP_TAP/$FORMULA_PATH"; then
   perl -0pi -e 's|(export ANTHROPIC_API_KEY=\.\.\.\n)|$1\n      Switchbay MCP bridge:\n        export SWITCHBAY_MCP=on\n        # or: export SWITCHBAY_TOOL_MODE=switchbay-mcp\n|g' "$TMP_TAP/$FORMULA_PATH"
 fi
-if ! grep -q 'SWITCHBAY_LANE=native-mcp' "$TMP_TAP/$FORMULA_PATH"; then
-  perl -0pi -e 's|(export SWITCHBAY_LMSTUDIO_API_KEY=\.\.\.\n)|$1        # Legacy/native LM Studio MCP testing:\n        # export SWITCHBAY_LANE=native-mcp\n        # switchbay mcp init\n|g' "$TMP_TAP/$FORMULA_PATH"
-fi
 
 cd "$TMP_TAP"
 git add "$FORMULA_PATH"

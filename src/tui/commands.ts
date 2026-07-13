@@ -7,6 +7,12 @@ export type SlashCommand = {
 
 export const SLASH_COMMANDS: SlashCommand[] = [
   {
+    category: "runtime",
+    command: "/auto",
+    description: "Clear the pinned cloud model and restore trusted auto-routing.",
+    example: "/auto",
+  },
+  {
     category: "session",
     command: "/sessions",
     description: "List recent local session history.",
@@ -80,6 +86,24 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     category: "runtime",
+    command: "/lane gemini",
+    description: "Switch this TUI session to the Gemini cloud provider.",
+    example: "/lane gemini",
+  },
+  {
+    category: "runtime",
+    command: "/lane openrouter",
+    description: "Switch this session to an explicitly selected OpenRouter model.",
+    example: "/lane openrouter",
+  },
+  {
+    category: "runtime",
+    command: "/lane huggingface",
+    description: "Switch this session to an explicitly selected hosted Hugging Face model.",
+    example: "/lane huggingface",
+  },
+  {
+    category: "runtime",
     command: "/lane cloud-mcp",
     description: "Use cloud models with Switchbay MCP bridge enabled.",
     example: "/lane cloud-mcp",
@@ -98,21 +122,15 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     category: "runtime",
-    command: "/lane lmstudio",
-    description: "Switch this TUI session to the local LM Studio provider.",
-    example: "/lane lmstudio",
+    command: "/lane ollama-cloud",
+    description: "Switch this session to Ollama's hosted cloud API.",
+    example: "/lane ollama-cloud",
   },
   {
     category: "runtime",
     command: "/lane mcp",
     description: "Enable Switchbay MCP bridge for the active model lane.",
     example: "/lane mcp",
-  },
-  {
-    category: "runtime",
-    command: "/lane native-mcp",
-    description: "Switch to LM Studio's native MCP API lane for testing.",
-    example: "/lane native-mcp",
   },
   {
     category: "runtime",
@@ -165,7 +183,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   {
     category: "runtime",
     command: "/create-mcp",
-    description: "Open the guided LM Studio MCP config wizard.",
+    description: "Open the guided external MCP config wizard.",
     example: "/create-mcp",
   },
   {
@@ -293,6 +311,18 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     command: "/trace export",
     description: "Show the latest trace JSON file path.",
     example: "/trace export",
+  },
+  {
+    category: "runtime",
+    command: "/usage",
+    description: "Graph traced turns, routes, estimated tokens, and tool activity.",
+    example: "/usage",
+  },
+  {
+    category: "runtime",
+    command: "/graph trace",
+    description: "Render the latest agent turn as a terminal flow graph.",
+    example: "/graph trace",
   },
   {
     category: "context",

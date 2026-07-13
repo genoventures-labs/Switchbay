@@ -12,7 +12,7 @@ import { resolveAgentPolicy } from "../agent/policy";
 import type { ChatRuntimeClient } from "../runtime/client";
 import { createRuntimeClient, getRuntimeLaneLabel } from "../runtime/client";
 import { getToolMode, type RuntimeLane, type ToolMode } from "../config/env";
-import { getOperatorConfig } from "../config/switchbay-config";
+import { clearSelectedRuntimeModel, getOperatorConfig, setSelectedRuntimeModel } from "../config/switchbay-config";
 import { createSessionStore, sessionReducer } from "../session/store";
 import { createTranscriptEntry } from "../agent/turn-state";
 import { loadPersistedSession, savePersistedSession, listSessions, purgeSessions } from "../session/persistence";
@@ -54,6 +54,7 @@ import { loadToolboxInventory, type ToolboxSkill } from "../toolbox/hub";
 import { RightRail } from "./components/RightRail";
 import { saveTraceRecord } from "../trace/store";
 import { formatRouteTag } from "../runtime/route-display";
+import { suggestRuntimeLane } from "../runtime/lane-router";
 import { addDailyTask, clearDailyBoard, completeDailyTask, describeDailyBoard, loadDailyBoard, type DailyBoard } from "../operator/daily-board";
 import { buildStartupOverview } from "../operator/startup-overview";
 
@@ -150,6 +151,10 @@ export function SwitchbayApp({
   const [createPluginGenerating, setCreatePluginGenerating] = useState(false);
   const [pendingPluginDraft, setPendingPluginDraft] = useState<PendingPluginDraft | null>(null);
   const [turnThoughts, setTurnThoughts] = useState<string[]>([]);
+  const [pendingAgentFollowUp, setPendingAgentFollowUp] = useState<string | null>(null);
+  const [pendingLaneSuggestion, setPendingLaneSuggestion] = useState<{ input: string; reason: string } | null>(null);
+  const [pendingLaneFollowUp, setPendingLaneFollowUp] = useState<{ input: string; lane: "cloud" | "local" } | null>(null);
+  const laneGateBypassRef = useRef(false);
   const [alwaysApprovedShellCommands, setAlwaysApprovedShellCommands] = useState<Set<string>>(() => new Set());
   const [rightRailCollapsed, setRightRailCollapsed] = useState(false);
   const [dailyBoard, setDailyBoard] = useState<DailyBoard>(() => loadDailyBoard());
@@ -319,12 +324,24 @@ export function SwitchbayApp({
   }
 
   function selectRuntimeModel(model: RuntimeModelOption) {
+    if (model.provider === "auto") {
+      clearSelectedRuntimeModel(model.lane);
+      setActiveCloudProvider("auto");
+      setCloudProvider("auto");
+      setRuntimeLane(model.lane);
+      setActiveRuntimeModel(null);
+      setRuntimeClient(createRuntimeClient(model.lane, { provider: null, localProvider }));
+      setComposerMode("default");
+      setQuerySync("");
+      dispatch({ type: "assistant/appended", message: "Model pin cleared. **Auto** trusted cloud routing is active." });
+      return;
+    }
     const provider = model.provider === "openai" || model.provider === "anthropic" || model.provider === "google"
       ? model.provider
       : null;
     setRuntimeLane(model.lane);
-    if (model.provider === "ollama" || model.provider === "lmstudio") {
-      const provider = model.provider === "ollama" ? "ollama" : "lmstudio";
+    if (model.provider === "ollama" || model.provider === "ollama-cloud") {
+      const provider = model.provider;
       setActiveLocalProvider(provider);
       setLocalProvider(provider);
     }
@@ -335,7 +352,8 @@ export function SwitchbayApp({
     if (model.lane === "cloud-mcp") setToolMode("switchbay-mcp");
     if (model.lane === "local-mcp") setToolMode("standard");
     setActiveRuntimeModel(model);
-    setRuntimeClient(createRuntimeClient(model.lane, { model: model.id, provider, localProvider: model.provider === "ollama" ? "ollama" : model.provider === "lmstudio" ? "lmstudio" : localProvider }));
+    setSelectedRuntimeModel(model.lane, { id: model.id, provider: model.provider });
+    setRuntimeClient(createRuntimeClient(model.lane, { model: model.id, provider, localProvider: model.provider === "ollama" || model.provider === "ollama-cloud" ? model.provider : localProvider }));
     setComposerMode("default");
     setQuerySync("");
     dispatch({
@@ -909,6 +927,25 @@ export function SwitchbayApp({
     setQuerySync("");
     setComposerMode("default");
 
+    if (pendingLaneSuggestion) {
+      const intent = parseApprovalIntent(trimmedVal);
+      const original = pendingLaneSuggestion.input;
+      if (intent === "apply" || intent === "always") {
+        setPendingLaneSuggestion(null);
+        switchRuntimeLane("local", localProvider);
+        setPendingLaneFollowUp({ input: original, lane: "local" });
+        return;
+      }
+      if (intent === "cancel") {
+        setPendingLaneSuggestion(null);
+        dispatch({ type: "assistant/appended", message: "Staying on trusted cloud auto-routing." });
+        setPendingLaneFollowUp({ input: original, lane: "cloud" });
+        return;
+      }
+      dispatch({ type: "assistant/appended", message: "Choose **y** to switch local or **n** to stay on cloud." });
+      return;
+    }
+
     // HANDLE SLASH COMMANDS
     if (trimmedVal === "/sessions") {
       const sessions = await listSessions();
@@ -1006,6 +1043,14 @@ export function SwitchbayApp({
         switchRuntimeLane("cloud", undefined, "auto");
         return;
       }
+      if (requested === "openrouter" || requested === "open-router" || requested === "or") {
+        switchRuntimeLane("openrouter");
+        return;
+      }
+      if (requested === "huggingface" || requested === "hugging-face" || requested === "hf" || requested === "hf-cloud") {
+        switchRuntimeLane("huggingface");
+        return;
+      }
       const requestedCloudProvider = normalizeCloudProvider(requested);
       if (requestedCloudProvider && requestedCloudProvider !== "auto") {
         switchRuntimeLane("cloud", undefined, requestedCloudProvider);
@@ -1020,12 +1065,12 @@ export function SwitchbayApp({
         switchRuntimeLane("local");
         return;
       }
-      if (requested === "lm" || requested === "lmstudio" || requested === "lm-studio") {
-        switchRuntimeLane("local", "lmstudio");
+      if (requested === "ollama") {
+        switchRuntimeLane("local", "ollama");
         return;
       }
-      if (requested === "ollama" || requested === "hf" || requested === "huggingface") {
-        switchRuntimeLane("local", "ollama");
+      if (requested === "ollama-cloud" || requested === "ollama_cloud" || requested === "oc") {
+        switchRuntimeLane("local", "ollama-cloud");
         return;
       }
       if (requested === "mcp" || requested === "switchbay-mcp" || requested === "bridge") {
@@ -1034,7 +1079,7 @@ export function SwitchbayApp({
       }
       dispatch({
         type: "assistant/appended",
-        message: `Unknown lane \`${requested}\`. Use \`/lane cloud\`, \`/lane openai\`, \`/lane anthropic\`, \`/lane google\`, \`/lane local\`, \`/lane ollama\`, \`/lane mcp\`, or \`/lane\` to toggle.`,
+        message: `Unknown lane \`${requested}\`. Use \`/lane cloud\`, \`/lane openai\`, \`/lane anthropic\`, \`/lane gemini\`, \`/lane huggingface\`, \`/lane openrouter\`, \`/lane local\`, \`/lane ollama\`, \`/lane ollama-cloud\`, \`/lane mcp\`, or \`/lane\` to toggle.`,
       });
       setQuerySync("");
       return;
@@ -1042,10 +1087,20 @@ export function SwitchbayApp({
 
     if (trimmedVal === "/collapse") {
       setRightRailCollapsed((value) => !value);
-      dispatch({
-        type: "assistant/appended",
-        message: rightRailCollapsed ? "Right panels expanded." : "Right panels collapsed.",
-      });
+      setTranscriptScrollOffset(0);
+      setQuerySync("");
+      return;
+    }
+
+    if (trimmedVal === "/auto") {
+      clearSelectedRuntimeModel("cloud");
+      clearSelectedRuntimeModel("cloud-mcp");
+      setActiveCloudProvider("auto");
+      setCloudProvider("auto");
+      setRuntimeLane("cloud");
+      setActiveRuntimeModel(null);
+      setRuntimeClient(createRuntimeClient("cloud", { provider: null, localProvider }));
+      dispatch({ type: "assistant/appended", message: "Model pin cleared. **Auto** trusted cloud routing is active." });
       setQuerySync("");
       return;
     }
@@ -1061,6 +1116,14 @@ export function SwitchbayApp({
       if (requested === "cloud") {
         void openModelDrawer("cloud");
         setQuerySync("");
+        return;
+      }
+      if (requested === "openrouter" || requested === "open-router" || requested === "or") {
+        void openModelDrawer("openrouter");
+        return;
+      }
+      if (requested === "huggingface" || requested === "hugging-face" || requested === "hf" || requested === "hf-cloud") {
+        void openModelDrawer("huggingface");
         return;
       }
       if (normalizeCloudProvider(requested)) {
@@ -1079,11 +1142,17 @@ export function SwitchbayApp({
         setQuerySync("");
         return;
       }
-      if (requested === "ollama" || requested === "hf" || requested === "huggingface") {
+      if (requested === "ollama") {
         setActiveLocalProvider("ollama");
         setLocalProvider("ollama");
         void openModelDrawer("local", "ollama");
         setQuerySync("");
+        return;
+      }
+      if (requested === "ollama-cloud" || requested === "ollama_cloud" || requested === "oc") {
+        setActiveLocalProvider("ollama-cloud");
+        setLocalProvider("ollama-cloud");
+        void openModelDrawer("local", "ollama-cloud");
         return;
       }
       if (requested === "mcp" || requested === "switchbay-mcp" || requested === "bridge") {
@@ -1268,7 +1337,7 @@ export function SwitchbayApp({
           await wf(pendingMcpDraft.savePath, pendingMcpDraft.content, "utf-8");
           dispatch({
             type: "assistant/appended",
-            message: `✓ MCP config **${pendingMcpDraft.name}** saved to \`${pendingMcpDraft.savePath}\`\n\nEnable Switchbay's bridge with \`/mcp on\`. Test LM Studio's native API with \`/lane native-mcp\`.`,
+            message: `✓ MCP config **${pendingMcpDraft.name}** saved to \`${pendingMcpDraft.savePath}\`\n\nEnable external MCP tools with \`/mcp on\`.`,
           });
         } catch (e: any) {
           dispatch({ type: "assistant/appended", message: `Save failed: ${e.message}` });
@@ -1523,7 +1592,7 @@ export function SwitchbayApp({
     }
 
     const onStep = (title: string) => {
-        setTurnThoughts([title]);
+      setTurnThoughts((previous) => appendTurnThought(previous, title));
     };
     const onTokens = (count: number) => {
         dispatch({ type: "turn/tokens", count });
@@ -1532,6 +1601,13 @@ export function SwitchbayApp({
     const onToken = (token: string) => {
       didStream = true;
       dispatch({ type: "turn/token", token });
+    };
+    const onStreamReset = (draft: string) => {
+      didStream = false;
+      dispatch({ type: "turn/response", content: "" });
+      if (draft.trim()) {
+        setTurnThoughts((previous) => appendTurnThought(previous, draft));
+      }
     };
     setTurnThoughts([]);
 
@@ -1729,6 +1805,9 @@ export function SwitchbayApp({
           type: "assistant/appended",
           message: localCommand.assistantMessage ?? (localCommand.activateAgent ? "Agent activated." : "Agent deactivated."),
         });
+        if (localCommand.activateAgent && localCommand.followUpInput) {
+          setPendingAgentFollowUp(localCommand.followUpInput);
+        }
         return;
       }
 
@@ -1752,6 +1831,23 @@ export function SwitchbayApp({
         await handleSubmit(localCommand.followUpInput);
       }
       return;
+    }
+
+    const bypassLaneGate = laneGateBypassRef.current;
+    laneGateBypassRef.current = false;
+    const laneSuggestion = !bypassLaneGate && runtimeLane === "cloud" && cloudProvider === "auto" && !activeRuntimeModel
+      ? suggestRuntimeLane(trimmedVal)
+      : null;
+    if (laneSuggestion) {
+      const localModels = await listRuntimeModels("local", localProvider).catch(() => ({ models: [] }));
+      if (localModels.models.length > 0) {
+        setPendingLaneSuggestion({ input: value, reason: laneSuggestion.reason });
+        dispatch({
+          type: "assistant/appended",
+          message: `${laneSuggestion.reason}\n\nThis task looks suitable for **${getRuntimeLaneLabel("local")}**. Switch before continuing?\n\n**y** switch local · **n** stay cloud`,
+        });
+        return;
+      }
     }
 
     const { mentions, cleanQuery } = parseMentions(value);
@@ -1803,6 +1899,7 @@ export function SwitchbayApp({
         workspace,
         onStep,
         onToken,
+        onStreamReset,
         onTokens,
       });
       const response = executedTurn.response;
@@ -2067,6 +2164,21 @@ export function SwitchbayApp({
   }
 
   useEffect(() => {
+    if (!pendingLaneFollowUp || pendingLaneSuggestion || runtimeLane !== pendingLaneFollowUp.lane) return;
+    const followUp = pendingLaneFollowUp.input;
+    setPendingLaneFollowUp(null);
+    laneGateBypassRef.current = true;
+    void handleSubmit(followUp);
+  }, [pendingLaneFollowUp, pendingLaneSuggestion, runtimeLane]);
+
+  useEffect(() => {
+    if (!pendingAgentFollowUp || !state.activeAgentId) return;
+    const followUp = pendingAgentFollowUp;
+    setPendingAgentFollowUp(null);
+    void handleSubmit(followUp);
+  }, [pendingAgentFollowUp, state.activeAgentId]);
+
+  useEffect(() => {
     if (initialQuery) {
       void handleSubmit(initialQuery);
     }
@@ -2230,6 +2342,7 @@ export function SwitchbayApp({
             pendingRuleDraft ? "rule_draft" :
             pendingSkillDraft ? "skill_draft" :
             pendingPluginDraft ? "plugin_draft" :
+            pendingLaneSuggestion ? "lane_suggestion" :
             pendingAgentDraft ? "agent_draft" :
             state.activePlan?.status === "pending_approval" ? "plan_approval" :
             state.activePlan?.status === "awaiting_continue" ? "plan_continue" :
@@ -2263,6 +2376,12 @@ export function SwitchbayApp({
   );
 }
 
+function appendTurnThought(previous: string[], value: string): string[] {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (!normalized || previous.at(-1) === normalized) return previous;
+  return [...previous, normalized].slice(-6);
+}
+
 function isSwitchbayCheckpointLine(line: string): boolean {
   return /\bswitchbay:\s*/.test(line);
 }
@@ -2279,7 +2398,7 @@ function formatShellCompletion(result: ShellResult): string {
   return `Shell command completed.\n\nOutput:\n\`\`\`text\n${clipped}\n\`\`\``;
 }
 
-function sliceTranscriptForRows(
+export function sliceTranscriptForRows(
   entries: ReturnType<typeof createTranscriptEntry>[],
   endIndex: number,
   maxRows: number,
@@ -2294,6 +2413,13 @@ function sliceTranscriptForRows(
     if (!entry) continue;
     const rows = estimateTranscriptRows(entry, terminalWidth);
     if (visible.length > 0 && usedRows + rows > maxRows) {
+      // Never show Bay's reply without the user turn that prompted it. Width
+      // changes (such as /collapse) may overflow the row estimate, but keeping
+      // the pair intact is less confusing than visually erasing user input.
+      const completesVisibleTurn = entry.kind === "user" && visible.some((item) => item.kind === "assistant");
+      if (!completesVisibleTurn) break;
+      visible.unshift(entry);
+      usedRows += rows;
       break;
     }
     visible.unshift(entry);

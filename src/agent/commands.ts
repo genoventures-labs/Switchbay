@@ -86,6 +86,57 @@ export type LocalCommandOptions = {
   workspace: WorkspaceSnapshot | null;
 };
 
+export const AUTO_COMPACT_CONTEXT_CHARS = 18_000;
+
+export type ContextCompaction = {
+  messages: ChatMessage[];
+  summary: string;
+};
+
+/**
+ * Shrink only provider context. The UI transcript is intentionally not part of
+ * this operation: it remains the durable, scrollable work feed for the session.
+ */
+export async function compactConversationForContext(options: {
+  client: ChatRuntimeClient;
+  conversation: ChatMessage[];
+  force?: boolean;
+  surface: string;
+}): Promise<ContextCompaction | null> {
+  const conversational = options.conversation.filter((message) => message.role === "user" || message.role === "assistant");
+  const characters = conversational.reduce((total, message) => total + String(message.content).length, 0);
+  if (conversational.length < 4 || (!options.force && characters < AUTO_COMPACT_CONTEXT_CHARS)) return null;
+
+  const recent = conversational.slice(-4);
+  const older = conversational.slice(0, -recent.length);
+  const existingContext = options.conversation
+    .filter((message) => message.role === "system" && String(message.content).startsWith("[COMPACTED CONTEXT]"))
+    .map((message) => String(message.content).replace(/^\[COMPACTED CONTEXT\]\s*/, ""))
+    .join("\n\n");
+  const source = [
+    existingContext ? `Existing compacted context:\n${existingContext}` : "",
+    ...older.map((message) => `${message.role === "user" ? "User" : "Bay"}: ${String(message.content).slice(0, 900)}`),
+  ].filter(Boolean).join("\n\n");
+
+  if (!source.trim()) return null;
+  const summaryResp = await options.client.createChatCompletion(options.surface, {
+    model: undefined,
+    messages: [
+      {
+        role: "system",
+        content: "You maintain compact working context for a local coding agent. Summarize the conversation faithfully in 350 words or fewer. Preserve user goals, decisions, workspace changes, files modified, completed verification, active plan/task state, and unresolved blockers. Do not add a preamble or invent facts.",
+      },
+      { role: "user", content: source },
+    ],
+  });
+  const summary = extractAssistantText(summaryResp).trim();
+  if (!summary) return null;
+  return {
+    summary,
+    messages: [{ role: "system", content: `[COMPACTED CONTEXT]\n${summary}` }, ...recent],
+  };
+}
+
 export function parseApprovalIntent(input: string): "apply" | "cancel" | "always" | null {
   const normalized = input.trim().toLowerCase();
   if (["2", "y", "yes"].includes(normalized)) return "apply";
@@ -1424,36 +1475,18 @@ async function handleMemoryCommand(trimmed: string, options: LocalCommandOptions
 }
 
 async function handleCompactCommand(options: LocalCommandOptions): Promise<LocalCommandResult> {
-  const conversation = options.conversation ?? [];
-  if (conversation.length < 4) {
+  const compacted = await compactConversationForContext({
+    client: options.client,
+    conversation: options.conversation ?? [],
+    force: true,
+    surface: options.surface,
+  }).catch(() => null);
+  if (!compacted) {
     return { handled: true, assistantMessage: "Nothing to compact yet — conversation is short." };
   }
-  const transcript = conversation
-    .filter((m) => m.role === "user" || m.role === "assistant")
-    .map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${String(m.content).slice(0, 400)}`)
-    .join("\n");
-  try {
-    const summaryResp = await options.client.createChatCompletion(options.surface, {
-      model: undefined,
-      messages: [
-        {
-          role: "system",
-          content: "You are a conversation compactor. Summarize the following conversation into a concise context block (max 300 words) that preserves all decisions made, files changed, current objectives, and any unresolved issues. Output only the summary, no preamble.",
-        },
-        { role: "user", content: transcript },
-      ],
-    });
-    const summary = extractAssistantText(summaryResp);
-    if (!summary) {
-      return { handled: true, assistantMessage: "Compact failed — the model returned no summary." };
-    }
-    return {
-      handled: true,
-      assistantMessage: `Session compacted. Summary:\n\n${summary}`,
-      clearTranscript: true,
-      compactedConversation: [{ role: "system", content: `[COMPACTED CONTEXT]\n${summary}` }],
-    };
-  } catch {
-    return { handled: true, assistantMessage: "Compact failed — could not reach the provider." };
-  }
+  return {
+    handled: true,
+    assistantMessage: `Context compacted. The work feed stays intact.\n\n${compacted.summary}`,
+    compactedConversation: compacted.messages,
+  };
 }

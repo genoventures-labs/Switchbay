@@ -831,6 +831,19 @@ export async function executeTurn(input: {
     }
 
     if (toolCalls.length === 0) {
+      const groundingFailure = unresolvedGroundingFailure(toolExecutions);
+      if (groundingFailure) {
+        return {
+          response: {
+            ...response,
+            choices: [{
+              message: { role: "assistant", content: `I couldn't ground this request because **${groundingFailure.tool}** failed: ${groundingFailure.body}\n\nI stopped rather than inventing a workspace summary.` },
+              finish_reason: "stop",
+            }],
+          },
+          toolExecutions,
+        };
+      }
       if (input.onStep) input.onStep("Done.");
       return { response, toolExecutions };
     }
@@ -906,6 +919,17 @@ export async function executeTurn(input: {
   } finally {
     await mcpRuntime?.close();
   }
+}
+
+function unresolvedGroundingFailure(executions: AgentToolExecution[]): AgentToolExecution | null {
+  const grounding = /^(workspace_hop|read_file|read_file_range|read_json|summarize_file|list_directory|glob_files|search_files|git_status|git_log|git_show|shell)$/;
+  for (let index = executions.length - 1; index >= 0; index -= 1) {
+    const execution = executions[index]!;
+    if (!grounding.test(execution.tool)) continue;
+    if (execution.ok) return null;
+    return execution;
+  }
+  return null;
 }
 
 function summarizeToolLimit(objective: string, toolExecutions: AgentToolExecution[]): string {

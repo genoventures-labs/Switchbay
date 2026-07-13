@@ -564,6 +564,32 @@ test("executeTurn workspace hop changes cwd for later tools in the same turn", a
   }
 });
 
+test("workspace_hop can enter an explicitly requested adjacent non-git directory", async () => {
+  const originalCwd = process.cwd();
+  const parent = await mkdtemp(join(tmpdir(), "switchbay-adjacent-"));
+  const source = join(parent, "Switchbay Engines");
+  const target = join(parent, "Adjacent Project Fixture");
+  await mkdir(source, { recursive: true });
+  await mkdir(target, { recursive: true });
+  try {
+    const result = await executeToolCall("workspace_hop", { query: "AdjacentProjectFixture" }, { cwd: source });
+    expect(result.ok).toBe(true);
+    expect(result.travel?.toPath).toBe(target);
+  } finally { process.chdir(originalCwd); }
+});
+
+test("executeTurn fails closed after an unresolved grounding tool failure", async () => {
+  const { client } = createMockClient([
+    createResponse(null, [{ id: "bad-hop", type: "function", function: { name: "workspace_hop", arguments: JSON.stringify({ query: "definitely-not-a-workspace" }) } }]),
+    createResponse("Here is a confident but fabricated repository summary."),
+  ]);
+  const result = await executeTurn({ client: client as ChatRuntimeClient, cwd: process.cwd(), sessionId: "test-session", surface: "dev", turn: createTurn() });
+  const answer = extractAssistantText(result.response);
+  expect(answer).toContain("I couldn't ground this request");
+  expect(answer).toContain("stopped rather than inventing");
+  expect(answer).not.toContain("confident but fabricated");
+});
+
 test("executeTurn discovers and executes configured external MCP tools", async () => {
   const cwd = await mkdtemp(join(tmpdir(), "switchbay-loop-mcp-"));
   const previousConfigDir = Bun.env.SWITCHBAY_CONFIG_DIR;

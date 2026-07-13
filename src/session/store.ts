@@ -35,6 +35,8 @@ export type SessionAction =
   | { type: "turn/started" }
   | { type: "turn/token"; token: string }
   | { type: "turn/tokens"; count: number }
+  | { type: "workstep/add"; message: string }
+  | { type: "progress-message/add"; message: string }
   | { type: "tool/executed"; tool: string; summary: string; ok: boolean }
   | { type: "turn/response"; content: string }
   | { type: "turn/completed"; content?: string }
@@ -244,6 +246,32 @@ export function sessionReducer(
         ...state,
         turnTokenCount: state.turnTokenCount + action.count,
       };
+    case "workstep/add": {
+      const message = action.message.replace(/\s+/g, " ").trim();
+      if (!message || state.transcript.at(-1)?.body === message) return state;
+      return appendTranscript(
+        appendActivity(state, "tool", message),
+        createTranscriptEntry({
+          kind: "tool",
+          title: "Working",
+          body: message,
+          tone: "info",
+        }),
+      );
+    }
+    case "progress-message/add": {
+      const message = action.message.trim();
+      if (!message || state.transcript.at(-1)?.body === message) return state;
+      return appendTranscript(
+        appendActivity(state, "status", "Bay shared a progress update."),
+        createTranscriptEntry({
+          kind: "assistant",
+          title: "Bay",
+          body: message,
+          tone: "info",
+        }),
+      );
+    }
     case "tool/executed":
       return appendTranscript(
         appendThought(

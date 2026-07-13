@@ -15,3 +15,11 @@ test("transcript slicing keeps user input with an oversized Bay reply", () => {
   expect(result.entries.map((entry) => entry.kind)).toEqual(["user", "assistant"]);
   expect(result.startIndex).toBe(0);
 });
+
+test("transcript slicing leaves room for a live response without cutting the feed", () => {
+  const user = createTranscriptEntry({ kind: "user", title: "User", body: "Create engine manifests." });
+  const progress = createTranscriptEntry({ kind: "tool", title: "Working", body: "reading engine templates...", tone: "info" });
+  const result = sliceTranscriptForRows([user, progress], 2, 2, 64);
+
+  expect(result.entries).toEqual([progress]);
+});

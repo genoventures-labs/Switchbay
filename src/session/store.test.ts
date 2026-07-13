@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import type { ActivePlan } from "../agent/turn-state";
+import { createInitialSessionState, type ActivePlan } from "../agent/turn-state";
 import { createSessionStore, sessionReducer } from "./store";
 
 function createState() {
@@ -57,6 +57,27 @@ test("turn/completed records assistant text and clears streaming state", () => {
   expect(completed.streamingText).toBe("");
   expect(completed.conversation.at(-1)).toEqual({ role: "assistant", content: "Hello" });
   expect(completed.transcript.at(-1)?.body).toBe("Hello");
+});
+
+test("work steps stay in the feed after a turn completes", () => {
+  const initial = createInitialSessionState({ mode: "build", profile: "switchbay", resolvedProfile: "switchbay", surface: "test" });
+  const working = sessionReducer(initial, { type: "workstep/add", message: "Searching workspace docs" });
+  const completed = sessionReducer(working, { type: "turn/completed", content: "Found the answer." });
+
+  expect(completed.transcript.some((entry) => entry.kind === "tool" && entry.body === "Searching workspace docs")).toBe(true);
+  expect(completed.transcript.at(-1)?.body).toBe("Found the answer.");
+});
+
+test("model progress notes render as Bay messages without ending the active turn", () => {
+  const initial = createInitialSessionState({ mode: "build", profile: "switchbay", resolvedProfile: "switchbay", surface: "test" });
+  const thinking = sessionReducer(initial, { type: "turn/started" });
+  const updated = sessionReducer(thinking, {
+    type: "progress-message/add",
+    message: "Good — now I have the template pattern.",
+  });
+
+  expect(updated.status).toBe("THINKING");
+  expect(updated.transcript.at(-1)).toMatchObject({ kind: "assistant", body: "Good — now I have the template pattern." });
 });
 
 test("local command entries do not mutate model conversation", () => {

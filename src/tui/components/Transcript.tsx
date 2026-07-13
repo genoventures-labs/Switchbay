@@ -34,11 +34,6 @@ export function Transcript({
   const brandColor = TUI_COLORS.accentBright;
   const greenColor = TUI_COLORS.accent;
   const grayColor = TUI_COLORS.muted;
-  const routineToolCount = entries.filter((entry) =>
-    entry.kind === "tool" &&
-    entry.tone === "info" &&
-    Boolean(entry.body || entry.title)
-  ).length;
 
   return (
     <Box flexDirection="column" flexGrow={1} paddingTop={1}>
@@ -94,19 +89,18 @@ export function Transcript({
               </Box>
             );
           }
-          return null;
+          return (
+            <Box key={entry.id} flexDirection="column" marginBottom={1} paddingLeft={1}>
+              <Box gap={1}>
+                <Text color={TUI_COLORS.muted}>◌</Text>
+                <Text color={TUI_COLORS.muted}>{entry.body || entry.title}</Text>
+              </Box>
+            </Box>
+          );
         }
 
         return null;
       })}
-
-      {routineToolCount > 0 && (
-        <Box flexDirection="column" marginBottom={1}>
-          <Text color={grayColor}>
-            Tool activity summarized here; {routineToolCount} step{routineToolCount === 1 ? "" : "s"} in the right panel.
-          </Text>
-        </Box>
-      )}
 
       {streamingText && (
         <Box flexDirection="column" marginBottom={1}>

@@ -1,5 +1,6 @@
 import path from "node:path";
 import fs from "node:fs/promises";
+import os from "node:os";
 import type { WorkspaceSnapshot } from "../session/workspace";
 import type { ShellCommand } from "./turn-state";
 import { buildPatchPreview, type PatchPreview } from "../tools/patch";
@@ -940,16 +941,20 @@ export async function executeToolCall(
         const query = String(args.query || "").trim();
         if (!query) throw new Error("workspace_hop requires a query.");
         const matches = await fuzzyMatchLocations(query);
-        if (!matches.length) throw new Error(`No known workspace matched: ${query}`);
-        const selected = matches[0]!;
-        const traveled = await travelTo(selected.absPath);
-        if (!traveled.ok || !traveled.workspace) throw new Error(traveled.error || `Could not load workspace: ${selected.absPath}`);
+        const known = matches[0];
+        const explicitPath = known ? null : await resolveExplicitWorkspacePath(query, cwd);
+        if (!known && !explicitPath) throw new Error(`No known or adjacent workspace matched: ${query}`);
+        const selectedPath = known?.absPath ?? explicitPath!;
+        const selectedLabel = known?.label ?? path.basename(selectedPath);
+        const isGit = known?.isGit ?? await isGitDirectory(selectedPath);
+        const traveled = known ? await travelTo(selectedPath) : await travelExplicitly(selectedPath);
+        if (!traveled.ok || !traveled.workspace) throw new Error(traveled.error || `Could not load workspace: ${selectedPath}`);
         return {
           tool: name,
           ok: true,
-          summary: `Entered workspace ${selected.label}`,
-          body: `Active workspace changed to ${selected.label}.\nPath: ${selected.absPath}\nGit repository: ${selected.isGit ? "yes" : "no"}`,
-          travel: { toPath: selected.absPath, label: selected.label, workspace: traveled.workspace },
+          summary: `Entered workspace ${selectedLabel}`,
+          body: `Active workspace changed to ${selectedLabel}.\nPath: ${selectedPath}\nGit repository: ${isGit ? "yes" : "no"}`,
+          travel: { toPath: selectedPath, label: selectedLabel, workspace: traveled.workspace },
         };
       }
 
@@ -1669,6 +1674,42 @@ export async function executeToolCall(
       body: reason,
     };
   }
+}
+
+async function resolveExplicitWorkspacePath(query: string, cwd: string): Promise<string | null> {
+  const cleaned = query.trim().replace(/^['"]|['"]$/g, "");
+  const directCandidates = [
+    path.isAbsolute(cleaned) ? cleaned : path.resolve(cwd, cleaned),
+    path.resolve(cwd, "..", cleaned),
+    path.resolve(os.homedir(), cleaned),
+    path.resolve(os.homedir(), "Documents", "GitHub", cleaned),
+    path.resolve(os.homedir(), "Documents", "Git Hub", cleaned),
+  ];
+  for (const candidate of directCandidates) {
+    try { if ((await fs.stat(candidate)).isDirectory()) return candidate; } catch {}
+  }
+  const normalized = cleaned.toLowerCase().replace(/[^a-z0-9]/g, "");
+  for (const parent of [path.dirname(cwd), path.resolve(os.homedir(), "Documents", "GitHub"), path.resolve(os.homedir(), "Documents", "Git Hub")]) {
+    try {
+      const entries = await fs.readdir(parent, { withFileTypes: true });
+      const match = entries.find((entry) => entry.isDirectory() && entry.name.toLowerCase().replace(/[^a-z0-9]/g, "") === normalized);
+      if (match) return path.join(parent, match.name);
+    } catch {}
+  }
+  return null;
+}
+
+async function travelExplicitly(target: string) {
+  try {
+    process.chdir(target);
+    return { ok: true as const, workspace: await import("../session/workspace").then(({ loadWorkspaceSnapshot }) => loadWorkspaceSnapshot(target)) };
+  } catch (error) {
+    return { ok: false as const, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+async function isGitDirectory(directory: string): Promise<boolean> {
+  try { return (await fs.stat(path.join(directory, ".git"))).isDirectory(); } catch { return false; }
 }
 
 async function walkVisibleFiles(root: string, maxDepth: number, includeDirectories: boolean): Promise<string[]> {

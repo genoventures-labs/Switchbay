@@ -7,7 +7,7 @@ import {
   refreshWorkspace,
   synthesizeAssistantFallback,
 } from "../agent/loop";
-import { parseApprovalIntent, tryLocalCommand } from "../agent/commands";
+import { compactConversationForContext, parseApprovalIntent, tryLocalCommand } from "../agent/commands";
 import { resolveAgentPolicy } from "../agent/policy";
 import type { ChatRuntimeClient } from "../runtime/client";
 import { createRuntimeClient, getRuntimeLaneLabel } from "../runtime/client";
@@ -238,6 +238,18 @@ export function SwitchbayApp({
         ? 5
         : 0;
   const transcriptAreaHeight = Math.max(5, stdoutHeight - headerRows - composerRows - drawerRows);
+  // The live response renders below the persisted feed, but is not itself in
+  // state.transcript until the turn completes. Reserve its actual row budget
+  // so it cannot paint over the final visible feed entries while streaming.
+  const streamingRows = state.streamingText
+    ? estimateTranscriptRows(createTranscriptEntry({
+        kind: "assistant",
+        title: "Bay",
+        body: state.streamingText,
+        tone: "info",
+      }), mainWidth)
+    : 0;
+  const transcriptRowsAvailable = Math.max(1, transcriptAreaHeight - streamingRows);
   const totalTranscriptEntries = state.transcript.length;
   const transcriptScrollPage = Math.max(3, Math.floor(transcriptAreaHeight / 2));
   const maxTranscriptScrollOffset = Math.max(0, totalTranscriptEntries - 1);
@@ -247,8 +259,8 @@ export function SwitchbayApp({
   );
   const transcriptEndIndex = Math.max(0, totalTranscriptEntries - clampedScrollOffset);
   const { entries: visibleTranscriptEntries, startIndex: transcriptStartIndex } = useMemo(
-    () => sliceTranscriptForRows(state.transcript, transcriptEndIndex, transcriptAreaHeight, mainWidth),
-    [state.transcript, transcriptEndIndex, transcriptAreaHeight, mainWidth],
+    () => sliceTranscriptForRows(state.transcript, transcriptEndIndex, transcriptRowsAvailable, mainWidth),
+    [state.transcript, transcriptEndIndex, transcriptRowsAvailable, mainWidth],
   );
   function acceptMention(candidate: MentionCandidate) {
     const next = queryRef.current.replace(/@([\w./\-]*)$/, `@${candidate.value}${candidate.isDir ? "/" : ""} `);
@@ -1593,6 +1605,7 @@ export function SwitchbayApp({
 
     const onStep = (title: string) => {
       setTurnThoughts((previous) => appendTurnThought(previous, title));
+      dispatch({ type: "workstep/add", message: title });
     };
     const onTokens = (count: number) => {
         dispatch({ type: "turn/tokens", count });
@@ -1607,6 +1620,7 @@ export function SwitchbayApp({
       dispatch({ type: "turn/response", content: "" });
       if (draft.trim()) {
         setTurnThoughts((previous) => appendTurnThought(previous, draft));
+        dispatch({ type: "progress-message/add", message: draft });
       }
     };
     setTurnThoughts([]);
@@ -1811,12 +1825,9 @@ export function SwitchbayApp({
         return;
       }
 
-      if (localCommand.clearTranscript) {
-        dispatch({ type: "transcript/cleared" });
-        if (localCommand.compactedConversation) {
-          dispatch({ type: "conversation/replaced", messages: localCommand.compactedConversation });
-          dispatch({ type: "assistant/appended", message: localCommand.assistantMessage ?? "Session compacted." });
-        }
+      if (localCommand.compactedConversation) {
+        dispatch({ type: "conversation/replaced", messages: localCommand.compactedConversation });
+        dispatch({ type: "assistant/appended", message: localCommand.assistantMessage ?? "Context compacted. Work feed retained." });
         return;
       }
 
@@ -1865,13 +1876,27 @@ export function SwitchbayApp({
       }
     }
     const effectiveInput = mentionContext ? `${mentionContext}${cleanQuery || value}` : value;
+    let conversationForTurn = state.conversation;
+    const automaticCompaction = await compactConversationForContext({
+      client: runtimeClient,
+      conversation: state.conversation,
+      surface,
+    }).catch(() => null);
+    if (automaticCompaction) {
+      conversationForTurn = automaticCompaction.messages;
+      dispatch({ type: "conversation/replaced", messages: automaticCompaction.messages });
+      dispatch({
+        type: "assistant/appended",
+        message: "Context refreshed for this session — the full work feed remains above.",
+      });
+    }
 
       const turn = await buildTurn({
       input: effectiveInput,
       mode,
       profile,
       previousObjective: state.currentObjective,
-      transcript: state.conversation,
+      transcript: conversationForTurn,
       workspace,
       activeAgentId: state.activeAgentId,
       runtimeLane,
@@ -2436,7 +2461,10 @@ function estimateTranscriptRows(
   entry: ReturnType<typeof createTranscriptEntry>,
   terminalWidth: number,
 ) {
-  const contentWidth = Math.max(36, terminalWidth - 8);
+  // Markdown has indentation, Bay's label, and ANSI/unicode display width that
+  // a raw string length cannot fully capture. Biasing a little narrower avoids
+  // rendering a partial lower line in Ink's fixed-height viewport.
+  const contentWidth = Math.max(30, terminalWidth - 12);
   const rawLines = String(entry.body || entry.title || "").split("\n");
   const wrappedLines = rawLines.reduce((sum, line) => (
     sum + Math.max(1, Math.ceil(line.length / contentWidth))

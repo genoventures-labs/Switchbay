@@ -68,6 +68,11 @@ export async function loadEngineRegistry(cwd = process.cwd()): Promise<EngineReg
     engines.set(webEngine.id, webEngine);
   }
 
+  const plannerEngine = createPlannerEngine(cwd);
+  if (!engines.has(plannerEngine.id)) {
+    engines.set(plannerEngine.id, plannerEngine);
+  }
+
   const gumOpsEngine = await discoverGumOpsEngine(cwd);
   if (gumOpsEngine && !engines.has(gumOpsEngine.id)) {
     engines.set(gumOpsEngine.id, gumOpsEngine);
@@ -376,6 +381,24 @@ function createWebEngine(cwd: string): EngineManifest {
         required: ["url"],
         parameters: { url: { type: "string", description: "Public http or https URL to scan for links." } },
       },
+    ],
+  };
+}
+
+function createPlannerEngine(cwd: string): EngineManifest {
+  const scriptPath = path.join(import.meta.dir, "planner-engine.ts");
+  const command = (action: string, args = "") => `bun ${shellQuote(scriptPath)} ${action} ${args}`;
+  return {
+    id: "planner",
+    name: "Planner Engine",
+    description: "Durable workspace planning: create a task plan, inspect it, add work, and update progress.",
+    cwd,
+    tools: [
+      { name: "create_plan", description: "Create or replace the active workspace plan. steps_json must be a JSON array of concise task titles.", command: command("create", "--objective {{objective}} --steps {{steps_json}}"), required: ["objective"], parameters: { objective: { type: "string", description: "Concrete goal the plan should accomplish." }, steps_json: { type: "string", description: "JSON array of task titles, e.g. [\"Inspect\",\"Implement\",\"Verify\"]." } } },
+      { name: "show_plan", description: "Show the active workspace plan and each task's current state.", command: command("show") },
+      { name: "add_task", description: "Append a focused task to the active plan.", command: command("add", "--task {{task}} --notes {{notes}}"), required: ["task"], parameters: { task: { type: "string", description: "Task title." }, notes: { type: "string", description: "Optional short context or acceptance check." } } },
+      { name: "update_task", description: "Set a task state to todo, in_progress, done, or blocked. State changes make progress inspectable.", command: command("update", "--task_id {{task_id}} --status {{status}} --notes {{notes}}"), required: ["task_id", "status"], parameters: { task_id: { type: "string", description: "Task id from show_plan." }, status: { type: "string", description: "todo, in_progress, done, or blocked." }, notes: { type: "string", description: "Optional progress note or blocker." } } },
+      { name: "clear_plan", description: "Clear the active workspace plan after the work is complete or deliberately abandoned.", command: command("clear") },
     ],
   };
 }

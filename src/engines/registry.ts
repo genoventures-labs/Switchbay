@@ -52,7 +52,11 @@ export async function loadEngineRegistry(cwd = process.cwd()): Promise<EngineReg
     try {
       const raw = await fs.readFile(manifestPath, "utf-8");
       const manifest = normalizeManifest(JSON.parse(raw), path.dirname(manifestPath));
-      engines.set(manifest.id, manifest);
+      // Discovery is ordered from most local/explicit to shared fallbacks.
+      // Do not let a synced Engine Bay manifest replace a workspace engine.
+      if (!engines.has(manifest.id)) {
+        engines.set(manifest.id, manifest);
+      }
     } catch (err) {
       warnings.push(`${manifestPath}: ${err instanceof Error ? err.message : String(err)}`);
     }
@@ -74,7 +78,8 @@ export async function loadEngineRegistry(cwd = process.cwd()): Promise<EngineReg
   }
 
   const gumOpsEngine = await discoverGumOpsEngine(cwd);
-  if (gumOpsEngine && !engines.has(gumOpsEngine.id)) {
+  const hasExplicitGumOpsPath = Boolean(Bun.env.SWITCHBAY_GUMOPS_PATH?.trim() || Bun.env.GUMOPS_PATH?.trim());
+  if (gumOpsEngine && (hasExplicitGumOpsPath || !engines.has(gumOpsEngine.id))) {
     engines.set(gumOpsEngine.id, gumOpsEngine);
   }
 

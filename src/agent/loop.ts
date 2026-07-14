@@ -506,6 +506,12 @@ export async function buildTurn(input: {
   const mode = (input.mode as AgentMode) || "build";
   const objective = input.input.slice(0, 100);
   const cwd = input.workspace?.cwd || process.cwd();
+  const currentDate = new Intl.DateTimeFormat("en-CA", {
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
 
   // Inject project context if it exists.
   let oriMdBlock = "";
@@ -561,6 +567,7 @@ export async function buildTurn(input: {
 Current Mode: ${mode}
 Current Profile: ${input.profile}
 Current Workspace: ${cwd}
+Current Local Date: ${currentDate}
 Runtime Lane: ${input.runtimeLane ?? "cloud"}
 Tool Mode: ${effectiveToolMode}
 Assistant Callsign: Bay${oriMdBlock}${memoryBlock}${knowledgeBlock}${pinsBlock}${agentBlock}${capabilityDirectoryBlock}${toolboxBlock}${guidesBlock}${switchbayMcpBlock}
@@ -577,6 +584,7 @@ GROUNDING RULES:
 9. DO NOT NARRATE your tool usage or internal reasoning steps in your final response to the user. (e.g. avoid "I have checked the files and found..."). Just state the findings or provide the answer directly.
 10. If a user asks to enter, inspect, or continue in another project, call workspace_hop before reading files or running commands there. Finding a path is not the same as changing the active workspace.
 11. If grounding tools fail, report the failure and stop. Never fabricate a repository snapshot, package metadata, git state, or file contents after failed reads or commands.
+12. For Gumroad data, use typed gumroad_* tools, not generic run_engine_tool. gumroad_sales_summary is all-time only. For weekly, month-to-date, or date-specific reporting, use gumroad_sales_range with an explicit YYYY-MM-DD range. If the user says only "weekly" and does not identify the week, ask which date range they mean; never invent it.
 `;
   // Proactively embed live workspace context so the model can answer questions about
   // the project, recent changes, and git state without server-side tool calls.

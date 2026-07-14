@@ -332,6 +332,22 @@ test("buildTurn injects Toolbox skills into system context", async () => {
   expect(modelToolsGuide).toContain("mcp__<server>__<tool>");
 });
 
+test("buildTurn gives Gumroad reporting an explicit date-range rule", async () => {
+  const turn = await buildTurn({
+    input: "weekly Gumroad stats",
+    mode: "build",
+    profile: "switchbay",
+    previousObjective: null,
+    transcript: [],
+    workspace: null,
+  });
+  const system = turn.request.messages.find((message) => message.role === "system")?.content ?? "";
+
+  expect(system).toContain("Current Local Date:");
+  expect(system).toContain("gumroad_sales_range");
+  expect(system).toContain("ask which date range they mean");
+});
+
 test("buildTurn injects Workspace Knowledge hits into system context", async () => {
   const cwd = await mkdtemp(join(tmpdir(), "switchbay-knowledge-context-"));
   await writeFile(
@@ -758,6 +774,29 @@ test("GumOps tools run through configured checkout", async () => {
       Bun.env.SWITCHBAY_GUMOPS_PATH = previous;
     }
   }
+});
+
+test("Gumroad sales alias resolves the synced GumOps manifest name", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "switchbay-gumops-manifest-"));
+  const engineDir = join(cwd, ".switchbay", "engines");
+  await mkdir(engineDir, { recursive: true });
+  await writeFile(join(engineDir, "gumops_runner.py"), "import sys\nprint('SALES:' + ' '.join(sys.argv[1:]))\n", "utf-8");
+  await writeFile(join(engineDir, "gumops.engine.json"), JSON.stringify({
+    id: "gumops",
+    name: "Synced GumOps",
+    tools: [
+      { name: "gum_sales_summary", description: "Sales", command: "python3 gumops_runner.py sales_summary" },
+      { name: "gum_sales_range", description: "Sales range", command: "python3 gumops_runner.py sales_range --start {{start}} --end {{end}}", required: ["start", "end"] },
+    ],
+  }), "utf-8");
+
+  const result = await executeToolCall("gumroad_sales_summary", {}, { cwd });
+  expect(result.ok).toBe(true);
+  expect(result.body).toBe("SALES:sales_summary");
+
+  const range = await executeToolCall("gumroad_sales_range", { start: "2026-07-07", end: "2026-07-13" }, { cwd });
+  expect(range.ok).toBe(true);
+  expect(range.body).toBe("SALES:sales_range --start 2026-07-07 --end 2026-07-13");
 });
 
 test("GumOps optional harnesses are exposed when present", async () => {

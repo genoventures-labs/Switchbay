@@ -48,6 +48,7 @@ const BUILTIN_GUIDES: Guide[] = [
       "- Use capability readers before guessing: `list_agents`/`read_agent`, `list_guides`/`read_guide`, `list_plugins`/`read_plugin`, `list_engines`/`list_engine_tools`, and `list_toolbox_skills`/`read_toolbox_skill`.",
       "- Treat tool policy as authoritative: read tools may inspect, write tools may mutate locally, external tools cross a service boundary, and approval tools must wait for user consent.",
       "- Dynamic MCP tools use `mcp__<server>__<tool>` names. Engine execution goes through `run_engine_tool`. Never invent either name.",
+      "- For Gumroad reporting, use `gumroad_sales_range` for weekly, monthly, or date-specific claims. `gumroad_sales_summary` is all-time only. Never infer a time range from an all-time result, and surface unavailable refunds as unavailable.",
       "- For multi-step work, inspect the Planner Engine and use it to create a small, durable plan. Update a task when starting, completing, or hitting a real blocker; do not create a plan for a one-step answer.",
       "- When moving projects, call `workspace_hop` first. Finding or mentioning a path does not change the active workspace.",
       "- If a grounding tool fails, report the failure and stop; never manufacture file contents, package metadata, git state, or tool results.",

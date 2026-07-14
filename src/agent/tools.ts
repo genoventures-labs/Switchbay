@@ -456,7 +456,7 @@ export const AGENT_TOOLS: ToolDefinition[] = [
     type: "function",
     function: {
       name: "run_engine_tool",
-      description: "Run a tool exposed by a registered Switchbay engine. Provide args_json as a JSON object string.",
+      description: "Run a tool exposed by a registered Switchbay engine. Provide args_json as a JSON object string. Do not use this generic tool for Gumroad reporting; use the typed gumroad_* tools instead.",
       parameters: {
         type: "object",
         properties: {
@@ -822,8 +822,23 @@ export const AGENT_TOOLS: ToolDefinition[] = [
     type: "function",
     function: {
       name: "gumroad_sales_summary",
-      description: "Return Gumroad sales, revenue, and refund summary through GumOps.",
+      description: "Return an all-time Gumroad gross-sales summary through GumOps. Never present this as a weekly or monthly figure.",
       parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "gumroad_sales_range",
+      description: "Return Gumroad gross sales for an explicit inclusive YYYY-MM-DD date range. Use this for weekly, month-to-date, or date-specific revenue questions.",
+      parameters: {
+        type: "object",
+        properties: {
+          start: { type: "string", description: "Inclusive start date in YYYY-MM-DD." },
+          end: { type: "string", description: "Inclusive end date in YYYY-MM-DD." },
+        },
+        required: ["start", "end"],
+      },
     },
   },
   {
@@ -1594,27 +1609,27 @@ export async function executeToolCall(
       }
 
       case "gumops_tools": {
-        return executeEngineTool(name, "gumops", "tools", {}, cwd);
+        return executeGumOpsTool(name, ["tools"], {}, cwd);
       }
 
       case "gumops_query": {
         const query = String(args.query || "").trim();
         if (!query) throw new Error("gumops_query requires a query.");
-        return executeEngineTool(name, "gumops", args.no_tools === true ? "query_no_tools" : "query", { query }, cwd);
+        return executeGumOpsTool(name, [args.no_tools === true ? "query_no_tools" : "query"], { query }, cwd);
       }
 
       case "gumops_refresh": {
-        return executeEngineTool(name, "gumops", "refresh", {}, cwd);
+        return executeGumOpsTool(name, ["refresh", "gum_refresh_memory"], {}, cwd);
       }
 
       case "gumops_memory_list": {
-        return executeEngineTool(name, "gumops", "memory_list", {}, cwd);
+        return executeGumOpsTool(name, ["memory_list", "gum_memory_list"], {}, cwd);
       }
 
       case "gumops_memory_get": {
         const key = String(args.key || "").trim();
         if (!key) throw new Error("gumops_memory_get requires a key.");
-        return executeEngineTool(name, "gumops", "memory_get", { key }, cwd);
+        return executeGumOpsTool(name, ["memory_get", "gum_memory_get"], { key }, cwd);
       }
 
       case "gumops_memory_add": {
@@ -1622,26 +1637,35 @@ export async function executeToolCall(
         const value = String(args.value || "").trim();
         if (!key) throw new Error("gumops_memory_add requires a key.");
         if (!value) throw new Error("gumops_memory_add requires a value.");
-        return executeEngineTool(name, "gumops", "memory_add", { key, value }, cwd);
+        return executeGumOpsTool(name, ["memory_add", "gum_memory_add"], { key, value }, cwd);
       }
 
       case "gumops_memory_find": {
         const query = String(args.query || "").trim();
         if (!query) throw new Error("gumops_memory_find requires a query.");
-        return executeEngineTool(name, "gumops", "memory_find", { query }, cwd);
+        return executeGumOpsTool(name, ["memory_find", "gum_memory_find"], { query }, cwd);
       }
 
       case "gumroad_products": {
         const page = Math.max(1, Number(args.page) || 1);
-        return executeEngineTool(name, "gumops", "products", { page }, cwd);
+        return executeGumOpsTool(name, ["products", "gum_list_products"], { page }, cwd);
       }
 
       case "gumroad_sales_summary": {
-        return executeEngineTool(name, "gumops", "sales_summary", {}, cwd);
+        return executeGumOpsTool(name, ["sales_summary", "gum_sales_summary"], {}, cwd);
+      }
+
+      case "gumroad_sales_range": {
+        const start = String(args.start || "").trim();
+        const end = String(args.end || "").trim();
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end)) {
+          throw new Error("gumroad_sales_range requires start and end as YYYY-MM-DD.");
+        }
+        return executeGumOpsTool(name, ["sales_range", "gum_sales_range"], { start, end }, cwd);
       }
 
       case "gumroad_account_info": {
-        return executeEngineTool(name, "gumops", "account_info", {}, cwd);
+        return executeGumOpsTool(name, ["account_info", "gum_account_info"], {}, cwd);
       }
 
       case "gumroad_refund_sale": {
@@ -1653,7 +1677,7 @@ export async function executeToolCall(
         if (amount !== null && (!Number.isFinite(amount) || amount <= 0)) {
           throw new Error("gumroad_refund_sale amount must be a positive number when provided.");
         }
-        return executeEngineTool(name, "gumops", "refund_sale", { sale_id: saleId, amount }, cwd);
+        return executeGumOpsTool(name, ["refund_sale", "gum_refund_sale"], { sale_id: saleId, amount }, cwd);
       }
 
       default:
@@ -1791,6 +1815,22 @@ async function executeEngineTool(
     result.ok ? `Ran ${rendered.engine.id}.${rendered.tool.name}` : `${rendered.engine.id}.${rendered.tool.name} failed`,
     result,
   );
+}
+
+/** Resolve friendly Switchbay aliases against both legacy and synced GumOps manifests. */
+async function executeGumOpsTool(
+  tool: string,
+  candidates: string[],
+  args: Record<string, unknown>,
+  cwd: string,
+): Promise<AgentToolExecution> {
+  const registry = await loadEngineRegistry(cwd);
+  const engine = registry.engines.find((entry) => entry.id === "gumops");
+  const selected = candidates.find((candidate) => engine?.tools.some((entry) => entry.name === candidate));
+  if (!selected) {
+    throw new Error(`GumOps does not expose ${candidates.join(" or ")}. Run list_engine_tools for gumops to inspect the installed engine.`);
+  }
+  return executeEngineTool(tool, "gumops", selected, args, cwd);
 }
 
 function engineResult(tool: string, summary: string, result: Awaited<ReturnType<typeof runCommand>>): AgentToolExecution {

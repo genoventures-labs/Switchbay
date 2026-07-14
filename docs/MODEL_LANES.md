@@ -68,6 +68,8 @@ Switchbay only creates MCP configs from Switchbay's trusted catalog: Playwright,
 
 ## Auto Routing
 
+Model names also act as conversational pins. A turn beginning with `Claude`, `GPT`, `Gemini`, `OpenRouter`, `Hugging Face`, `Ollama`, or `Ollama Cloud` selects that model lane and keeps it active for later unaddressed turns. Calling another model replaces the pin. `Auto, ...` and `/auto` clear it and restore trusted cloud routing.
+
 When using `auto` cloud routing, Switchbay picks a provider based on intent:
 
 - **Structured/summary tasks** → OpenAI

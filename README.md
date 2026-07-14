@@ -135,6 +135,15 @@ The model is a variable. Switchbay is the constant.
 
 Switch providers, pull new models, and pin lanes — without changing how you work or what Switchbay knows about your project.
 
+Addressing a model by name pins its configured default for following turns. Call another model to replace the pin, or use `Auto, ...` or `/auto` to restore trusted automatic routing:
+
+```text
+Claude, inspect this repo
+GPT, review Claude's plan
+Gemini, research the alternatives
+Auto, choose the best model for the next step
+```
+
 ```bash
 # Cloud (auto-routes between OpenAI, Anthropic, Google by intent)
 export SWITCHBAY_LANE=cloud
@@ -293,6 +302,7 @@ Switchbay never starts from scratch. Every session loads a full context layer bu
 
 | Source | What It Carries |
 |---|---|
+| `~/.switchbay/context/` | Private machine-local profile, work style, preferences, active projects, and boundaries |
 | `SWITCHBAY.md` | Project overview, stack decisions, permanent context |
 | `.switchbay/memory/` | Session memories, operational facts, auto-refreshed summaries |
 | `.switchbay/knowledge/` | Local knowledge index — code, docs, rules, sourced snippets |
@@ -365,6 +375,8 @@ Full reference: [SLASH_COMMANDS.md](docs/SLASH_COMMANDS.md)
 | [SKILLS.md](docs/SKILLS.md) | Built-in skills, custom skill authoring, GitHub sync |
 | [PLUGINS.md](docs/PLUGINS.md) | Plugin manifest format, asset types, creating plugins |
 | [MEMORY_KNOWLEDGE_TRACES.md](docs/MEMORY_KNOWLEDGE_TRACES.md) | Memory, Knowledge Index, Trace Ledger, Quick Starts/Rules |
+| [MODEL_READINESS.md](docs/MODEL_READINESS.md) | Workspace profiles, durable plans, automatic knowledge, workflows, context receipts |
+| [USER_CONTEXT.md](docs/USER_CONTEXT.md) | Private machine-local profile, work style, active-project, preference, and boundary context |
 | [QUICKSTARTS_AND_RULES.md](docs/QUICKSTARTS_AND_RULES.md) | The quickstarts Switchbay reads before acting, how to write your own |
 | [SLASH_COMMANDS.md](docs/SLASH_COMMANDS.md) | Complete TUI slash command reference |
 | [APPROVAL_MODEL.md](docs/APPROVAL_MODEL.md) | What gates for approval, what runs freely |

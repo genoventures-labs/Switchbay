@@ -48,6 +48,9 @@ import { fuzzyMatchLocations, listTravelLocations, travelTo } from "../tools/tra
 import { formatWorkspaceContext } from "../session/workspace";
 import { formatFrictionRadar, runFrictionRadar } from "../operator/radar";
 import { buildQuickHandoff } from "../operator/handoff";
+import { ensureWorkspaceProfile, formatWorkspaceProfile, refreshWorkspaceProfile } from "../workspace/profile";
+import { formatWorkflows, listWorkflows, readWorkflow, saveWorkflow } from "../workflows/store";
+import { describeUserContext, ensureUserContext, readUserContextFile } from "../context/user-context";
 
 export type LocalCommandResult = {
   handled: boolean;
@@ -396,6 +399,61 @@ export async function tryLocalCommand(
 
   if (trimmed === "/memory" || trimmed.startsWith("/memory ")) {
     return handleMemoryCommand(trimmed, options);
+  }
+
+  if (trimmed === "/context" || trimmed.startsWith("/context ")) {
+    const rest = trimmed.slice("/context".length).trim();
+    if (!rest || rest === "list") return { handled: true, assistantMessage: await describeUserContext() };
+    if (rest === "init" || rest === "path") {
+      const directory = await ensureUserContext();
+      return {
+        handled: true,
+        assistantMessage: rest === "init" ? `Personal context is ready at \`${directory}\`.` : directory,
+      };
+    }
+    const readMatch = rest.match(/^read\s+(.+)$/i);
+    if (readMatch?.[1]) {
+      const file = await readUserContextFile(readMatch[1]);
+      return {
+        handled: true,
+        assistantMessage: file
+          ? `**${file.name}**\n\n${file.content}`
+          : `Context file not found: \`${readMatch[1]}\`.`,
+      };
+    }
+    return { handled: true, assistantMessage: "Usage: `/context`, `/context path`, or `/context read <file>`." };
+  }
+
+  if (trimmed === "/profile" || trimmed.startsWith("/profile ")) {
+    const cwd = options.workspace?.cwd ?? process.cwd();
+    const refresh = trimmed.slice("/profile".length).trim() === "refresh";
+    const profile = refresh ? await refreshWorkspaceProfile(cwd) : await ensureWorkspaceProfile(cwd);
+    return { handled: true, assistantMessage: formatWorkspaceProfile(profile, cwd) };
+  }
+
+  if (trimmed === "/workflows") {
+    return { handled: true, assistantMessage: formatWorkflows(await listWorkflows(options.workspace?.cwd ?? process.cwd())) };
+  }
+
+  if (trimmed === "/workflow" || trimmed.startsWith("/workflow ")) {
+    const cwd = options.workspace?.cwd ?? process.cwd();
+    const rest = trimmed.slice("/workflow".length).trim();
+    if (rest.startsWith("save ")) {
+      const body = rest.slice(5); const divider = body.indexOf("::");
+      if (divider < 1) return { handled: true, assistantMessage: "Usage: `/workflow save <name> :: <instructions>`" };
+      const workflow = await saveWorkflow(cwd, body.slice(0, divider), body.slice(divider + 2));
+      return { handled: true, assistantMessage: `Saved workflow **${workflow.id}**.` };
+    }
+    const runMatch = rest.match(/^run\s+([^\s]+)$/i);
+    if (runMatch?.[1]) {
+      const workflow = await readWorkflow(cwd, runMatch[1]);
+      return workflow ? { handled: true, assistantMessage: `Running workflow **${workflow.id}**.`, followUpInput: workflow.instructions } : { handled: true, assistantMessage: `Workflow not found: \`${runMatch[1]}\`.` };
+    }
+    if (rest) {
+      const workflow = await readWorkflow(cwd, rest);
+      return { handled: true, assistantMessage: workflow ? `**${workflow.name}**\n\n${workflow.instructions}` : `Workflow not found: \`${rest}\`.` };
+    }
+    return { handled: true, assistantMessage: formatWorkflows(await listWorkflows(cwd)) };
   }
 
   if (trimmed === "/trace" || trimmed.startsWith("/trace ")) {

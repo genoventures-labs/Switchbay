@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { modelSpeakerLabel, parseModelAddress } from "./model-identity";
+import { modelOptionForAddress, modelSpeakerLabel, parseModelAddress } from "./model-identity";
 
 test("recognizes model names only when they address the start of a turn", () => {
   expect(parseModelAddress("Hey Claude, inspect this repo")).toEqual({ lane: "cloud", provider: "anthropic", speaker: "Claude" });
@@ -7,8 +7,15 @@ test("recognizes model names only when they address the start of a turn", () => 
   expect(parseModelAddress("yo Gemini — research this")).toEqual({ lane: "cloud", provider: "google", speaker: "Gemini" });
   expect(parseModelAddress("OpenRouter, take this one")).toEqual({ lane: "openrouter", speaker: "OpenRouter" });
   expect(parseModelAddress("Ollama Cloud: summarize this")).toEqual({ lane: "local", localProvider: "ollama-cloud", speaker: "Ollama Cloud" });
+  expect(parseModelAddress("Auto, take over again")).toEqual({ lane: "cloud", speaker: "Auto", auto: true });
   expect(parseModelAddress("Compare Claude and GPT for this job")).toBeNull();
   expect(parseModelAddress("This mentions Gemini later")).toBeNull();
+});
+
+test("turn addresses resolve to persistent model selections", () => {
+  const claude = parseModelAddress("Claude, continue")!;
+  expect(modelOptionForAddress(claude)).toMatchObject({ lane: "cloud", provider: "anthropic" });
+  expect(modelOptionForAddress(parseModelAddress("Auto, continue")!)).toMatchObject({ id: "auto", provider: "auto" });
 });
 
 test("labels the actual responding model family", () => {

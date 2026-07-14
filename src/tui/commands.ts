@@ -266,6 +266,30 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     category: "context",
+    command: "/profile",
+    description: "Show or refresh the structured workspace profile.",
+    example: "/profile refresh",
+  },
+  {
+    category: "context",
+    command: "/context",
+    description: "Show the private machine-local context loaded for every model turn.",
+    example: "/context read working-style",
+  },
+  {
+    category: "planning",
+    command: "/workflows",
+    description: "List reusable workspace workflows.",
+    example: "/workflows",
+  },
+  {
+    category: "planning",
+    command: "/workflow",
+    description: "Save, inspect, or run an explicit reusable workflow.",
+    example: "/workflow save weekly-report :: Pull sales data, verify dates, and summarize results",
+  },
+  {
+    category: "context",
     command: "/agenda",
     description: "Show today's Daily Board.",
     example: "/agenda",

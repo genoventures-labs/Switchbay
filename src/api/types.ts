@@ -18,6 +18,7 @@ export type TurnResponse = {
   content: string;
   lane: RuntimeLane;
   traceSaved: boolean;
+  contextReceipt: string[];
   toolExecutions: Array<{
     tool: string;
     summary: string;

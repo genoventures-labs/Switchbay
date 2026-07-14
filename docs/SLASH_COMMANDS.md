@@ -73,6 +73,9 @@ Full list of TUI slash commands. Type any of these inside Switchbay's terminal U
 ## Context and Rules
 
 ```text
+/context           Show private machine-local context loaded for every model
+/context path      Print the personal context directory
+/context read      Read one personal context file
 /quickstarts       List quick-start guides Switchbay reads before matching tool work
 /rules             List built-in, user, and workspace operating rules
 /create-rule       Create a conversational rule for Switchbay and agents

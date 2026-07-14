@@ -5,11 +5,11 @@ import { buildTurn, executeTurn, extractAssistantText, synthesizeAssistantFallba
 import { resolveAgentPolicy } from "../agent/policy";
 import { createApprovalRequest, createInitialSessionState } from "../agent/turn-state";
 import { getToolMode, normalizeRuntimeLane } from "../config/env";
-import { getSelectedRuntimeModel } from "../config/switchbay-config";
-import { normalizeCloudProvider } from "../runtime/cloud-providers";
+import { clearSelectedRuntimeModel, getSelectedRuntimeModel, setSelectedRuntimeModel } from "../config/switchbay-config";
+import { normalizeCloudProvider, setActiveCloudProvider } from "../runtime/cloud-providers";
 import { createRuntimeClient } from "../runtime/client";
-import { parseModelAddress } from "../runtime/model-identity";
-import { normalizeLocalProvider } from "../runtime/local-providers";
+import { modelOptionForAddress, parseModelAddress } from "../runtime/model-identity";
+import { normalizeLocalProvider, setActiveLocalProvider } from "../runtime/local-providers";
 import { loadPersistedSession, savePersistedSession } from "../session/persistence";
 import { loadWorkspaceSnapshot } from "../session/workspace";
 import { saveTraceRecord } from "../trace/store";
@@ -30,8 +30,20 @@ export async function runSwitchbayTurn(input: TurnRequest, options: { requestId?
   const cloudProvider = normalizeCloudProvider(input.lane);
   const selected = getSelectedRuntimeModel(runtimeLane);
   const addressed = parseModelAddress(prompt);
+  const addressedModel = addressed ? modelOptionForAddress(addressed) : null;
+  if (addressed?.auto) {
+    clearSelectedRuntimeModel("cloud");
+    clearSelectedRuntimeModel("cloud-mcp");
+    setActiveCloudProvider("auto");
+  } else if (addressed && addressedModel) {
+    setSelectedRuntimeModel(addressedModel.lane, { id: addressedModel.id, provider: addressedModel.provider });
+    if (addressed.provider) setActiveCloudProvider(addressed.provider);
+    if (addressed.localProvider) setActiveLocalProvider(addressed.localProvider);
+  }
+  const effectiveRuntimeLane = addressed?.lane ?? runtimeLane;
   const client = addressed
     ? createRuntimeClient(addressed.lane, {
+        model: addressedModel?.provider === "auto" ? undefined : addressedModel?.id,
         provider: addressed.provider,
         localProvider: addressed.localProvider ?? localProvider,
       })
@@ -71,21 +83,23 @@ export async function runSwitchbayTurn(input: TurnRequest, options: { requestId?
     conversation: state.conversation,
     lastChangedFile: state.changedFiles[state.changedFiles.length - 1] ?? null,
     activeAgentId: state.activeAgentId,
-    runtimeLane,
+    runtimeLane: effectiveRuntimeLane,
     toolMode,
   });
 
-  if (localCommand.handled && localCommand.assistantMessage) {
+  if (localCommand.handled && localCommand.assistantMessage && !localCommand.followUpInput) {
     state.conversation.push({ role: "user", content: prompt }, { role: "assistant", content: localCommand.assistantMessage });
     state.currentObjective = prompt.slice(0, 100);
     state.workspace = workspace;
     state.updatedAt = Date.now();
     await savePersistedSession(state);
-    return response(requestId, state.sessionId, localCommand.assistantMessage, runtimeLane, false, [], workspace, null, null);
+    return response(requestId, state.sessionId, localCommand.assistantMessage, runtimeLane, false, [], [], workspace, null, null);
   }
 
+  const modelPrompt = localCommand.followUpInput ?? prompt;
+
   const turn = await buildTurn({
-    input: prompt,
+    input: modelPrompt,
     mode: state.mode,
     profile: state.requestedProfile,
     previousObjective: state.currentObjective,
@@ -104,7 +118,7 @@ export async function runSwitchbayTurn(input: TurnRequest, options: { requestId?
   }
   let traceSaved = false;
   if (content) {
-    await saveTraceRecord({ assistantContent: content, cwd, executedTurn, runtimeLane, toolMode, sessionId: state.sessionId, turn, userPrompt: prompt, workspace });
+    await saveTraceRecord({ assistantContent: content, cwd, executedTurn, runtimeLane: effectiveRuntimeLane, toolMode, sessionId: state.sessionId, turn, userPrompt: prompt, workspace });
     traceSaved = true;
   }
 
@@ -116,9 +130,9 @@ export async function runSwitchbayTurn(input: TurnRequest, options: { requestId?
   state.updatedAt = Date.now();
   await savePersistedSession(state);
   const meta = executedTurn.response.meta;
-  return response(requestId, state.sessionId, content, runtimeLane, traceSaved, executedTurn.toolExecutions, workspace, state.pendingApproval, meta ? { provider: meta.provider, model: meta.model, using: meta.using } : null);
+  return response(requestId, state.sessionId, content, effectiveRuntimeLane, traceSaved, turn.contextReceipt ?? [], executedTurn.toolExecutions, workspace, state.pendingApproval, meta ? { provider: meta.provider, model: meta.model, using: meta.using } : null);
 }
 
-function response(requestId: string, sessionId: string, content: string, lane: TurnResponse["lane"], traceSaved: boolean, tools: Array<{ tool: string; summary: string; ok: boolean; changedFile?: string }>, workspace: TurnResponse["workspace"], pendingApproval: TurnResponse["pendingApproval"], route: TurnResponse["route"]): TurnResponse {
-  return { requestId, sessionId, content, lane, traceSaved, toolExecutions: tools.map(({ tool, summary, ok, changedFile }) => ({ tool, summary, ok, changedFile })), workspace, pendingApproval, route };
+function response(requestId: string, sessionId: string, content: string, lane: TurnResponse["lane"], traceSaved: boolean, contextReceipt: string[], tools: Array<{ tool: string; summary: string; ok: boolean; changedFile?: string }>, workspace: TurnResponse["workspace"], pendingApproval: TurnResponse["pendingApproval"], route: TurnResponse["route"]): TurnResponse {
+  return { requestId, sessionId, content, lane, traceSaved, contextReceipt, toolExecutions: tools.map(({ tool, summary, ok, changedFile }) => ({ tool, summary, ok, changedFile })), workspace, pendingApproval, route };
 }

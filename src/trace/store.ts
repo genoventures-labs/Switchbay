@@ -41,6 +41,7 @@ export type TraceRecord = {
   };
   context: {
     knowledgeSources: string[];
+    receipt: string[];
     systemPromptChars: number;
     promptChars: number;
     estimatedPromptTokens: number;
@@ -107,6 +108,7 @@ export async function saveTraceRecord(input: {
     },
     context: {
       knowledgeSources: extractKnowledgeSources(systemPrompt),
+      receipt: input.turn.contextReceipt ?? [],
       systemPromptChars: systemPrompt.length,
       promptChars,
       estimatedPromptTokens: estimateTokens(systemPrompt) + estimateTokens(String(input.userPrompt)),
@@ -169,6 +171,7 @@ export async function describeLatestTrace(cwd = process.cwd()): Promise<string> 
     `Runtime: \`${record.runtime.lane}\` / \`${record.runtime.toolMode}\``,
     `Workspace: \`${record.workspace.cwd}\`${record.workspace.branch ? ` on \`${record.workspace.branch}\`` : ""}`,
     `Knowledge sources: \`${record.context.knowledgeSources.length}\``,
+    `Context resources: \`${record.context.receipt?.length ?? 0}\``,
     `Tools: \`${record.actions.toolCount}\``,
     `Changed files: \`${record.actions.changedFiles.length}\``,
     `Pending approvals: \`${record.actions.pendingApprovals.length}\``,
@@ -179,6 +182,7 @@ export async function describeLatestTrace(cwd = process.cwd()): Promise<string> 
   if (record.context.knowledgeSources.length) {
     lines.push("", "Knowledge:", ...record.context.knowledgeSources.slice(0, 6).map((source) => `- \`${source}\``));
   }
+  if (record.context.receipt?.length) lines.push("", "Context receipt:", ...record.context.receipt.map((item) => `- \`${item}\``));
 
   if (record.actions.tools.length) {
     lines.push("", "Tools:", ...record.actions.tools.slice(0, 8).map((tool) => `- ${tool.ok ? "ok" : "x"} \`${tool.tool}\`: ${tool.summary}`));

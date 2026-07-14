@@ -34,6 +34,7 @@ const MAX_FILES = 550;
 const CHUNK_LINES = 80;
 const CHUNK_OVERLAP = 12;
 const MAX_PROMPT_HITS = 5;
+const AUTO_REFRESH_MS = 60_000;
 
 const INDEXABLE_EXTENSIONS = new Set([
   ".c",
@@ -163,6 +164,12 @@ export async function loadKnowledgeIndex(cwd = process.cwd()): Promise<Knowledge
   }
 }
 
+export async function ensureKnowledgeIndexFresh(cwd = process.cwd()): Promise<KnowledgeIndex> {
+  const existing = await loadKnowledgeIndex(cwd);
+  const age = existing ? Date.now() - Date.parse(existing.createdAt) : Number.POSITIVE_INFINITY;
+  return age <= AUTO_REFRESH_MS ? existing! : refreshKnowledgeIndex(cwd);
+}
+
 export async function describeKnowledgeIndex(cwd = process.cwd()): Promise<string> {
   const index = await loadKnowledgeIndex(cwd);
   const indexPath = knowledgeIndexPath(cwd);
@@ -210,6 +217,7 @@ export async function buildKnowledgePromptBlock(
   query: string,
   cwd = process.cwd(),
 ): Promise<string> {
+  await ensureKnowledgeIndexFresh(cwd);
   const hits = await searchKnowledgeIndex(query, cwd, MAX_PROMPT_HITS);
   if (!hits.length) return "";
 
@@ -238,7 +246,7 @@ export function formatKnowledgeSearchResults(hits: KnowledgeSearchHit[]): string
 }
 
 async function listIndexableFiles(cwd: string): Promise<string[]> {
-  const result = await runCommand(["rg", "--files", "--hidden", "--glob", "!.git", "--glob", "!node_modules", "--glob", "!dist", "--glob", "!build", "--glob", "!.switchbay/knowledge"], cwd);
+  const result = await runCommand(["rg", "--files", "--hidden", "--glob", "!.git", "--glob", "!node_modules", "--glob", "!dist", "--glob", "!build", "--glob", "!.env*", "--glob", "!*.pem", "--glob", "!*.key", "--glob", "!*.p12", "--glob", "!.switchbay/traces/**", "--glob", "!.switchbay/knowledge/**", "--glob", "!.switchbay/checkpoints/**", "--glob", "!.switchbay/workflows/runs/**"], cwd);
   if (!result.ok) return [];
 
   return result.stdout
@@ -250,6 +258,8 @@ async function listIndexableFiles(cwd: string): Promise<string[]> {
 }
 
 function shouldIndexPath(relativePath: string): boolean {
+  const normalized = relativePath.replace(/\\/g, "/").toLowerCase();
+  if (/(^|\/)(credentials?|secrets?|tokens?)(\/|\.|$)/.test(normalized)) return false;
   const name = path.basename(relativePath);
   if (INDEXABLE_NAMES.has(name)) return true;
   const extension = path.extname(relativePath).toLowerCase();

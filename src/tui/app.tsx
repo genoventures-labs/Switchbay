@@ -54,10 +54,11 @@ import { loadToolboxInventory, type ToolboxSkill } from "../toolbox/hub";
 import { RightRail } from "./components/RightRail";
 import { saveTraceRecord } from "../trace/store";
 import { formatRouteTag } from "../runtime/route-display";
-import { modelSpeakerLabel, parseModelAddress } from "../runtime/model-identity";
+import { modelOptionForAddress, modelSpeakerLabel, parseModelAddress } from "../runtime/model-identity";
 import { suggestRuntimeLane } from "../runtime/lane-router";
 import { addDailyTask, clearDailyBoard, completeDailyTask, describeDailyBoard, loadDailyBoard, type DailyBoard } from "../operator/daily-board";
 import { buildStartupOverview } from "../operator/startup-overview";
+import { loadActivePlan, saveActivePlan } from "../planner/store";
 
 export type SwitchbayAppProps = {
   client: ChatRuntimeClient;
@@ -809,6 +810,20 @@ export function SwitchbayApp({
 
     void savePersistedSession(state);
   }, [state]);
+
+  useEffect(() => {
+    const cwd = state.workspace?.cwd;
+    if (!cwd) return;
+    void loadActivePlan(cwd).then((plan) => {
+      if (plan && !state.activePlan) dispatch({ type: "plan/created", plan });
+    });
+  }, [state.workspace?.cwd]);
+
+  useEffect(() => {
+    const cwd = state.workspace?.cwd;
+    if (!cwd || !state.activePlan) return;
+    void saveActivePlan(cwd, state.activePlan).catch(() => {});
+  }, [state.workspace?.cwd, state.activePlan]);
 
   useEffect(() => {
     if (initialQuery || didShowStartupOverviewRef.current || !didHydrateRef.current || !state.workspace) {
@@ -1864,12 +1879,36 @@ export function SwitchbayApp({
 
     const { mentions, cleanQuery } = parseMentions(value);
     const modelAddress = parseModelAddress(value);
+    const addressedModel = modelAddress ? modelOptionForAddress(modelAddress) : null;
     const turnClient = modelAddress
       ? createRuntimeClient(modelAddress.lane, {
+          model: addressedModel?.provider === "auto" ? undefined : addressedModel?.id,
           provider: modelAddress.provider,
           localProvider: modelAddress.localProvider ?? localProvider,
         })
       : runtimeClient;
+    if (modelAddress?.auto) {
+      clearSelectedRuntimeModel("cloud");
+      clearSelectedRuntimeModel("cloud-mcp");
+      setActiveCloudProvider("auto");
+      setCloudProvider("auto");
+      setRuntimeLane("cloud");
+      setActiveRuntimeModel(null);
+      setRuntimeClient(turnClient);
+    } else if (modelAddress && addressedModel) {
+      setSelectedRuntimeModel(addressedModel.lane, { id: addressedModel.id, provider: addressedModel.provider });
+      setRuntimeLane(addressedModel.lane);
+      setActiveRuntimeModel(addressedModel);
+      if (modelAddress.provider) {
+        setActiveCloudProvider(modelAddress.provider);
+        setCloudProvider(modelAddress.provider);
+      }
+      if (modelAddress.localProvider) {
+        setActiveLocalProvider(modelAddress.localProvider);
+        setLocalProvider(modelAddress.localProvider);
+      }
+      setRuntimeClient(turnClient);
+    }
     dispatch({ type: "turn/speaker", speaker: modelAddress?.speaker ?? "Model" });
     let mentionContext = "";
     if (mentions.length > 0) {
@@ -1943,6 +1982,9 @@ export function SwitchbayApp({
       const routeTag = formatRouteTag(response);
       if (routeTag) {
         dispatch({ type: "assistant/appended", message: routeTag });
+      }
+      if (turn.contextReceipt?.length) {
+        dispatch({ type: "assistant/appended", message: `Context: ${turn.contextReceipt.join(" · ")}` });
       }
       let autoApprovedShellContent: string | null = null;
       let autoApprovedShellFailed = false;

@@ -49,6 +49,10 @@ import { runCommand } from "../tools/shell";
 import { createDefaultSwitchbayMcpConfig, switchbayMcpConfigPath } from "../runtime/mcp-config";
 import { describeTrustedMcpCatalog, matchTrustedMcpCatalog, TRUSTED_MCP_CATALOG } from "../runtime/mcp-catalog";
 import { normalizePluginManifest, pluginManifestTemplate } from "../plugins/registry";
+import { buildWorkspaceProfilePromptBlock, workspaceProfilePath } from "../workspace/profile";
+import { activePlanPath, buildActivePlanPromptBlock } from "../planner/store";
+import { buildWorkflowsPromptBlock, listWorkflows } from "../workflows/store";
+import { formatUserContextPromptBlock, loadUserContext } from "../context/user-context";
 
 export async function generatePlan(
   client: ChatRuntimeClient,
@@ -405,6 +409,7 @@ export type BuiltTurn = {
   request: ChatCompletionRequest;
   resolvedProfile: string;
   toolMode?: ToolMode;
+  contextReceipt?: string[];
 };
 
 export type ExecutedTurn = {
@@ -523,8 +528,15 @@ export async function buildTurn(input: {
     } catch { /* ignore */ }
   }
 
-  const memoryBlock = await buildMemoryPromptBlock(cwd);
-  const knowledgeBlock = await buildKnowledgePromptBlock(input.input, cwd);
+  const [userContext, memoryBlock, knowledgeBlock, workspaceProfileBlock, activePlanBlock, workflowsBlock] = await Promise.all([
+    loadUserContext(),
+    buildMemoryPromptBlock(cwd),
+    buildKnowledgePromptBlock(input.input, cwd),
+    buildWorkspaceProfilePromptBlock(cwd),
+    buildActivePlanPromptBlock(cwd),
+    buildWorkflowsPromptBlock(cwd),
+  ]);
+  const userContextBlock = formatUserContextPromptBlock(userContext);
 
   // Inject pinned files
   let pinsBlock = "";
@@ -570,7 +582,7 @@ Current Workspace: ${cwd}
 Current Local Date: ${currentDate}
 Runtime Lane: ${input.runtimeLane ?? "cloud"}
 Tool Mode: ${effectiveToolMode}
-Identity: Speak as the model you actually are. Switchbay owns the workspace, tools, memory, safety gates, and working standards; it is not a fictional assistant identity.${oriMdBlock}${memoryBlock}${knowledgeBlock}${pinsBlock}${agentBlock}${capabilityDirectoryBlock}${toolboxBlock}${guidesBlock}${switchbayMcpBlock}
+Identity: Speak as the model you actually are. Switchbay owns the workspace, tools, memory, safety gates, and working standards; it is not a fictional assistant identity.${userContextBlock}${oriMdBlock}${workspaceProfileBlock}${memoryBlock}${knowledgeBlock}${pinsBlock}${activePlanBlock}${workflowsBlock}${agentBlock}${capabilityDirectoryBlock}${toolboxBlock}${guidesBlock}${switchbayMcpBlock}
 
 GROUNDING RULES:
 1. You are running inside a local development tool.
@@ -659,6 +671,18 @@ You have access to tools that execute on the user's local machine via this app's
     },
     resolvedProfile: input.profile,
     toolMode: effectiveToolMode,
+    contextReceipt: [
+      userContextBlock ? `user-context:${userContext.files.length}-files` : "",
+      `workspace-profile:${workspaceProfilePath(cwd)}`,
+      oriMdBlock ? `project-context:${contextPath}` : "",
+      memoryBlock ? "memory:loaded" : "",
+      knowledgeBlock ? `knowledge:${(knowledgeBlock.match(/^Source \d+:/gm) ?? []).length}-sources` : "",
+      pinsBlock ? "pins:loaded" : "",
+      activePlanBlock ? `active-plan:${activePlanPath(cwd)}` : "",
+      workflowsBlock ? `workflows:${(await listWorkflows(cwd)).length}` : "",
+      input.activeAgentId ? `agent:${input.activeAgentId}` : "",
+      effectiveToolMode === "switchbay-mcp" ? "mcp:enabled" : "",
+    ].filter(Boolean),
   };
 }
 

@@ -70,6 +70,24 @@ test("cloud router honors an explicit provider", async () => {
   expect(response.meta?.using).toContain("cloud/anthropic/");
 });
 
+test("an addressed model overrides the configured provider for one turn", async () => {
+  Bun.env.OPENAI_API_KEY = "test-openai";
+  Bun.env.ANTHROPIC_API_KEY = "test-anthropic";
+  Bun.env.SWITCHBAY_CLOUD_PROVIDER = "openai";
+  const calls: string[] = [];
+  const router = new CloudRouterClient({
+    openAi: mockProvider("openai", calls),
+    anthropic: mockProvider("anthropic", calls),
+  });
+
+  const response = await router.createChatCompletion("dev", request("Claude, inspect this repo"));
+
+  expect(calls).toEqual(["anthropic"]);
+  expect(response.meta?.provider).toBe("anthropic");
+  expect(response.meta?.router_mode).toBe("explicit");
+  expect(response.meta?.router_reason).toContain("addressed Claude");
+});
+
 test("cloud router picks OpenAI for structured summaries", async () => {
   Bun.env.OPENAI_API_KEY = "test-openai";
   Bun.env.ANTHROPIC_API_KEY = "test-anthropic";

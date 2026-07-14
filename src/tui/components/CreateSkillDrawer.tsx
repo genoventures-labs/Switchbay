@@ -20,10 +20,10 @@ type Step = {
 
 const STEPS: Step[] = [
   { key: "name", question: "What should this skill be called?", hint: "e.g. Migration Review, Launch Checklist", required: true },
-  { key: "purpose", question: "What repeatable method should it teach Bay?", hint: "Describe the workflow in normal words.", required: true },
+  { key: "purpose", question: "What repeatable method should it teach models?", hint: "Describe the workflow in normal words.", required: true },
   { key: "triggers", question: "When should this skill be used?", hint: "Optional. Words, situations, tasks, or user asks.", required: false },
   { key: "method", question: "Any must-follow steps or checklist?", hint: "Optional. Rough bullets are fine.", required: false },
-  { key: "guardrails", question: "Any hard rules or risks?", hint: "Optional. What should Bay avoid or always flag?", required: false },
+  { key: "guardrails", question: "Any hard rules or risks?", hint: "Optional. What should models avoid or always flag?", required: false },
 ];
 
 type CreateSkillDrawerProps = {

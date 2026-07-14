@@ -19,7 +19,7 @@ type Step = {
 
 const STEPS: Step[] = [
   { key: "name", question: "What should this plugin be called?", hint: "e.g. Gumroad Ops, Launch Desk, Repo Steward", required: true },
-  { key: "purpose", question: "What should this plugin help Bay do?", hint: "One practical sentence is plenty.", required: true },
+  { key: "purpose", question: "What should this plugin help models do?", hint: "One practical sentence is plenty.", required: true },
   { key: "contents", question: "What real parts should it eventually bundle?", hint: "Optional. agents, skills, engines, guides, knowledge, mcp.", required: false },
   { key: "notes", question: "Any constraints or setup notes?", hint: "Optional. Local-only, needs API key, read-only tools, etc.", required: false },
 ];

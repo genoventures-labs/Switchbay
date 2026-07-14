@@ -72,7 +72,7 @@ Save your `plugin.json` and Switchbay discovers it automatically on the next ses
 
 ## Plugin Guides
 
-Use plugin guides for domain-specific behavior. For example, a plugin for a specific service can include `guides/domain.md` with `kind: quickstart` or `kind: rule` frontmatter so Bay automatically operates inside that service's workflows, approval rules, terminology, and safety boundaries when the plugin is active.
+Use plugin guides for domain-specific behavior. For example, a plugin for a specific service can include `guides/domain.md` with `kind: quickstart` or `kind: rule` frontmatter so Switchbay automatically operates inside that service's workflows, approval rules, terminology, and safety boundaries when the plugin is active.
 
 ```markdown
 ---

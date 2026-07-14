@@ -40,7 +40,7 @@ Any engine tool with `"approval": "always"` in its manifest, or with a name matc
 
 ## Approval Flow
 
-When a command is staged for approval, Bay outputs the command and waits. You can:
+When a command is staged for approval, Switchbay outputs the command and waits. You can:
 
 - **Approve**: type `y`, `yes`, `apply`, or `a`
 - **Cancel**: type `n`, `no`, or `cancel`

@@ -165,7 +165,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   {
     category: "runtime",
     command: "/mcp catalog",
-    description: "List trusted MCP servers Bay can configure without guessing.",
+    description: "List trusted MCP servers models can configure without guessing.",
     example: "/mcp catalog",
   },
   {
@@ -339,7 +339,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   {
     category: "context",
     command: "/quickstarts",
-    description: "List quick-start guides Bay reads before matching tool/lane work.",
+    description: "List quick-start guides models read before matching tool/lane work.",
     example: "/quickstarts",
   },
   {
@@ -351,7 +351,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   {
     category: "context",
     command: "/create-rule",
-    description: "Create a conversational operating rule for Bay and agents.",
+    description: "Create a conversational operating rule for models and agents.",
     example: "/create-rule",
   },
   {
@@ -453,7 +453,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   {
     category: "skills",
     command: "/skills",
-    description: "Open the Bay skills drawer.",
+    description: "Open the model skills drawer.",
     example: "/skills",
   },
   {

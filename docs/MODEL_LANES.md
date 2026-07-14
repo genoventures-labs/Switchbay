@@ -64,7 +64,7 @@ export SWITCHBAY_LANE=cloud-mcp
 
 Inside the TUI: `/mcp on` and `/mcp off` toggle the bridge for the session. `/mcp init` generates an empty starter config, `/mcp catalog` lists trusted options, and `/create-mcp` opens the conversational config builder.
 
-Bay only creates MCP configs from Switchbay's trusted catalog: Playwright, filesystem, GitHub, memory, fetch, sequential-thinking, and Postgres. Anything outside the catalog gets refused with instructions to proceed manually.
+Switchbay only creates MCP configs from Switchbay's trusted catalog: Playwright, filesystem, GitHub, memory, fetch, sequential-thinking, and Postgres. Anything outside the catalog gets refused with instructions to proceed manually.
 
 ## Auto Routing
 

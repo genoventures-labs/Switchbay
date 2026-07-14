@@ -27,7 +27,7 @@ const STEPS: Step[] = [
   },
   {
     key: "purpose",
-    question: "What should this engine help Bay do?",
+    question: "What should this engine help models do?",
     hint: "Describe the workflow or internal tool surface.",
     required: true,
   },

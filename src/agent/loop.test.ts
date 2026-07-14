@@ -1085,7 +1085,7 @@ test("agent commands support explicit and conversational activation", async () =
   expect(activated.handled).toBe(true);
   expect(activated.activateAgent).toBe("backend");
 
-  const conversational = await tryLocalCommand("Bay, use Backend. Do a quick test and report errors.", baseOptions);
+  const conversational = await tryLocalCommand("Switchbay, use Backend. Do a quick test and report errors.", baseOptions);
   expect(conversational.handled).toBe(true);
   expect(conversational.activateAgent).toBe("backend");
   expect(conversational.followUpInput).toBe("Do a quick test and report errors.");
@@ -1153,16 +1153,16 @@ test("conversational operator requests answer from local state", async () => {
   };
 
   try {
-    const added = await tryLocalCommand("Bay, remind me to test brew", baseOptions);
+    const added = await tryLocalCommand("Switchbay, remind me to test brew", baseOptions);
     expect(added.handled).toBe(true);
     expect(added.dailyBoardChanged).toBe(true);
     expect(added.assistantMessage).toContain("Local-first");
     expect(added.assistantMessage).toContain("test brew");
 
-    const agenda = await tryLocalCommand("Bay, what's on my agenda?", baseOptions);
+    const agenda = await tryLocalCommand("Switchbay, what's on my agenda?", baseOptions);
     expect(agenda.handled).toBe(false);
 
-    const done = await tryLocalCommand("Bay, mark task 1 done", baseOptions);
+    const done = await tryLocalCommand("Switchbay, mark task 1 done", baseOptions);
     expect(done.handled).toBe(true);
     expect(done.dailyBoardChanged).toBe(true);
     expect(done.assistantMessage).toContain("Completed Daily Board task");
@@ -1287,26 +1287,26 @@ test("workspace slash commands show, add, and hop known workspaces", async () =>
     const hopWithFollowUp = await tryLocalCommand(`hop to ${basename(target)}, then tell me the status`, baseOptions);
     expect(hopWithFollowUp.handled).toBe(true);
     expect(hopWithFollowUp.travel?.toPath).toBe(target);
-    expect(hopWithFollowUp.followUpInput).toBe("Bay, what's changed in git?");
+    expect(hopWithFollowUp.followUpInput).toBe("What's changed in git?");
 
     process.chdir(originalCwd);
-    const addressedHop = await tryLocalCommand(`Bay, hop in to ${basename(target)}`, baseOptions);
+    const addressedHop = await tryLocalCommand(`Claude, hop in to ${basename(target)}`, baseOptions);
     expect(addressedHop.handled).toBe(false);
 
-    const addressedHeyHop = await tryLocalCommand(`Hey Bay, hop to ${basename(target)} repo. Then tell me the status`, baseOptions);
+    const addressedHeyHop = await tryLocalCommand(`Hey GPT, hop to ${basename(target)} repo. Then tell me the status`, baseOptions);
     expect(addressedHeyHop.handled).toBe(false);
 
     process.chdir(originalCwd);
     const cdHop = await tryLocalCommand(`cd to ${basename(target)}, then tell me the status of the repo`, baseOptions);
     expect(cdHop.handled).toBe(true);
     expect(cdHop.travel?.toPath).toBe(target);
-    expect(cdHop.followUpInput).toBe("Bay, what's changed in git?");
+    expect(cdHop.followUpInput).toBe("What's changed in git?");
 
     process.chdir(originalCwd);
     const statusFromWorkspace = await tryLocalCommand(`I need the repo status, summarized. From "${basename(target)}"`, baseOptions);
     expect(statusFromWorkspace.handled).toBe(true);
     expect(statusFromWorkspace.travel?.toPath).toBe(target);
-    expect(statusFromWorkspace.followUpInput).toBe("Bay, what's changed in git?");
+    expect(statusFromWorkspace.followUpInput).toBe("What's changed in git?");
 
     const createRepoRequest = await tryLocalCommand(
       'bay, I need you to make me a repo called "BillTend", no elaborate readme. Just a placeholder for working on the next project. Once it\'s done, you can commit and publish it. Private.',

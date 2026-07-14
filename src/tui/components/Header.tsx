@@ -88,7 +88,7 @@ export function Header({ lane = "Cloud", mode, status, terminalWidth = 120, work
       </Box>
       <Box>
         <Text color={TUI_COLORS.muted}>
-          Talk to Bay, route a task, inspect the repo, or call a Switchbay lane.
+          Talk naturally, address a model by name, or let Auto route the task.
         </Text>
       </Box>
     </Box>

@@ -1,8 +1,8 @@
 # Agents
 
-Agents are specialist personas Bay can adopt during a session. Activating an agent swaps Bay's operating priorities, review lens, and decision-making defaults — without changing the tools, workspace, or lane. One Bay, many modes.
+Agents are specialist personas Switchbay can adopt during a session. Activating an agent swaps Switchbay's operating priorities, review lens, and decision-making defaults — without changing the tools, workspace, or lane. One Switchbay, many modes.
 
-Agents are scoped to a session. You can switch mid-conversation and Bay picks up the new persona immediately.
+Agents are scoped to a session. You can switch mid-conversation and Switchbay picks up the new persona immediately.
 
 ---
 
@@ -154,7 +154,7 @@ Eight specialists ship with Switchbay. They cover the most common contexts a dev
 switchbay --agent reviewer "review the auth changes"
 ```
 
-**Back to default Bay:**
+**Back to default Switchbay:**
 
 ```text
 /agent             (no argument clears the active agent)
@@ -166,7 +166,7 @@ Agents are session-scoped. Starting a new session with `/new` or `--resume` clea
 
 ## How Agents Work
 
-When an agent is active, Bay's system prompt gets an extra block injected:
+When an agent is active, Switchbay's system prompt gets an extra block injected:
 
 ```text
 ACTIVE AGENT: 🔍 Debugger
@@ -174,7 +174,7 @@ You are operating as a systematic debugger.
 Priorities: isolate root cause before proposing any fix...
 ```
 
-This replaces Bay's default open-ended persona with the specialist's priorities, approach, and guardrails for the remainder of the session. All tools, workspace context, memory, and lane routing stay the same — only the decision-making lens changes.
+This replaces Switchbay's default open-ended persona with the specialist's priorities, approach, and guardrails for the remainder of the session. All tools, workspace context, memory, and lane routing stay the same — only the decision-making lens changes.
 
 ---
 
@@ -225,7 +225,7 @@ Avoid: premature optimization, shipping experiments without a success criterion.
 | `emoji` | Optional | Shown in the TUI agent label. Defaults to 🤖. |
 | `description` | Recommended | One-line summary shown in the agent browser. |
 
-Everything after the metadata lines becomes the agent's system prompt — Bay reads it verbatim.
+Everything after the metadata lines becomes the agent's system prompt — Switchbay reads it verbatim.
 
 ---
 

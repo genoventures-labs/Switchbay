@@ -1,6 +1,6 @@
 # Workspace Knowledge
 
-Workspace Knowledge is Switchbay's local RAG direction: a source-backed map of the active repo/workspace that Bay can use before answering, editing, or running tools.
+Workspace Knowledge is Switchbay's local RAG direction: a source-backed map of the active repo/workspace that Switchbay can use before answering, editing, or running tools.
 
 It is not telemetry, eval dashboards, or a desktop document-chat product. The goal is local confidence:
 
@@ -30,7 +30,7 @@ It stores small line-based chunks:
 }
 ```
 
-Bay receives top matching chunks in the system prompt as:
+Switchbay receives top matching chunks in the system prompt as:
 
 ```text
 WORKSPACE KNOWLEDGE MAP

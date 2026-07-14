@@ -68,16 +68,17 @@ test("work steps stay in the feed after a turn completes", () => {
   expect(completed.transcript.at(-1)?.body).toBe("Found the answer.");
 });
 
-test("model progress notes render as Bay messages without ending the active turn", () => {
+test("model progress notes use the active model speaker without ending the active turn", () => {
   const initial = createInitialSessionState({ mode: "build", profile: "switchbay", resolvedProfile: "switchbay", surface: "test" });
   const thinking = sessionReducer(initial, { type: "turn/started" });
-  const updated = sessionReducer(thinking, {
+  const speaking = sessionReducer(thinking, { type: "turn/speaker", speaker: "Claude" });
+  const updated = sessionReducer(speaking, {
     type: "progress-message/add",
     message: "Good — now I have the template pattern.",
   });
 
   expect(updated.status).toBe("THINKING");
-  expect(updated.transcript.at(-1)).toMatchObject({ kind: "assistant", body: "Good — now I have the template pattern." });
+  expect(updated.transcript.at(-1)).toMatchObject({ kind: "assistant", title: "Claude", body: "Good — now I have the template pattern." });
 });
 
 test("local command entries do not mutate model conversation", () => {

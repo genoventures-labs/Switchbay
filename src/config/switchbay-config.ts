@@ -17,7 +17,7 @@ export type SwitchbayConfig = {
   discover_exclude: string[];
   /** Per-lane model pins set by the CLI/TUI. */
   selected_models: Partial<Record<RuntimeLane, SelectedRuntimeModel>>;
-  /** Operator surfaces for Bay's local-first daily cockpit. */
+  /** Operator surfaces for Switchbay's local-first daily cockpit. */
   operator: OperatorConfig;
 };
 

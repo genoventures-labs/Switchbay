@@ -54,6 +54,7 @@ import { loadToolboxInventory, type ToolboxSkill } from "../toolbox/hub";
 import { RightRail } from "./components/RightRail";
 import { saveTraceRecord } from "../trace/store";
 import { formatRouteTag } from "../runtime/route-display";
+import { modelSpeakerLabel, parseModelAddress } from "../runtime/model-identity";
 import { suggestRuntimeLane } from "../runtime/lane-router";
 import { addDailyTask, clearDailyBoard, completeDailyTask, describeDailyBoard, loadDailyBoard, type DailyBoard } from "../operator/daily-board";
 import { buildStartupOverview } from "../operator/startup-overview";
@@ -244,7 +245,7 @@ export function SwitchbayApp({
   const streamingRows = state.streamingText
     ? estimateTranscriptRows(createTranscriptEntry({
         kind: "assistant",
-        title: "Bay",
+        title: state.activeSpeaker,
         body: state.streamingText,
         tone: "info",
       }), mainWidth)
@@ -1322,7 +1323,7 @@ export function SwitchbayApp({
           setAvailableEngines(registry.engines);
           dispatch({
             type: "assistant/appended",
-            message: `✓ Engine **${pendingEngineDraft.name}** saved to \`${pendingEngineDraft.savePath}\`\n\nOpen it with \`/engines\` or call tools by asking Bay to use \`${pendingEngineDraft.id}\`.`,
+            message: `✓ Engine **${pendingEngineDraft.name}** saved to \`${pendingEngineDraft.savePath}\`\n\nOpen it with \`/engines\` or ask a model to use \`${pendingEngineDraft.id}\`.`,
           });
         } catch (e: any) {
           dispatch({ type: "assistant/appended", message: `Save failed: ${e.message}` });
@@ -1405,7 +1406,7 @@ export function SwitchbayApp({
           setAvailableSkills(inventory.skills);
           dispatch({
             type: "assistant/appended",
-            message: `✓ Skill **${pendingSkillDraft.name}** saved to \`${pendingSkillDraft.savePath}\`\n\nOpen it with \`/skills\` or ask Bay to use \`${pendingSkillDraft.id}\`.`,
+            message: `✓ Skill **${pendingSkillDraft.name}** saved to \`${pendingSkillDraft.savePath}\`\n\nOpen it with \`/skills\` or ask a model to use \`${pendingSkillDraft.id}\`.`,
           });
         } catch (e: any) {
           dispatch({ type: "assistant/appended", message: `Save failed: ${e.message}` });
@@ -1862,6 +1863,14 @@ export function SwitchbayApp({
     }
 
     const { mentions, cleanQuery } = parseMentions(value);
+    const modelAddress = parseModelAddress(value);
+    const turnClient = modelAddress
+      ? createRuntimeClient(modelAddress.lane, {
+          provider: modelAddress.provider,
+          localProvider: modelAddress.localProvider ?? localProvider,
+        })
+      : runtimeClient;
+    dispatch({ type: "turn/speaker", speaker: modelAddress?.speaker ?? "Model" });
     let mentionContext = "";
     if (mentions.length > 0) {
       const cwd = workspace?.cwd ?? process.cwd();
@@ -1878,7 +1887,7 @@ export function SwitchbayApp({
     const effectiveInput = mentionContext ? `${mentionContext}${cleanQuery || value}` : value;
     let conversationForTurn = state.conversation;
     const automaticCompaction = await compactConversationForContext({
-      client: runtimeClient,
+      client: turnClient,
       conversation: state.conversation,
       surface,
     }).catch(() => null);
@@ -1916,7 +1925,7 @@ export function SwitchbayApp({
 
     try {
       const executedTurn = await executeTurn({
-        client: runtimeClient,
+        client: turnClient,
         cwd: workspace?.cwd ?? process.cwd(),
         sessionId: state.sessionId,
         surface,
@@ -1926,6 +1935,9 @@ export function SwitchbayApp({
         onToken,
         onStreamReset,
         onTokens,
+        onRoute: (routedResponse) => {
+          dispatch({ type: "turn/speaker", speaker: modelSpeakerLabel(routedResponse.meta) });
+        },
       });
       const response = executedTurn.response;
       const routeTag = formatRouteTag(response);
@@ -2265,6 +2277,7 @@ export function SwitchbayApp({
             activePlan={state.activePlan}
             scrollOffset={clampedScrollOffset}
             streamingText={state.streamingText}
+            streamingSpeaker={state.activeSpeaker}
             terminalWidth={mainWidth}
           />
         </Box>
@@ -2438,7 +2451,7 @@ export function sliceTranscriptForRows(
     if (!entry) continue;
     const rows = estimateTranscriptRows(entry, terminalWidth);
     if (visible.length > 0 && usedRows + rows > maxRows) {
-      // Never show Bay's reply without the user turn that prompted it. Width
+      // Never show a model reply without the user turn that prompted it. Width
       // changes (such as /collapse) may overflow the row estimate, but keeping
       // the pair intact is less confusing than visually erasing user input.
       const completesVisibleTurn = entry.kind === "user" && visible.some((item) => item.kind === "assistant");
@@ -2461,7 +2474,7 @@ function estimateTranscriptRows(
   entry: ReturnType<typeof createTranscriptEntry>,
   terminalWidth: number,
 ) {
-  // Markdown has indentation, Bay's label, and ANSI/unicode display width that
+  // Markdown has indentation, a model label, and ANSI/unicode display width that
   // a raw string length cannot fully capture. Biasing a little narrower avoids
   // rendering a partial lower line in Ink's fixed-height viewport.
   const contentWidth = Math.max(30, terminalWidth - 12);

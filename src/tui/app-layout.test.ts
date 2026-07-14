@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { createTranscriptEntry } from "../agent/turn-state";
 import { sliceTranscriptForRows } from "./app";
 
-test("transcript slicing keeps user input with an oversized Bay reply", () => {
+test("transcript slicing keeps user input with an oversized model reply", () => {
   const user = createTranscriptEntry({ kind: "user", title: "User", body: "Please reassess Node engines." });
   const assistant = createTranscriptEntry({
     kind: "assistant",

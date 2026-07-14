@@ -1,6 +1,6 @@
 # Switchbay MCP Bridge
 
-The Switchbay MCP bridge is a full MCP client runtime shared by cloud models, Ollama, the TUI, CLI, local API, and SDK. It connects to local stdio servers or remote Streamable HTTP endpoints, initializes each server, discovers tools with `tools/list`, exposes namespaced tools to Bay, and executes `tools/call` through Switchbay policy.
+The Switchbay MCP bridge is a full MCP client runtime shared by cloud models, Ollama, the TUI, CLI, local API, and SDK. It connects to local stdio servers or remote Streamable HTTP endpoints, initializes each server, discovers tools with `tools/list`, exposes namespaced tools to Switchbay, and executes `tools/call` through Switchbay policy.
 
 ---
 
@@ -50,7 +50,7 @@ export SWITCHBAY_LANE=cloud-mcp
 /mcp               Show current config and status
 ```
 
-When the bridge is active, Bay's system prompt includes a `SWITCHBAY MCP BRIDGE` block listing the current model lane, config path, and configured integrations. Bay uses this to know which tool intents are allowed.
+When the bridge is active, Switchbay's system prompt includes a `SWITCHBAY MCP BRIDGE` block listing the current model lane, config path, and configured integrations. Switchbay uses this to know which tool intents are allowed.
 
 ---
 
@@ -118,7 +118,7 @@ Each server must define exactly one transport: `command` for stdio or `url` for 
 /create-mcp
 ```
 
-Bay asks what you want to use, matches it against the trusted catalog, and generates the config file. You review and approve it before it's saved.
+Switchbay asks what you want to use, matches it against the trusted catalog, and generates the config file. You review and approve it before it's saved.
 
 **TUI — generate an empty starter:**
 
@@ -148,9 +148,9 @@ switchbay mcp status
 
 ---
 
-## How Bay Uses It
+## How Switchbay Uses It
 
-When `switchbay-mcp` tool mode is active, Switchbay injects this into Bay's system prompt:
+When `switchbay-mcp` tool mode is active, Switchbay injects this into Switchbay's system prompt:
 
 ```text
 SWITCHBAY MCP BRIDGE:
@@ -168,7 +168,7 @@ Switchbay MCP bridge rules:
 - Do not invent MCP server ids, tool names, plugin handles, or external capabilities.
 ```
 
-Bay receives the discovered definitions alongside Switchbay's local tools and engine tools. MCP execution results return through the same tool-message loop, so the model can continue the turn using real server output.
+Switchbay receives the discovered definitions alongside Switchbay's local tools and engine tools. MCP execution results return through the same tool-message loop, so the model can continue the turn using real server output.
 
 ---
 
@@ -214,7 +214,7 @@ The `integrations` array supports three forms:
 /mcp off           Disable the Switchbay MCP bridge for this session
 /mcp catalog       List all trusted integration options
 /mcp init          Generate an empty starter config
-/create-mcp        Conversational builder — describe what you want, Bay generates the config
+/create-mcp        Conversational builder — describe what you want, Switchbay generates the config
 ```
 
 ```bash

@@ -570,7 +570,7 @@ Current Workspace: ${cwd}
 Current Local Date: ${currentDate}
 Runtime Lane: ${input.runtimeLane ?? "cloud"}
 Tool Mode: ${effectiveToolMode}
-Assistant Callsign: Bay${oriMdBlock}${memoryBlock}${knowledgeBlock}${pinsBlock}${agentBlock}${capabilityDirectoryBlock}${toolboxBlock}${guidesBlock}${switchbayMcpBlock}
+Identity: Speak as the model you actually are. Switchbay owns the workspace, tools, memory, safety gates, and working standards; it is not a fictional assistant identity.${oriMdBlock}${memoryBlock}${knowledgeBlock}${pinsBlock}${agentBlock}${capabilityDirectoryBlock}${toolboxBlock}${guidesBlock}${switchbayMcpBlock}
 
 GROUNDING RULES:
 1. You are running inside a local development tool.
@@ -580,7 +580,7 @@ GROUNDING RULES:
 5. Your primary mission is to understand, plan, and execute changes within the current workspace path: ${cwd}.
 6. Treat sibling repos and shared host state as out of scope unless the user explicitly asks to cross that boundary.
 7. Be extremely concise and direct.
-8. If the user addresses Bay, they are addressing this assistant inside Switchbay.
+8. If the user addresses GPT, Claude, Gemini, or another selected model by name, respond naturally as that model. Do not adopt a fictional assistant identity that conflicts with the provider's identity.
 9. DO NOT NARRATE your tool usage or internal reasoning steps in your final response to the user. (e.g. avoid "I have checked the files and found..."). Just state the findings or provide the answer directly.
 10. If a user asks to enter, inspect, or continue in another project, call workspace_hop before reading files or running commands there. Finding a path is not the same as changing the active workspace.
 11. If grounding tools fail, report the failure and stop. Never fabricate a repository snapshot, package metadata, git state, or file contents after failed reads or commands.
@@ -748,6 +748,7 @@ export async function executeTurn(input: {
   onToken?: (token: string) => void;
   onStreamReset?: (draft: string) => void;
   onTokens?: (count: number) => void;
+  onRoute?: (response: ChatCompletionResponse) => void;
   maxIterations?: number;
   signal?: AbortSignal;
 }): Promise<ExecutedTurn> {
@@ -817,6 +818,7 @@ export async function executeTurn(input: {
         onToken: input.onToken,
       },
     );
+    input.onRoute?.(response);
 
     const choice = response.choices?.[0];
     const assistantMessage = choice?.message;

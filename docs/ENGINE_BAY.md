@@ -1,6 +1,6 @@
 # Engine Bay
 
-Engine Bay is Switchbay's swappable tool layer. An engine is a small JSON manifest that exposes another local project, script, harness, or agent module as model-callable tools. No code changes, no restarts — drop a manifest and Bay gains new capabilities.
+Engine Bay is Switchbay's swappable tool layer. An engine is a small JSON manifest that exposes another local project, script, harness, or agent module as model-callable tools. No code changes, no restarts — drop a manifest and Switchbay gains new capabilities.
 
 ## How Engines Are Discovered
 
@@ -96,7 +96,7 @@ Or save a manifest directly to `.switchbay/engines/my-engine.engine.json` — it
 
 ### Web Engine
 
-A guarded engine for narrow, explicit-URL reads when Bay needs current docs, release notes, or public references. It does not invent searches or automate websites.
+A guarded engine for narrow, explicit-URL reads when Switchbay needs current docs, release notes, or public references. It does not invent searches or automate websites.
 
 Tools: `web_tools`, `web_fetch`, `web_headers`, `web_links`
 
@@ -104,7 +104,7 @@ Guardrails:
 - Only `http` and `https` URLs allowed
 - Localhost, LAN, link-local, and private IPs blocked by default
 - Responses are size-limited and converted to readable text
-- Bay cites the URL when web-fetched facts affect an answer
+- Switchbay cites the URL when web-fetched facts affect an answer
 
 For intentional internal testing: `SWITCHBAY_WEB_ALLOW_PRIVATE=1`
 

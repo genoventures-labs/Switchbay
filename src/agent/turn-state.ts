@@ -94,6 +94,7 @@ export type SessionState = {
   sessionTitle: string | null;
   turnStartedAt: number | null;
   turnTokenCount: number;
+  activeSpeaker: string;
 };
 
 export function createActivityEvent(
@@ -192,5 +193,6 @@ export function createInitialSessionState(input: {
     ],
     turnStartedAt: null,
     turnTokenCount: 0,
+    activeSpeaker: "Model",
   };
 }

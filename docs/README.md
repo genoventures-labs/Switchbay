@@ -9,11 +9,11 @@
 [![Plugins](https://img.shields.io/badge/Plugins-local%20bundles-11a79b)](#plugins)
 [![License](https://img.shields.io/badge/license-MIT-0f766e)](#license)
 
-**Switchbay is your AI development operating system.** One intelligent agent — Bay — that lives in your terminal, knows every project you work in, routes across every model without breaking your flow, and can be extended with engines, skills, agents, and plugins without ever touching its core.
+**Switchbay is your AI development operating system.** One intelligent agent — Switchbay — that lives in your terminal, knows every project you work in, routes across every model without breaking your flow, and can be extended with engines, skills, agents, and plugins without ever touching its core.
 
 Most AI coding tools give you a chat window bolted onto a model. Switchbay gives you a **platform**.
 
-> Bay isn't a chatbot. Bay is your AI co-pilot — persistent, context-aware, and extensible.
+> Switchbay isn't a chatbot. Switchbay is your AI co-pilot — persistent, context-aware, and extensible.
 
 ---
 
@@ -23,10 +23,10 @@ The AI landscape is moving faster than any one tool can keep up with. Models get
 
 Switchbay bets on a different architecture:
 
-- **The model is interchangeable.** Bay routes between OpenAI, Anthropic, Google, and Ollama — mid-session, mid-task, without restarting anything. Best model for the job, every time.
-- **Context is owned, not rented.** Bay builds a persistent memory of your workspace — decisions, facts, pinned files, sourced knowledge — and carries it across every session. It doesn't ask you the same questions twice.
-- **Capabilities are composable.** Drop a JSON engine manifest and Bay gains new callable tools. Write a skill file and Bay gains a new working method. Bundle agents, engines, and rules into a plugin and share it across every repo you work in.
-- **You stay in control.** Every shell command, every publish, every broad or irreversible action goes through an explicit approval gate. Bay works fast. It doesn't act blind.
+- **The model is interchangeable.** Switchbay routes between OpenAI, Anthropic, Google, and Ollama — mid-session, mid-task, without restarting anything. Best model for the job, every time.
+- **Context is owned, not rented.** Switchbay builds a persistent memory of your workspace — decisions, facts, pinned files, sourced knowledge — and carries it across every session. It doesn't ask you the same questions twice.
+- **Capabilities are composable.** Drop a JSON engine manifest and Switchbay gains new callable tools. Write a skill file and Switchbay gains a new working method. Bundle agents, engines, and rules into a plugin and share it across every repo you work in.
+- **You stay in control.** Every shell command, every publish, every broad or irreversible action goes through an explicit approval gate. Switchbay works fast. It doesn't act blind.
 
 This is what "AI-native tooling" actually looks like — not a wrapper, a workbench.
 
@@ -40,28 +40,28 @@ graph TD
     User --> CLI["CLI / One-shot"]
     User --> API["Local HTTP API\n127.0.0.1:7349"]
 
-    TUI --> Bay["🧠 Bay\nAgent Loop"]
-    CLI --> Bay
-    API --> Bay
+    TUI --> Switchbay["🧠 Switchbay\nAgent Loop"]
+    CLI --> Switchbay
+    API --> Switchbay
 
-    Bay --> Router["Model Router"]
+    Switchbay --> Router["Model Router"]
     Router --> Cloud["☁️ Cloud\nOpenAI · Anthropic · Google"]
     Router --> Local["💻 Local\nOllama · HuggingFace"]
 
-    Bay --> Context["Context Layer"]
+    Switchbay --> Context["Context Layer"]
     Context --> Memory["Workspace Memory"]
     Context --> Knowledge["Knowledge Index\n(local RAG)"]
     Context --> Quickstarts["Quick Starts\n+ Rules"]
     Context --> Pins["Pinned Files"]
     Context --> SWITCHBAY["SWITCHBAY.md"]
 
-    Bay --> Agents["Specialist Agents\n(8 built-in + custom)"]
-    Bay --> Skills["Skills\n(working methods)"]
-    Bay --> Engines["Engine Bay\n(JSON tool manifests)"]
-    Bay --> Plugins["Plugins\n(bundled extensions)"]
-    Bay --> MCP["MCP Bridge\n(tool-intent layer)"]
+    Switchbay --> Agents["Specialist Agents\n(8 built-in + custom)"]
+    Switchbay --> Skills["Skills\n(working methods)"]
+    Switchbay --> Engines["Engine Bay\n(JSON tool manifests)"]
+    Switchbay --> Plugins["Plugins\n(bundled extensions)"]
+    Switchbay --> MCP["MCP Bridge\n(tool-intent layer)"]
 
-    Bay --> Tools["Tool Execution"]
+    Switchbay --> Tools["Tool Execution"]
     Tools --> Shell["Shell / Files"]
     Tools --> Approval["Approval Gate\n(destructive ops)"]
     Tools --> Traces["Trace Ledger\n(turn receipts)"]
@@ -100,9 +100,9 @@ switchbay service status
 
 ---
 
-## What Bay Actually Does
+## What Switchbay Actually Does
 
-Bay is not a command runner with AI sprinkled on top. Bay is an **agent** — it plans, reasons, uses tools, reads and writes your codebase, and surfaces decisions to you when they matter.
+Switchbay is not a command runner with AI sprinkled on top. Switchbay is an **agent** — it plans, reasons, uses tools, reads and writes your codebase, and surfaces decisions to you when they matter.
 
 ```bash
 switchbay                              # open the full TUI cockpit
@@ -113,7 +113,7 @@ switchbay serve                        # start the local API for integrations
 switchbay update                       # sync commits, push, pull latest, reinstall
 ```
 
-**On any given task, Bay will:**
+**On any given task, Switchbay will:**
 
 - Read the relevant files and understand the current state of the code before touching anything
 - Form a plan, show you what it intends to do, and execute step-by-step
@@ -123,7 +123,7 @@ switchbay update                       # sync commits, push, pull latest, reinst
 - Gate anything destructive or high-impact (publishes, force-pushes, refunds, disk ops) behind explicit approval
 - Write a durable trace receipt for every completed turn so nothing is a black box
 
-Bay isn't helpful when you ask it nicely. Bay is operational — it has working modes, specialist personas, memory, and context. It's the difference between a calculator and a co-pilot.
+Switchbay isn't helpful when you ask it nicely. Switchbay is operational — it has working modes, specialist personas, memory, and context. It's the difference between a calculator and a co-pilot.
 
 ---
 
@@ -131,7 +131,7 @@ Bay isn't helpful when you ask it nicely. Bay is operational — it has working 
 
 The model is a variable. Switchbay is the constant.
 
-Switch providers, pull new models, and pin lanes — without changing how you work or what Bay knows about your project.
+Switch providers, pull new models, and pin lanes — without changing how you work or what Switchbay knows about your project.
 
 ```bash
 # Cloud (auto-routes between OpenAI, Anthropic, Google by intent)
@@ -171,7 +171,7 @@ Full reference: [MODEL_LANES.md](docs/MODEL_LANES.md)
 
 ## Specialist Agents
 
-One Bay, eight modes. Activate a specialist and Bay's entire operating lens shifts — priorities, review criteria, what it calls out, what it refuses to do — without changing your session, context, or tools.
+Eight specialist modes. Activate a specialist and Switchbay's entire operating lens shifts — priorities, review criteria, what it calls out, what it refuses to do — without changing your session, context, or tools.
 
 | Agent | Activates on | Focus |
 |---|---|---|
@@ -190,7 +190,7 @@ Build your own with `/create-agent` — specialist agents for your domain, your 
 
 ## Engine Bay
 
-Engines are the extension layer. A JSON manifest drops new callable tools into Bay without touching source code, without restarting, without configuration rituals.
+Engines are the extension layer. A JSON manifest drops new callable tools into Switchbay without touching source code, without restarting, without configuration rituals.
 
 ```json
 {
@@ -208,7 +208,7 @@ Engines are the extension layer. A JSON manifest drops new callable tools into B
 }
 ```
 
-Drop it in `.switchbay/engines/` and Bay picks it up. The GitHub-backed Engine Bay gives you community templates on demand:
+Drop it in `.switchbay/engines/` and Switchbay picks it up. The GitHub-backed Engine Bay gives you community templates on demand:
 
 ```bash
 switchbay engines sync
@@ -228,7 +228,7 @@ Full reference: [ENGINE_BAY.md](docs/ENGINE_BAY.md)
 
 ## Skills
 
-Skills are reusable working methods — Bay reads them before tackling a task and applies the method, not just the answer.
+Skills are reusable working methods — Switchbay reads them before tackling a task and applies the method, not just the answer.
 
 Built-in: `code-review-pass`, `debugging-triage`, `implementation-plan`, `release-readiness`, `test-strategy`, `ui-polish-pass`, `api-contract-check`, `web-research`
 
@@ -264,7 +264,7 @@ Drop it in `.switchbay/plugins/<id>/plugin.json` and it's live — no registrati
 
 ## Persistent Context
 
-Bay never starts from scratch. Every session loads a full context layer built from your workspace:
+Switchbay never starts from scratch. Every session loads a full context layer built from your workspace:
 
 | Source | What It Carries |
 |---|---|
@@ -274,15 +274,15 @@ Bay never starts from scratch. Every session loads a full context layer built fr
 | `.switchbay/traces/` | Durable receipts for every completed turn |
 | `.switchbay/pins.json` | Files that are always in context, no matter what |
 | `~/.switchbay/rules/` | Your personal operating rules, across every repo |
-| `~/.switchbay/quickstarts/` | How Bay should act in specific tool or domain contexts |
+| `~/.switchbay/quickstarts/` | How Switchbay should act in specific tool or domain contexts |
 
-Bay reads memory before every session, cites knowledge sources inline, and writes trace receipts after every turn. Full reference: [MEMORY_KNOWLEDGE_TRACES.md](docs/MEMORY_KNOWLEDGE_TRACES.md)
+Switchbay reads memory before every session, cites knowledge sources inline, and writes trace receipts after every turn. Full reference: [MEMORY_KNOWLEDGE_TRACES.md](docs/MEMORY_KNOWLEDGE_TRACES.md)
 
 ---
 
 ## Local API
 
-Switchbay isn't just a TUI. It's a local API server — so you can power editor integrations, desktop sidebars, automation scripts, and internal tools with the same Bay that runs in your terminal.
+Switchbay isn't just a TUI. It's a local API server — so you can power editor integrations, desktop sidebars, automation scripts, and internal tools with the same Switchbay that runs in your terminal.
 
 ```bash
 switchbay serve
@@ -340,13 +340,13 @@ Full reference: [SLASH_COMMANDS.md](docs/SLASH_COMMANDS.md)
 | [SKILLS.md](docs/SKILLS.md) | Built-in skills, custom skill authoring, GitHub sync |
 | [PLUGINS.md](docs/PLUGINS.md) | Plugin manifest format, asset types, creating plugins |
 | [MEMORY_KNOWLEDGE_TRACES.md](docs/MEMORY_KNOWLEDGE_TRACES.md) | Memory, Knowledge Index, Trace Ledger, Quick Starts/Rules |
-| [QUICKSTARTS_AND_RULES.md](docs/QUICKSTARTS_AND_RULES.md) | The quickstarts Bay reads before acting, how to write your own |
+| [QUICKSTARTS_AND_RULES.md](docs/QUICKSTARTS_AND_RULES.md) | The quickstarts Switchbay reads before acting, how to write your own |
 | [SLASH_COMMANDS.md](docs/SLASH_COMMANDS.md) | Complete TUI slash command reference |
 | [APPROVAL_MODEL.md](docs/APPROVAL_MODEL.md) | What gates for approval, what runs freely |
 | [API_INTEGRATION.md](docs/API_INTEGRATION.md) | Local HTTP API and TypeScript client |
 | [LOCAL_API_README.md](docs/LOCAL_API_README.md) | Local API route design |
 | [1.0_SMOKE_CHECKLIST.md](docs/1.0_SMOKE_CHECKLIST.md) | Release-readiness smoke test checklist |
-| [1.5_ROADMAP.md](docs/1.5_ROADMAP.md) | Bay operator direction and roadmap |
+| [1.5_ROADMAP.md](docs/1.5_ROADMAP.md) | Switchbay operator direction and roadmap |
 
 ---
 

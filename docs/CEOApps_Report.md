@@ -2,7 +2,7 @@ Our next play is **not another feature lane**.
 
 It’s **Switchbay Trace / Replay**: the local “flight recorder” for every AI coding session.
 
-Workspace Knowledge RAG gives Bay better context. The next wedge should prove Bay is **trustworthy when it acts**.
+Workspace Knowledge RAG gives Switchbay better context. The next wedge should prove Switchbay is **trustworthy when it acts**.
 
 Switchbay already has the bones: terminal-first workbench, cloud/local lanes, MCP bridge, memory, sessions, approvals, Engine Bay, Toolbox, Web Engine, and local file/tool actions. The README positions it as “the workbench around the model,” not just a chat UI.  The package is already public, MIT, v0.9.79, and explicitly describes Switchbay as a terminal-first AI coding workbench with cloud/local model lanes and MCP bridge.
 
@@ -12,7 +12,7 @@ So the next strategic move is:
 
 The core product promise becomes:
 
-“Bay doesn’t just help you code. Bay shows what it knew, what it touched, why it acted, what changed, and whether the result held.”
+“Switchbay doesn’t just help you code. Switchbay shows what it knew, what it touched, why it acted, what changed, and whether the result held.”
 
 That is stronger than “local coding agent.” Claude Code and others already own the broad agentic coding lane; Claude Code is positioned as reading codebases, editing files, running commands, and integrating across terminal, IDE, desktop, and browser. ([Claude Platform Docs][1]) Switchbay wins by being the **inspectable, local-first control plane**.
 
@@ -46,9 +46,9 @@ Add simple commands:
 `/trace last` opens the last completed turn.
 `/trace export` writes `.switchbay/traces/<session>/<turn>.json`.
 `/replay last` reruns the same prompt against the same repo state/context plan where possible.
-`/why` explains why Bay chose a file, tool, command, or retrieved chunk.
+`/why` explains why Switchbay chose a file, tool, command, or retrieved chunk.
 
-This becomes the magic: not “Bay said it fixed it,” but “Bay touched these files, because these chunks/tools led it there, and tests passed/failed here.”
+This becomes the magic: not “Switchbay said it fixed it,” but “Switchbay touched these files, because these chunks/tools led it there, and tests passed/failed here.”
 
 **3. Approval History as Product, Not Just Safety**
 
@@ -65,7 +65,7 @@ What was not used.
 What chunk won and why.
 Whether the final answer cited evidence.
 Whether the context budget got squeezed.
-Whether Bay answered from repo facts, memory, or model prior.
+Whether Switchbay answered from repo facts, memory, or model prior.
 
 That maps exactly to the Reddit report’s strongest wedge: “evidence-backed local workspaces,” not “better local LLM chat.”  Open WebUI and AnythingLLM already expose RAG, chunking, reranking, full-context/partial-context tradeoffs, and citations, so the opportunity is not “we have RAG too.” It’s helping users see when RAG failed and why. ([Open WebUI][2]) ([AnythingLLM][3])
 
@@ -103,7 +103,7 @@ Then launch the narrative as:
 
 That’s the line, bro. Not “Claude Code clone.” Not “terminal chatbot.” Not “RAG app.”
 
-**Switchbay is Bay with receipts.**
+**Switchbay is Switchbay with receipts.**
 
 [1]: https://docs.anthropic.com/en/docs/claude-code/overview "Overview - Claude Code Docs"
 [2]: https://docs.openwebui.com/features/rag/ "Retrieval Augmented Generation (RAG) | Open WebUI"

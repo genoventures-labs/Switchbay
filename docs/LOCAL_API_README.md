@@ -614,7 +614,7 @@ SWITCHBAY_API_TOKEN="dev-token" switchbay serve
 curl -s http://127.0.0.1:7349/v1/turn \
   -H 'authorization: Bearer dev-token' \
   -H 'content-type: application/json' \
-  -d '{"input":"Hello Bay"}'
+  -d '{"input":"Hello Switchbay"}'
 ```
 
 ## Security Rules

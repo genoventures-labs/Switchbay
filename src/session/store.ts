@@ -35,6 +35,7 @@ export type SessionAction =
   | { type: "turn/started" }
   | { type: "turn/token"; token: string }
   | { type: "turn/tokens"; count: number }
+  | { type: "turn/speaker"; speaker: string }
   | { type: "workstep/add"; message: string }
   | { type: "progress-message/add"; message: string }
   | { type: "tool/executed"; tool: string; summary: string; ok: boolean }
@@ -246,6 +247,8 @@ export function sessionReducer(
         ...state,
         turnTokenCount: state.turnTokenCount + action.count,
       };
+    case "turn/speaker":
+      return { ...state, activeSpeaker: action.speaker };
     case "workstep/add": {
       const message = action.message.replace(/\s+/g, " ").trim();
       if (!message || state.transcript.at(-1)?.body === message) return state;
@@ -263,10 +266,10 @@ export function sessionReducer(
       const message = action.message.trim();
       if (!message || state.transcript.at(-1)?.body === message) return state;
       return appendTranscript(
-        appendActivity(state, "status", "Bay shared a progress update."),
+        appendActivity(state, "status", `${state.activeSpeaker} shared a progress update.`),
         createTranscriptEntry({
           kind: "assistant",
-          title: "Bay",
+          title: state.activeSpeaker,
           body: message,
           tone: "info",
         }),
@@ -331,7 +334,7 @@ export function sessionReducer(
         completedState,
         createTranscriptEntry({
           kind: "assistant",
-          title: "Assistant",
+          title: state.activeSpeaker,
           body: trimmed,
           tone: "info",
         }),
@@ -349,7 +352,7 @@ export function sessionReducer(
         ),
         createTranscriptEntry({
           kind: "assistant",
-          title: "Assistant",
+          title: "Switchbay",
           body: action.message,
           tone: "info",
         }),

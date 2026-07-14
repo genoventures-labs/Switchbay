@@ -20,8 +20,8 @@ type Step = {
 
 const STEPS: Step[] = [
   { key: "name", question: "What should this rule be called?", hint: "e.g. Spreadsheet Edits, MCP Browser Safety", required: true },
-  { key: "trigger", question: "When should Bay read this rule?", hint: "Comma-separated triggers, e.g. spreadsheet, csv, sheet edits", required: true },
-  { key: "rule", question: "What should Bay always do or never do?", hint: "Plain language is fine. This becomes the rule body.", required: true },
+  { key: "trigger", question: "When should models read this rule?", hint: "Comma-separated triggers, e.g. spreadsheet, csv, sheet edits", required: true },
+  { key: "rule", question: "What should models always do or never do?", hint: "Plain language is fine. This becomes the rule body.", required: true },
   { key: "appliesTo", question: "What tasks or tools does this apply to?", hint: "Optional. Describe the lane, tool, agent, or workflow.", required: false },
   { key: "scope", question: "Save globally or just this workspace?", hint: "Type global or workspace. Default: global.", required: false },
 ];

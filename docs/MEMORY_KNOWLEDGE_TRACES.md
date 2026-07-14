@@ -6,7 +6,7 @@ Switchbay keeps your workspace context close, readable, and persistent across se
 
 ## Operational Memory
 
-Workspace memory is scoped per-repo and stays human-readable. Bay can read, write, and refresh it during sessions.
+Workspace memory is scoped per-repo and stays human-readable. Switchbay can read, write, and refresh it during sessions.
 
 ### Files
 
@@ -54,7 +54,7 @@ switchbay memory facts
 
 ## Workspace Knowledge
 
-Workspace Knowledge is Switchbay's local RAG layer. It builds a readable source map at `.switchbay/knowledge/index.json` and automatically injects relevant snippets into Bay's turn context with file and line spans.
+Workspace Knowledge is Switchbay's local RAG layer. It builds a readable source map at `.switchbay/knowledge/index.json` and automatically injects relevant snippets into Switchbay's turn context with file and line spans.
 
 Indexable content: code, markdown/docs, config, memory, rules, engines, and Skills material.
 
@@ -74,13 +74,13 @@ switchbay knowledge search "approval gates"
 /search approval gates
 ```
 
-The backend is intentionally simple: line-based chunks, local lexical scoring, and normal path citations (`README.md:120-160`). Embeddings or SQLite FTS can be added later without changing how Bay consumes retrieved context.
+The backend is intentionally simple: line-based chunks, local lexical scoring, and normal path citations (`README.md:120-160`). Embeddings or SQLite FTS can be added later without changing how Switchbay consumes retrieved context.
 
 ---
 
 ## Trace Ledger
 
-Trace Ledger is Switchbay's local flight recorder. Completed model turns write JSON receipts under `.switchbay/traces/` so you can review exactly what Bay knew, what it touched, what tools ran, and what answer came back.
+Trace Ledger is Switchbay's local flight recorder. Completed model turns write JSON receipts under `.switchbay/traces/` so you can review exactly what Switchbay knew, what it touched, what tools ran, and what answer came back.
 
 ### What a Trace Records
 
@@ -116,7 +116,7 @@ switchbay handoff
 
 ## Quick Starts and Rules
 
-Switchbay injects a compact Quick Starts and Rules block into Bay's system context. These guides act like small "read this first" packets before Bay uses a tool lane, edits a file type, or follows a custom workflow.
+Switchbay injects a compact Quick Starts and Rules block into Switchbay's system context. These guides act like small "read this first" packets before Switchbay uses a tool lane, edits a file type, or follows a custom workflow.
 
 Built-in guides cover: local tool use, Web Engine, Switchbay MCP setup, Engine Bay calls, and local-first workspace boundaries.
 

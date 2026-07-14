@@ -1,6 +1,6 @@
 # Skills
 
-Skills are Switchbay's reusable working-method layer. Where engines give agents callable machinery, Skills give Bay reusable procedures — portable SOPs that agents read and apply during a session.
+Skills are Switchbay's reusable working-method layer. Where engines give agents callable machinery, Skills give Switchbay reusable procedures — portable SOPs that agents read and apply during a session.
 
 Skills are markdown files with frontmatter. They are human-readable, GitHub-syncable, and injected into session context as concise operating guides.
 

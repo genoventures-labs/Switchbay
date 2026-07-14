@@ -1138,9 +1138,11 @@ function shellQuote(value: string): string {
 
 async function runCliMode(options: any, resumeId: string | null) {
   const { runSwitchbayTurn } = await import("./src/api/service");
+  const { modelSpeakerLabel, parseModelAddress } = await import("./src/runtime/model-identity");
   let sessionId = resumeId;
   if (resumeId === "latest") sessionId = (await listSessions())[0]?.id ?? null;
-  process.stdout.write(`\n${CLR.accent}⏺${CLR.reset} ${CLR.text}${CLR.bold}Switchbay${CLR.reset} ${CLR.muted}(thinking...)${CLR.reset}\n`);
+  const addressed = parseModelAddress(options.initialQuery);
+  process.stdout.write(`\n${CLR.accent}⏺${CLR.reset} ${CLR.text}${CLR.bold}${addressed?.speaker ?? "Auto"}${CLR.reset} ${CLR.muted}(thinking...)${CLR.reset}\n`);
   try {
     const result = await runSwitchbayTurn({
       input: options.visionPath ? `${options.initialQuery}\n\nImage: ${options.visionPath}` : options.initialQuery,
@@ -1155,7 +1157,8 @@ async function runCliMode(options: any, resumeId: string | null) {
     }, {
       onStep: (title) => process.stdout.write(`  ${CLR.muted}└ ${title}${CLR.reset}\n`),
     });
-    process.stdout.write(`\n${CLR.accent}⏺${CLR.reset} ${CLR.text}${CLR.bold}Switchbay${CLR.reset}\n`);
+    const speaker = modelSpeakerLabel(result.route);
+    process.stdout.write(`\n${CLR.accent}⏺${CLR.reset} ${CLR.text}${CLR.bold}${speaker}${CLR.reset}\n`);
     if (result.route?.using) process.stdout.write(`  ${CLR.muted}└ ${CLR.reset}Using: ${result.route.using}\n`);
     process.stdout.write(`  ${CLR.muted}└ ${CLR.reset}${result.content}\n\n`);
     if (result.pendingApproval) process.stdout.write(`  ${CLR.accentBright}Approval required:${CLR.reset} ${result.pendingApproval.summary}\n  Resume session ${result.sessionId} through the TUI or API to approve it.\n\n`);

@@ -7,6 +7,7 @@ import {
 import { AnthropicClient } from "./anthropic-client";
 import { OpenAiClient } from "./openai-client";
 import { containsImageReferenceText } from "./image-inputs";
+import { parseModelAddress } from "./model-identity";
 import type { ChatRuntimeClient } from "./client";
 import type { ChatCompletionRequest, ChatCompletionResponse, ChatMessage, WorkspaceFocus } from "./types";
 
@@ -79,6 +80,18 @@ export class CloudRouterClient implements ChatRuntimeClient {
 function chooseProvider(request: ChatCompletionRequest): CloudRoutingDecision {
   const configured = getActiveCloudProvider();
   const classified = classifyIntent(request);
+  const latestUserMessage = [...request.messages].reverse().find((message) => message.role === "user");
+  const addressed = parseModelAddress(latestUserMessage ? messageText(latestUserMessage) : "");
+  if (addressed?.provider) {
+    assertProviderConfigured(addressed.provider);
+    return {
+      provider: addressed.provider,
+      model: getCloudProviderConfig(addressed.provider).model,
+      intent: classified.intent,
+      reason: `The user addressed ${addressed.speaker} for this turn.`,
+      mode: "explicit",
+    };
+  }
   if (configured === "openai" || configured === "anthropic" || configured === "google") {
     if (classified.intent === "vision" && configured !== "openai") {
       throw new Error("Image URL vision is currently wired for OpenAI. Switch with `/lane openai` or `switchbay cloud-provider set openai`.");

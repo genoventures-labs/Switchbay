@@ -11,6 +11,7 @@ import {
   workspaceStorageDir,
 } from "../config/paths";
 import type { ChatRuntimeClient } from "../runtime/client";
+import { parseModelAddress } from "../runtime/model-identity";
 import type { ChatMessage } from "../runtime/types";
 import type { WorkspaceSnapshot } from "../session/workspace";
 import type { PatchPreview } from "../tools/patch";
@@ -115,7 +116,7 @@ export async function compactConversationForContext(options: {
     .join("\n\n");
   const source = [
     existingContext ? `Existing compacted context:\n${existingContext}` : "",
-    ...older.map((message) => `${message.role === "user" ? "User" : "Bay"}: ${String(message.content).slice(0, 900)}`),
+    ...older.map((message) => `${message.role === "user" ? "User" : "Model"}: ${String(message.content).slice(0, 900)}`),
   ].filter(Boolean).join("\n\n");
 
   if (!source.trim()) return null;
@@ -152,10 +153,13 @@ export async function tryLocalCommand(
   const trimmed = input.trim();
 
   if (!trimmed.startsWith("/")) {
-    const addressedToBay = startsWithBayOpener(trimmed);
+    // A named model owns the whole conversational turn. Only slash commands
+    // bypass model routing; shallow local intent parsers must not steal it.
+    if (parseModelAddress(trimmed)) return { handled: false };
+    const addressedToSwitchbay = startsWithSwitchbayOpener(trimmed);
     const agentActivation = await parseConversationalAgentActivation(trimmed, options.workspace?.cwd);
     if (agentActivation) return agentActivation;
-    const workspaceHopIntent = addressedToBay ? null : parseConversationalWorkspaceHopIntent(trimmed);
+    const workspaceHopIntent = addressedToSwitchbay ? null : parseConversationalWorkspaceHopIntent(trimmed);
     if (workspaceHopIntent) {
       const result = await handleWorkspaceCommand(`/workspace hop ${workspaceHopIntent.query}`, options);
       if (result.handled && result.travel && workspaceHopIntent.followUp) {
@@ -164,7 +168,7 @@ export async function tryLocalCommand(
       return result;
     }
 
-    const workspaceReferenceIntent = addressedToBay ? null : parseConversationalWorkspaceReferenceIntent(trimmed);
+    const workspaceReferenceIntent = addressedToSwitchbay ? null : parseConversationalWorkspaceReferenceIntent(trimmed);
     if (workspaceReferenceIntent) {
       const result = await handleWorkspaceCommand(`/workspace hop ${workspaceReferenceIntent.query}`, options);
       if (result.handled && result.travel) {
@@ -467,7 +471,7 @@ async function parseConversationalAgentActivation(
   input: string,
   cwd?: string,
 ): Promise<LocalCommandResult | null> {
-  const normalized = input.replace(/^(?:(?:hey|yo|ok|okay)\s+)?(?:bay|switchbay)\b\s*[,\s:;!-]*/i, "").trim();
+  const normalized = input.replace(/^(?:(?:hey|hi|yo|ok|okay)\s+)?switchbay\b\s*[,\s:;!-]*/i, "").trim();
   const activation = normalized.match(/^(?:please\s+)?(?:use|activate|switch to|work as)\s+(?:the\s+)?(.+)$/i);
   if (!activation?.[1]) return null;
 
@@ -492,8 +496,8 @@ async function parseConversationalAgentActivation(
   };
 }
 
-function startsWithBayOpener(input: string): boolean {
-  return /^(?:(?:hey|yo|ok|okay)\s+)?(?:bay|switchbay)\b\s*[,\s:;!-]*/i.test(input.trim());
+function startsWithSwitchbayOpener(input: string): boolean {
+  return /^(?:(?:hey|hi|yo|ok|okay)\s+)?switchbay\b\s*[,\s:;!-]*/i.test(input.trim());
 }
 
 async function handleTraceCommand(
@@ -697,7 +701,7 @@ function stripWrappingQuotes(value: string): string {
 
 function parseConversationalWorkspaceHopIntent(input: string): { query: string; followUp?: string } | null {
   const normalized = input
-    .replace(/^[,\s]*(hey|yo|ok|okay)?\s*(bay|switchbay)[,\s:;-]*/i, "")
+    .replace(/^[,\s]*(hey|hi|yo|ok|okay)?\s*switchbay[,\s:;-]*/i, "")
     .replace(/[.!?]+$/g, "")
     .trim();
   const { primary, followUp } = splitFollowUpIntent(normalized);
@@ -723,7 +727,7 @@ function parseConversationalWorkspaceHopIntent(input: string): { query: string; 
 
 function parseConversationalWorkspaceReferenceIntent(input: string): { query: string; followUp: string } | null {
   const normalized = input
-    .replace(/^[,\s]*(hey|yo|ok|okay)?\s*(bay|switchbay)[,\s:;-]*/i, "")
+    .replace(/^[,\s]*(hey|hi|yo|ok|okay)?\s*switchbay[,\s:;-]*/i, "")
     .replace(/[.!?]+$/g, "")
     .trim();
 
@@ -797,10 +801,10 @@ function cleanupWorkspaceQuery(query: string): string {
 function normalizeFollowUpInput(input: string): string {
   const normalized = input.trim();
   if (/^(?:tell me|show me|give me)\s+(?:the\s+)?status(?:\s+of\s+the\s+(?:repo|repository|project|workspace))?$/i.test(normalized)) {
-    return "Bay, what's changed in git?";
+    return "What's changed in git?";
   }
   if (/^status(?:\s+of\s+the\s+(?:repo|repository|project|workspace))?$/i.test(normalized)) {
-    return "Bay, what's changed in git?";
+    return "What's changed in git?";
   }
   return normalized;
 }
@@ -808,7 +812,7 @@ function normalizeFollowUpInput(input: string): string {
 function normalizeWorkspaceReferenceFollowUp(input: string): string {
   const normalized = input.trim();
   if (/\b(status|dirty|changed|changes|git)\b/i.test(normalized)) {
-    return "Bay, what's changed in git?";
+    return "What's changed in git?";
   }
   return normalized;
 }
@@ -817,7 +821,7 @@ async function handleConversationalOperatorIntent(
   input: string,
   options: LocalCommandOptions,
 ): Promise<LocalCommandResult> {
-  const normalized = normalizeBayTalk(input);
+  const normalized = normalizeAssistantTalk(input);
 
   const coached = matchSwitchbayControlIntent(normalized);
   if (coached) {
@@ -868,10 +872,10 @@ async function formatRadarForOptions(options: LocalCommandOptions): Promise<stri
   return formatFrictionRadar(signals);
 }
 
-function normalizeBayTalk(input: string): string {
+function normalizeAssistantTalk(input: string): string {
   return input
     .toLowerCase()
-    .replace(/^[,\s]*(hey|yo|ok|okay|so)?\s*(bay|switchbay)[,\s:;-]*/i, "")
+    .replace(/^[,\s]*(hey|hi|yo|ok|okay|so)?\s*(switchbay|gpt|chatgpt|openai|claude|anthropic|gemini|google|open\s*router|hugging\s*face|hf|ollama(?:\s+cloud)?)[,\s:;!-]*/i, "")
     .replace(/[.!?]+$/g, "")
     .trim();
 }
@@ -1235,7 +1239,7 @@ async function handleWebCommand(options: LocalCommandOptions): Promise<LocalComm
       "Guardrails:",
       "- explicit public `http`/`https` URLs only",
       "- localhost, LAN, link-local, and private IP hosts are blocked by default",
-      "- fetched text is size-limited; Bay should cite URLs used for factual claims",
+      "- fetched text is size-limited; the responding model should cite URLs used for factual claims",
       "",
       "Use the `web-research` Skill for source-backed current-info work.",
     ].join("\n"),

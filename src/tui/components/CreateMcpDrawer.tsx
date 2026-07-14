@@ -20,7 +20,7 @@ type Step = {
 
 const STEPS: Step[] = [
   { key: "name", question: "What should this MCP bridge config be called?", hint: "e.g. Local Browser Tools, Studio Research Rig", required: true },
-  { key: "purpose", question: "What should Switchbay MCP help Bay do?", hint: "Describe the local/tool workflow.", required: true },
+  { key: "purpose", question: "What should Switchbay MCP help models do?", hint: "Describe the local/tool workflow.", required: true },
   { key: "servers", question: "Which trusted MCP servers should it use?", hint: "Catalog: playwright, filesystem, github, memory, fetch, sequential-thinking, postgres.", required: true },
   { key: "integrations", question: "Exact catalog integration IDs if you know them?", hint: "Optional. Example: mcp/playwright, mcp/filesystem. Unknown ids are rejected.", required: false },
   { key: "notes", question: "Any URL, command, allowed-tools, or setup notes?", hint: "Optional. Mention authentication, headers, or trust requirements.", required: false },

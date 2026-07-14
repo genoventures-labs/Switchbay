@@ -8,6 +8,7 @@ import { getToolMode, normalizeRuntimeLane } from "../config/env";
 import { getSelectedRuntimeModel } from "../config/switchbay-config";
 import { normalizeCloudProvider } from "../runtime/cloud-providers";
 import { createRuntimeClient } from "../runtime/client";
+import { parseModelAddress } from "../runtime/model-identity";
 import { normalizeLocalProvider } from "../runtime/local-providers";
 import { loadPersistedSession, savePersistedSession } from "../session/persistence";
 import { loadWorkspaceSnapshot } from "../session/workspace";
@@ -28,7 +29,13 @@ export async function runSwitchbayTurn(input: TurnRequest, options: { requestId?
   const localProvider = normalizeLocalProvider(input.lane);
   const cloudProvider = normalizeCloudProvider(input.lane);
   const selected = getSelectedRuntimeModel(runtimeLane);
-  const client = createRuntimeClient(runtimeLane, selected
+  const addressed = parseModelAddress(prompt);
+  const client = addressed
+    ? createRuntimeClient(addressed.lane, {
+        provider: addressed.provider,
+        localProvider: addressed.localProvider ?? localProvider,
+      })
+    : createRuntimeClient(runtimeLane, selected
     ? {
         model: selected.id,
         provider: selected.provider === "openai" || selected.provider === "anthropic" || selected.provider === "google" ? selected.provider : cloudProvider === "openai" || cloudProvider === "anthropic" || cloudProvider === "google" ? cloudProvider : null,

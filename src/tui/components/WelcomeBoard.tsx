@@ -46,7 +46,7 @@ export function WelcomeBoard({ appName, lane, version, cwd, terminalWidth }: Wel
           <Text key={i} color={brandColor}>{line}</Text>
         ))}
         <Text color={grayColor}>{appName} v{version} · {lane}</Text>
-        <Text color={dimColor}>Bay online</Text>
+        <Text color={dimColor}>models ready</Text>
         <Text color={dimColor}>{displayCwd}</Text>
         <Box marginTop={1}>
           <Text color={dimColor}>? shortcuts · / commands</Text>
@@ -86,7 +86,7 @@ export function WelcomeBoard({ appName, lane, version, cwd, terminalWidth }: Wel
             <Text color={grayColor}>{appName}</Text>
             <Text color={dimColor}>terminal-first AI coding workbench</Text>
             <Text color={dimColor}>cloud/local models, Switchbay MCP bridge</Text>
-            <Text color={dimColor}>assistant callsign: Bay</Text>
+            <Text color={dimColor}>address GPT, Claude, Gemini, or use Auto</Text>
             <Box marginTop={1}>
               <Text color={dimColor}>{displayCwd}</Text>
             </Box>

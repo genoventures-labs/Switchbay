@@ -124,6 +124,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
       };
     } else if (arg === "service") {
       const action = args[i + 1];
+      assertCliAction("service", action, ["install", "status", "restart", "uninstall"]);
       return {
         surface, profile, mode, lane, initialQuery: "", hop, resume, newSession, purge,
         subcommand: "service", serviceAction: action === "install" || action === "restart" || action === "uninstall" ? action : "status",
@@ -132,6 +133,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
       };
     } else if (arg === "engines" || arg === "engine-bay") {
       const action = args[i + 1];
+      assertCliAction("engines", action, ["sync", "list", "templates", "status"]);
       const engineAction = action === "sync" || action === "list" || action === "templates" || action === "status"
         ? action
         : "status";
@@ -160,6 +162,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
       };
     } else if (arg === "skills" || arg === "toolbox") {
       const action = args[i + 1];
+      assertCliAction(arg, action, ["sync", "list", "templates", "read", "status"]);
       const toolboxAction = action === "sync" || action === "list" || action === "templates" || action === "read" || action === "status"
         ? action
         : "status";
@@ -188,6 +191,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
       };
     } else if (arg === "plugins") {
       const action = args[i + 1];
+      assertCliAction("plugins", action, ["list", "inspect", "status"]);
       const pluginAction = action === "list" || action === "inspect" || action === "status"
         ? action
         : "status";
@@ -644,6 +648,13 @@ export function parseCliArgs(argv: string[]): CliOptions {
     modelTarget: null,
     modelLane: null,
   };
+}
+
+function assertCliAction(command: string, action: string | undefined, allowed: string[]): void {
+  if (!action || action.startsWith("-")) return;
+  if (!allowed.includes(action)) {
+    throw new Error(`Unknown ${command} action "${action}". Choose: ${allowed.join(", ")}.`);
+  }
 }
 
 type ParsedModelCommand = {

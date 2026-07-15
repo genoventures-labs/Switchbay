@@ -21,9 +21,9 @@ import { describeTrustedMcpCatalog } from "./src/runtime/mcp-catalog";
 import { ANSI_COLORS as CLR } from "./src/tui/theme";
 import { describePlugins, loadPluginInventory, readPlugin } from "./src/plugins/registry";
 import { listRuntimeModels, type RuntimeModelOption } from "./src/runtime/models";
-import { describeLocalProviders, getActiveLocalProvider, normalizeLocalProvider, setActiveLocalProvider, type LocalProviderId } from "./src/runtime/local-providers";
+import { getActiveLocalProvider, loadLocalProvidersConfig, normalizeLocalProvider, setActiveLocalProvider, type LocalProviderId } from "./src/runtime/local-providers";
 import { formatRouteTag } from "./src/runtime/route-display";
-import { describeAutoModelPool, describeCloudProviders, getActiveCloudProvider, normalizeCloudProvider, setActiveCloudProvider } from "./src/runtime/cloud-providers";
+import { getActiveCloudProvider, listAutoModelPool, loadCloudProvidersConfig, normalizeCloudProvider, setActiveCloudProvider } from "./src/runtime/cloud-providers";
 import { addDailyTask, clearDailyBoard, completeDailyTask, describeDailyBoard } from "./src/operator/daily-board";
 import { formatFrictionRadar, runFrictionRadar } from "./src/operator/radar";
 import { buildQuickHandoff } from "./src/operator/handoff";
@@ -32,113 +32,24 @@ import type { CloudProviderId } from "./src/runtime/cloud-providers";
 import { findAgent, loadAllAgents, saveAgentDefinition, type AgentScope } from "./src/agent/agents";
 import { loadEngineRegistry } from "./src/engines/registry";
 import { renderCliList } from "./src/cli/list-output";
+import { cliFailure, cliPage, cliReceipt, cleanTerminalText } from "./src/cli/presentation";
+import { renderCliHelp } from "./src/cli/help";
 
 // Ensure config is initialized on first boot
 loadSwitchbayConfig();
 
-const options = parseCliArgs(process.argv);
+let options: ReturnType<typeof parseCliArgs>;
+try {
+  options = parseCliArgs(process.argv);
+} catch (err) {
+  const message = err instanceof Error ? err.message : String(err);
+  console.error(cliFailure("Command Center", message, ["switchbay --help"]));
+  process.exit(1);
+}
 
 async function boot() {
   if (options.subcommand === "help") {
-    console.log(`
-${CLR.accentBright}${CLR.bold}Switchbay${CLR.reset} — local-first AI workspace and model router
-
-${CLR.muted}Tip: launch the TUI and press ? for the capability guide, or type / to search commands.${CLR.reset}
-
-${CLR.accent}${CLR.bold}Usage:${CLR.reset}
-  ${CLR.bold}switchbay${CLR.reset}                          Launch the TUI (interactive mode)
-  ${CLR.bold}switchbay${CLR.reset} "${CLR.accentBright}query${CLR.reset}"                  One-shot request
-  ${CLR.bold}switchbay serve${CLR.reset}                    Start the local HTTP API
-  ${CLR.bold}switchbay serve --detach${CLR.reset}           Start the API as a detached process
-  ${CLR.bold}switchbay service install${CLR.reset}          Install the macOS login service
-  ${CLR.bold}switchbay service status${CLR.reset}           Show background service status
-  ${CLR.bold}switchbay service restart${CLR.reset}          Restart the background service
-  ${CLR.bold}switchbay service uninstall${CLR.reset}        Remove the background service
-  ${CLR.bold}switchbay update${CLR.reset}                     Update Switchbay (git/homebrew & restart service)
-  ${CLR.bold}switchbay${CLR.reset} "${CLR.accentBright}query${CLR.reset}" ${CLR.accent}--hop${CLR.reset} <name>     Launch in a different workspace
-
-${CLR.accent}${CLR.bold}Sessions:${CLR.reset}
-  ${CLR.bold}switchbay --resume${CLR.reset}                 Resume the last session
-  ${CLR.bold}switchbay --resume${CLR.reset} <id|index>      Resume a specific session by ID or index
-  ${CLR.bold}switchbay --new${CLR.reset}                    Start a fresh session
-  ${CLR.bold}switchbay --purge${CLR.reset} <duration>       Clean up old sessions (e.g. 1d, 1w)
-
-${CLR.accent}${CLR.bold}Models and Lanes:${CLR.reset}
-  ${CLR.bold}switchbay models${CLR.reset}                   List models for the active lane
-  ${CLR.bold}switchbay models --lane${CLR.reset} <lane>     List models for a specific lane
-  ${CLR.bold}switchbay model${CLR.reset}                    Show the active lane model
-  ${CLR.bold}switchbay model${CLR.reset} <id>               Pin a model for the active lane
-  ${CLR.bold}switchbay model${CLR.reset} <lane> <id>        Pin a model for a specific lane
-  ${CLR.bold}switchbay model add openai${CLR.reset} <id>    Add a custom cloud model; optional ${CLR.accent}--label${CLR.reset}
-  ${CLR.bold}switchbay --lane cloud --add-model${CLR.reset} <id>
-  ${CLR.bold}switchbay model pull${CLR.reset} <id|url>      Pull a local model; optional ${CLR.accent}--quant${CLR.reset} <type>
-  ${CLR.bold}switchbay cloud-provider${CLR.reset}           Show cloud provider/router config
-  ${CLR.bold}switchbay cloud-provider set${CLR.reset} <id>  Switch provider: ${CLR.accentBright}auto | openai | anthropic | google${CLR.reset} (gemini alias)
-  ${CLR.bold}switchbay local-provider${CLR.reset}           Show local provider config
-  ${CLR.bold}switchbay local-provider set ollama${CLR.reset} Switch the local provider to Ollama
-  ${CLR.bold}switchbay mcp${CLR.reset}                      Show Switchbay MCP bridge config
-  ${CLR.bold}switchbay mcp init${CLR.reset}                 Create default Switchbay MCP config
-  ${CLR.bold}switchbay mcp catalog${CLR.reset}              List trusted MCP config options
-
-${CLR.accent}${CLR.bold}Context and Memory:${CLR.reset}
-  ${CLR.bold}switchbay agenda${CLR.reset}                   Show today's Daily Board
-  ${CLR.bold}switchbay task add${CLR.reset} <text>          Add a Daily Board task
-  ${CLR.bold}switchbay task done${CLR.reset} <id>           Mark a Daily Board task done
-  ${CLR.bold}switchbay task clear${CLR.reset}               Clear today's Daily Board
-  ${CLR.bold}switchbay memory${CLR.reset}                   Show workspace memory status
-  ${CLR.bold}switchbay memory add${CLR.reset} <note>        Add a workspace memory note
-  ${CLR.bold}switchbay memory refresh${CLR.reset}           Refresh operational memory
-  ${CLR.bold}switchbay memory list${CLR.reset}              List memory notes
-  ${CLR.bold}switchbay memories list${CLR.reset}            Alias for memory notes
-  ${CLR.bold}switchbay memory facts${CLR.reset}             List structured memory facts
-  ${CLR.bold}switchbay knowledge${CLR.reset}                Show workspace knowledge index status
-  ${CLR.bold}switchbay knowledge refresh${CLR.reset}        Build/rebuild the local workspace knowledge map
-  ${CLR.bold}switchbay knowledge search${CLR.reset} <query> Search sourced workspace snippets
-  ${CLR.bold}switchbay trace${CLR.reset}                    Show latest turn trace
-  ${CLR.bold}switchbay trace export${CLR.reset}             Print latest trace file path
-  ${CLR.bold}switchbay usage${CLR.reset}                    Graph turns, tokens, tools, and estimated API spend
-  ${CLR.bold}switchbay graph trace${CLR.reset}               Graph the latest agent turn flow
-  ${CLR.bold}switchbay radar${CLR.reset}                    Run read-only local friction checks
-  ${CLR.bold}switchbay handoff${CLR.reset}                  Print a compact next-session handoff
-
-${CLR.accent}${CLR.bold}Extensions:${CLR.reset}
-  ${CLR.bold}switchbay agents${CLR.reset}                   Show available specialist agents
-  ${CLR.bold}switchbay agents list${CLR.reset}              List built-in, user, workspace, and plugin agents
-  ${CLR.bold}switchbay agents read${CLR.reset} <id>         Print an agent definition
-  ${CLR.bold}switchbay agent create --name${CLR.reset} <n> ${CLR.accent}--specialty${CLR.reset} <role>
-  ${CLR.bold}  --approach${CLR.reset} <text> ${CLR.accent}--rules${CLR.reset} <text> ${CLR.accent}--scope${CLR.reset} <user|workspace>
-  ${CLR.bold}switchbay agent create${CLR.reset} "Name" "Role or domain"
-  ${CLR.bold}switchbay engines${CLR.reset}                  Show Engine Bay cache status
-  ${CLR.bold}switchbay engines sync${CLR.reset}             Pull the Switchbay-Engines GitHub repo
-  ${CLR.bold}switchbay engines list${CLR.reset}             List cached engine files and manifests
-  ${CLR.bold}switchbay engines templates${CLR.reset}        List cached templates
-  ${CLR.bold}switchbay skills${CLR.reset}                   Show available model and agent skills
-  ${CLR.bold}switchbay skills sync${CLR.reset}              Pull the GitHub-backed skills repo
-  ${CLR.bold}switchbay skills list${CLR.reset}              List available skills
-  ${CLR.bold}switchbay skills templates${CLR.reset}         List cached skill templates
-  ${CLR.bold}switchbay skills read${CLR.reset} <id>         Print a skill
-  ${CLR.bold}switchbay plugins${CLR.reset}                  Show workspace plugin status
-  ${CLR.bold}switchbay plugins list${CLR.reset}             List installed workspace plugins
-  ${CLR.bold}switchbay plugins inspect${CLR.reset} <id>     Print a plugin manifest and assets
-
-${CLR.accent}${CLR.bold}Maintenance:${CLR.reset}
-  ${CLR.bold}switchbay update${CLR.reset}                   Update, rebuild, and refresh the local service
-  ${CLR.bold}switchbay version${CLR.reset}                  Print version
-
-${CLR.accent}${CLR.bold}Options:${CLR.reset}
-  ${CLR.bold}-s, --surface${CLR.reset} <type>   Surface context (default: dev)
-  ${CLR.bold}-p, --profile${CLR.reset} <name>   Working style (default: switchbay)
-  ${CLR.bold}-m, --mode${CLR.reset} <name>      Agent mode: ${CLR.accentBright}build | design | debug${CLR.reset} (default: build)
-  ${CLR.bold}--lane${CLR.reset} <name>          Lane/provider: ${CLR.accentBright}cloud | openai | anthropic | gemini | cloud-mcp | local | ollama-cloud | openrouter | huggingface${CLR.reset}
-  ${CLR.bold}--vision${CLR.reset} <path|url>     Attach an image and pin this turn to OpenAI vision
-  ${CLR.bold}--hop${CLR.reset} <name>           Travel to a whitelisted location before launching
-  ${CLR.bold}--resume${CLR.reset} <val>         Resume last saved session, or specific ID/Index (0=latest)
-  ${CLR.bold}--new${CLR.reset}                  Force a fresh session even if a saved one exists
-  ${CLR.bold}--purge${CLR.reset} <duration>     Purge sessions older than duration (1d, 5d, 2w, etc.)
-  ${CLR.bold}-d, --detach${CLR.reset}               Run the API server in the background (detached mode)
-  ${CLR.bold}-h, --help${CLR.reset}                 Show this help
-  ${CLR.bold}-v, --version${CLR.reset}              Print the installed version
-`);
+    console.log(renderCliHelp());
     return;
   }
 
@@ -212,7 +123,9 @@ ${CLR.accent}${CLR.bold}Options:${CLR.reset}
 
   if (options.subcommand === "service") {
     const { runServiceCommand } = await import("./src/service/macos");
-    console.log(await runServiceCommand(options.serviceAction ?? "status"));
+    const action = options.serviceAction ?? "status";
+    const result = await runServiceCommand(action);
+    console.log(cliPage({ title: "Switchbay Service", state: action === "status" ? "System status" : action, body: result, next: action === "status" ? "switchbay service restart" : "switchbay service status" }));
     return;
   }
 
@@ -257,7 +170,7 @@ ${CLR.accent}${CLR.bold}Options:${CLR.reset}
   }
 
   if (options.subcommand === "agenda") {
-    console.log(describeDailyBoard());
+    console.log(cliPage({ title: "Daily Board", state: "Today", body: describeDailyBoard(), next: 'switchbay task add "<task>"' }));
     return;
   }
 
@@ -277,12 +190,12 @@ ${CLR.accent}${CLR.bold}Options:${CLR.reset}
   }
 
   if (options.subcommand === "usage") {
-    console.log(formatUsage(await listTraceRecords(process.cwd())));
+    console.log(cliPage({ title: "Usage Center", state: "Workspace telemetry", body: formatUsage(await listTraceRecords(process.cwd())), next: "switchbay graph trace" }));
     return;
   }
 
   if (options.subcommand === "graph") {
-    console.log(formatTraceGraph((await loadLatestTrace(process.cwd()))?.record ?? null));
+    console.log(cliPage({ title: "Execution Graph", state: "Latest turn", body: formatTraceGraph((await loadLatestTrace(process.cwd()))?.record ?? null), next: "switchbay trace" }));
     return;
   }
 
@@ -414,7 +327,8 @@ async function applyInitialHop(query: string) {
 async function runEngineCommand(action: "status" | "sync" | "list" | "templates") {
   try {
     if (action === "sync") {
-      console.log(await describeEngineBay(true));
+      await syncEngineBayRepo();
+      console.log(cliReceipt("Engine Bay", "Library synchronized", [], "switchbay engines list"));
       return;
     }
 
@@ -453,10 +367,16 @@ async function runEngineCommand(action: "status" | "sync" | "list" | "templates"
       if (registry.warnings.length) console.log(`\n${CLR.muted}${registry.warnings.length} manifest warning(s); run switchbay engines for details.${CLR.reset}`);
       return;
     }
-    console.log(await describeEngineBay(false));
+    const registry = await loadEngineRegistry(process.cwd());
+    console.log(cliPage({
+      title: "Engine Bay", state: inventory.exists ? "Ready" : "Not synchronized",
+      summary: "Reusable tools available to every model lane.",
+      rows: [["Engines", String(registry.engines.length)], ["Tools", String(registry.engines.reduce((n, engine) => n + engine.tools.length, 0))], ["Templates", String(inventory.templates.length)], ["Revision", inventory.head ?? "—"], ["Library", inventory.path.replace(process.env.HOME ?? "", "~")]],
+      next: inventory.exists ? "switchbay engines list" : "switchbay engines sync",
+    }));
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error(`switchbay engines: ${msg}`);
+    console.error(cliFailure("Engine Bay", msg, ["switchbay engines sync"]));
     process.exit(1);
   }
 }
@@ -469,7 +389,8 @@ async function runToolboxCommand(
   const command = `switchbay ${commandName}`;
   try {
     if (action === "sync") {
-      console.log(await describeToolbox(true));
+      await describeToolbox(true);
+      console.log(cliReceipt("Skill Library", "Library synchronized", [], `${command} list`));
       return;
     }
 
@@ -502,21 +423,21 @@ async function runToolboxCommand(
     }
     if (action === "read") {
       if (!skillId) {
-        console.error(`${command}: read requires a skill id.`);
+        console.error(cliFailure("Skill Library", "A skill id is required.", [`${command} read <id>`]));
         process.exit(1);
       }
       const skill = await readToolboxSkill(skillId);
       if (!skill) {
-        console.error(`${command}: skill not found: ${skillId}`);
+        console.error(cliFailure("Skill Library", `No skill named ${skillId}.`, [`${command} list`]));
         process.exit(1);
       }
       console.log(skill.body);
       return;
     }
-    console.log(await describeToolbox(false));
+    console.log(cliPage({ title: "Skill Library", state: inventory.exists ? "Ready" : "Not synchronized", summary: "Operational guides models can load when the work calls for them.", rows: [["Skills", String(inventory.skills.length)], ["Templates", String(inventory.templates.length)], ["Revision", inventory.head ?? "—"], ["Library", inventory.path.replace(process.env.HOME ?? "", "~")]], next: inventory.exists ? `${command} list` : `${command} sync` }));
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error(`${command}: ${msg}`);
+    console.error(cliFailure("Skill Library", msg, [`${command} list`]));
     process.exit(1);
   }
 }
@@ -550,22 +471,24 @@ async function runPluginCommand(action: "status" | "list" | "inspect", pluginId:
 
     if (action === "inspect") {
       if (!pluginId) {
-        console.error("switchbay plugins: inspect requires a plugin id.");
+        console.error(cliFailure("Plugins", "A plugin id is required.", ["switchbay plugins inspect <id>"]));
         process.exit(1);
       }
       const plugin = await readPlugin(pluginId);
       if (!plugin) {
-        console.error(`switchbay plugins: plugin not found: ${pluginId}`);
+        console.error(cliFailure("Plugins", `No plugin named ${pluginId}.`, ["switchbay plugins list"]));
         process.exit(1);
       }
       console.log(JSON.stringify(plugin.manifest, null, 2));
       return;
     }
 
-    console.log(await describePlugins());
+    const inventory = await loadPluginInventory();
+    const enabled = inventory.plugins.filter((plugin) => plugin.manifest.enabled).length;
+    console.log(cliPage({ title: "Plugins", state: inventory.plugins.length ? `${enabled} enabled` : "None installed", summary: "Workspace capability packs for agents, skills, engines, guides, and MCP.", rows: [["Installed", String(inventory.plugins.length)], ["Enabled", String(enabled)]], next: "switchbay plugins list" }));
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error(`switchbay plugins: ${msg}`);
+    console.error(cliFailure("Plugins", msg, ["switchbay plugins list"]));
     process.exit(1);
   }
 }
@@ -598,9 +521,7 @@ async function runAgentsCommand(
         rules: draft.rules ?? undefined,
         scope: draft.scope,
       }, cwd);
-      console.log(`Created agent ${saved.id}.`);
-      console.log(`Saved: ${saved.savePath}`);
-      console.log(`Activate in the TUI with: /agent ${saved.id}`);
+      console.log(cliReceipt("Agent created", saved.id, [["Location", saved.savePath.replace(process.env.HOME ?? "", "~")], ["Scope", draft.scope]], `switchbay agents read ${saved.id}`));
       return;
     }
 
@@ -650,10 +571,7 @@ ${agent.prompt}
       return;
     }
 
-    console.log(`Agents: ${agents.length} available (${customCount} custom).`);
-    console.log("List: switchbay agents list");
-    console.log("Read: switchbay agents read <id>");
-    console.log('Create: switchbay agent create --name "API Steward" --specialty "API design and integration checks"');
+    console.log(cliPage({ title: "Agents", state: `${agents.length} available`, summary: "Specialist workers models can select for focused jobs.", rows: [["Built in", String(agents.length - customCount)], ["Custom", String(customCount)]], next: "switchbay agents list" }));
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`switchbay agents: ${msg}`);
@@ -670,8 +588,7 @@ async function runMemoryCommand(action: "status" | "refresh" | "list" | "facts" 
         process.exit(1);
       }
       const count = await addMemoryNote(cwd, note);
-      console.log(`Remembered: ${note.trim()}`);
-      console.log(`${count} note${count !== 1 ? "s" : ""} in memory.`);
+      console.log(cliReceipt("Workspace Memory", "Note saved", [["Note", note.trim()], ["Total", `${count} note${count === 1 ? "" : "s"}`]], "switchbay memory list"));
       return;
     }
     if (action === "refresh") {
@@ -698,7 +615,7 @@ async function runMemoryCommand(action: "status" | "refresh" | "list" | "facts" 
       }));
       return;
     }
-    console.log(await describeMemory(cwd));
+    console.log(cliPage({ title: "Workspace Memory", state: "Ready", body: await describeMemory(cwd), next: "switchbay memory list" }));
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`switchbay memory: ${msg}`);
@@ -714,8 +631,7 @@ async function runTaskCommand(action: "status" | "add" | "done" | "clear", text:
         process.exit(1);
       }
       const task = addDailyTask(text);
-      console.log(`Added Daily Board task ${task.id}: ${task.text}`);
-      console.log(`\n${describeDailyBoard()}`);
+      console.log(cliReceipt("Daily Board", `Task ${task.id} added`, [["Task", task.text]], "switchbay agenda"));
       return;
     }
 
@@ -729,18 +645,17 @@ async function runTaskCommand(action: "status" | "add" | "done" | "clear", text:
         console.error(`switchbay task done: task ${id} not found on today's board.`);
         process.exit(1);
       }
-      console.log(`Completed Daily Board task ${task.id}: ${task.text}`);
-      console.log(`\n${describeDailyBoard()}`);
+      console.log(cliReceipt("Daily Board", `Task ${task.id} completed`, [["Task", task.text]], "switchbay agenda"));
       return;
     }
 
     if (action === "clear") {
       const count = clearDailyBoard();
-      console.log(`Cleared ${count} Daily Board task${count === 1 ? "" : "s"}.`);
+      console.log(cliReceipt("Daily Board", "Cleared", [["Removed", `${count} task${count === 1 ? "" : "s"}`]], "switchbay agenda"));
       return;
     }
 
-    console.log(describeDailyBoard());
+    console.log(cliPage({ title: "Daily Board", state: "Today", body: describeDailyBoard(), next: 'switchbay task add "<task>"' }));
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`switchbay task: ${msg}`);
@@ -753,7 +668,7 @@ async function runKnowledgeCommand(action: "status" | "refresh" | "search", quer
     const cwd = process.cwd();
     if (action === "refresh") {
       const index = await refreshKnowledgeIndex(cwd);
-      console.log(`Workspace knowledge refreshed.\nFiles: ${index.fileCount}\nChunks: ${index.chunkCount}`);
+      console.log(cliReceipt("Knowledge Index", "Refreshed", [["Files", String(index.fileCount)], ["Chunks", String(index.chunkCount)]], 'switchbay knowledge search "<query>"'));
       return;
     }
     if (action === "search") {
@@ -761,10 +676,10 @@ async function runKnowledgeCommand(action: "status" | "refresh" | "search", quer
         console.error("switchbay knowledge: search requires a query.");
         process.exit(1);
       }
-      console.log(formatKnowledgeSearchResults(await searchKnowledgeIndex(query, cwd, 10)));
+      console.log(cliPage({ title: "Knowledge Search", state: query, body: formatKnowledgeSearchResults(await searchKnowledgeIndex(query, cwd, 10)), next: "switchbay knowledge refresh" }));
       return;
     }
-    console.log(await describeKnowledgeIndex(cwd));
+    console.log(cliPage({ title: "Knowledge Index", state: "Workspace", body: await describeKnowledgeIndex(cwd), next: 'switchbay knowledge search "<query>"' }));
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`switchbay knowledge: ${msg}`);
@@ -780,7 +695,7 @@ async function runTraceCommand(action: "last" | "export") {
       console.log(tracePath ?? "No trace exists yet. Complete a model turn first.");
       return;
     }
-    console.log(await describeLatestTrace(cwd));
+    console.log(cliPage({ title: "Trace Ledger", state: "Latest turn", body: await describeLatestTrace(cwd), next: "switchbay graph trace" }));
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`switchbay trace: ${msg}`);
@@ -796,7 +711,7 @@ async function runRadarCommand(rawLane: string | null) {
       runtimeLane: lane,
       toolMode: getToolMode(),
     });
-    console.log(formatFrictionRadar(signals));
+    console.log(cliPage({ title: "Friction Radar", state: `${signals.length} signal${signals.length === 1 ? "" : "s"}`, body: formatFrictionRadar(signals), next: "switchbay handoff" }));
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`switchbay radar: ${msg}`);
@@ -806,7 +721,7 @@ async function runRadarCommand(rawLane: string | null) {
 
 async function runHandoffCommand() {
   try {
-    console.log(await buildQuickHandoff({ cwd: process.cwd() }));
+    console.log(cliPage({ title: "Session Handoff", state: "Ready", body: await buildQuickHandoff({ cwd: process.cwd() }), next: "switchbay --new" }));
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`switchbay handoff: ${msg}`);
@@ -819,19 +734,24 @@ async function runMcpCommand(action: "status" | "init" | "catalog") {
     const cwd = process.cwd();
     if (action === "init") {
       const path = await saveSwitchbayMcpConfig(createDefaultSwitchbayMcpConfig(), cwd);
-      console.log(`Created Switchbay MCP config at ${path}`);
-      console.log("Edit it to match the MCP servers installed, then run `switchbay --lane cloud-mcp` or `/lane mcp`.");
+      console.log(cliReceipt("MCP Bridge", "Configuration created", [["Location", path.replace(process.env.HOME ?? "", "~")]], "switchbay mcp status"));
       return;
     }
     if (action === "catalog") {
-      console.log(`Trusted MCP Catalog\n\n${describeTrustedMcpCatalog()}`);
+      console.log(cliPage({ title: "Trusted MCP Catalog", state: "Available bridges", body: describeTrustedMcpCatalog(), next: "switchbay mcp init" }));
       return;
     }
 
-    console.log(describeSwitchbayMcpConfig(await loadSwitchbayMcpConfig(cwd)));
+    const status = await loadSwitchbayMcpConfig(cwd);
+    console.log(cliPage({
+      title: "MCP Bridge", state: !status.exists ? "Not configured" : status.config.enabled === false ? "Disabled" : "Ready",
+      summary: "External tool servers available through Switchbay's guarded runtime.",
+      rows: [["Config", status.path.replace(process.env.HOME ?? "", "~")], ["Servers", String(status.integrations.length)], ["Policy", status.exists && status.config.enabled !== false ? "Enabled" : status.exists ? "Disabled" : "Awaiting setup"]],
+      next: status.exists ? "switchbay mcp catalog" : "switchbay mcp init",
+    }));
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error(`switchbay mcp: ${msg}`);
+    console.error(cliFailure("MCP Bridge", msg, ["switchbay mcp status"]));
     process.exit(1);
   }
 }
@@ -996,24 +916,27 @@ async function runLocalProviderCommand(action: "status" | "set", target: string 
       process.exit(1);
     }
     setActiveLocalProvider(provider);
-    console.log(`Local provider set to ${provider}.`);
+    console.log(cliReceipt("Local Runtime", `Provider set to ${provider}`, [], "switchbay local-provider"));
     return;
   }
-  console.log(describeLocalProviders());
+  const config = loadLocalProvidersConfig();
+  console.log(cliPage({ title: "Local Runtime", state: getActiveLocalProvider(), summary: "Private and contained model execution.", rows: Object.values(config.providers).map((provider) => [provider.label, `${provider.id === config.active ? "● active" : "○ available"} · ${provider.model ?? "automatic"}`] as [string, string]), next: "switchbay models --lane local" }));
 }
 
 async function runCloudProviderCommand(action: "status" | "set", target: string | null) {
   if (action === "set") {
     const provider = normalizeCloudProvider(target);
     if (!provider) {
-      console.error("switchbay cloud-provider: set requires `auto`, `openai`, `anthropic`, or `google`.");
+      console.error(cliFailure("Cloud Runtime", "Choose auto, openai, anthropic, or gemini.", ["switchbay cloud-provider set auto"]));
       process.exit(1);
     }
     setActiveCloudProvider(provider);
-    console.log(`Cloud provider set to ${provider}.`);
+    console.log(cliReceipt("Cloud Runtime", `Routing set to ${provider === "google" ? "gemini" : provider}`, [], "switchbay models --lane cloud"));
     return;
   }
-  console.log(describeCloudProviders());
+  const config = loadCloudProvidersConfig();
+  const pool = listAutoModelPool();
+  console.log(cliPage({ title: "Cloud Runtime", state: getActiveCloudProvider(), summary: "Trusted automatic routing across configured cloud lanes.", rows: pool.map((provider) => [provider.lane, `${provider.status === "ready" ? "● ready" : `○ ${provider.status}`} · ${provider.model}`]), next: "switchbay models --lane cloud" }));
 }
 
 async function runModelsCommand(rawLane: string | null) {
@@ -1027,7 +950,23 @@ async function runModelsCommand(rawLane: string | null) {
     const visibleModels = lane === "cloud" && activeCloudProvider !== "auto"
       ? result.models.filter((model) => model.provider === activeCloudProvider)
       : result.models;
-    if (lane === "cloud" && activeCloudProvider === "auto") console.log(`${describeAutoModelPool()}\n`);
+    if (lane === "cloud" && activeCloudProvider === "auto") {
+      const pool = listAutoModelPool();
+      console.log(`${renderCliList({
+        title: "Trusted Auto Pool",
+        count: pool.length,
+        noun: "lane",
+        summary: `${pool.filter((entry) => entry.status === "ready").length}/${pool.length} ready`,
+        columns: [
+          { key: "lane", label: "Lane", width: 12 },
+          { key: "model", label: "Default model", width: 34 },
+          { key: "status", label: "Status", width: 22 },
+          { key: "specialty", label: "Best for", width: 44 },
+        ],
+        rows: pool,
+        hint: "Trusted local: ollama · Explicit-only: openrouter, huggingface, ollama-cloud",
+      })}\n`);
+    }
     console.log(renderCliList({
       title: `${getRuntimeLaneLabel(lane)} Models`,
       count: visibleModels.length,
@@ -1075,9 +1014,7 @@ async function runModelCommand(
 
   if (!target) {
     const selected = getSelectedRuntimeModel(lane);
-    console.log(`${getRuntimeLaneLabel(lane)} model: ${selected?.id ?? "default"}`);
-    console.log(`List options with: switchbay models --lane ${lane}`);
-    console.log(`Switch with: switchbay model ${lane} <model-id>`);
+    console.log(cliPage({ title: "Model Runtime", state: getRuntimeLaneLabel(lane), rows: [["Selection", selected?.id ?? "Auto"], ["Mode", selected ? "Pinned" : "Automatic"]], next: `switchbay models --lane ${lane}` }));
     return;
   }
 
@@ -1096,7 +1033,7 @@ async function runModelCommand(
     if (match.provider === "auto") {
       clearSelectedRuntimeModel(lane);
       setActiveCloudProvider("auto");
-      console.log(`Cleared the ${getRuntimeLaneLabel(lane)} model pin. Trusted auto-routing is active.`);
+      console.log(cliReceipt("Model Runtime", "Trusted auto-routing active", [["Lane", getRuntimeLaneLabel(lane)]], `switchbay models --lane ${lane}`));
       return;
     }
 
@@ -1104,8 +1041,7 @@ async function runModelCommand(
       id: match.id,
       provider: match.provider,
     });
-    console.log(`Selected ${match.id} for ${getRuntimeLaneLabel(lane)}.`);
-    console.log(`Stored in ~/.switchbay/config.json`);
+    console.log(cliReceipt("Model Runtime", "Model pinned", [["Lane", getRuntimeLaneLabel(lane)], ["Model", match.id], ["Config", "~/.switchbay/config.json"]], `switchbay model ${lane} auto`));
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`switchbay model: ${msg}`);

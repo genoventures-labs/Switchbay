@@ -136,16 +136,9 @@ export function describeCloudProviders(): string {
 }
 
 export function describeAutoModelPool(): string {
-  const intents: Record<CloudProviderId, string> = {
-    openai: "structured output · summaries · vision",
-    anthropic: "code · tools · workspace implementation",
-    google: "research · comparison · long-context synthesis",
-  };
-  const rows = (["openai", "anthropic", "google"] as CloudProviderId[]).map((id) => {
-    const provider = getCloudProviderConfig(id);
-    const ready = hasCloudProviderKey(id) ? "ready" : `missing ${provider.apiKeyEnv}`;
-    return `  ${id === "google" ? "gemini" : id.padEnd(9)} ${provider.model} · ${ready}\n             ${intents[id]}`;
-  });
+  const rows = listAutoModelPool().map((entry) =>
+    `  ${entry.lane.padEnd(9)} ${entry.model} · ${entry.status}\n             ${entry.specialty}`
+  );
   return [
     "Trusted cloud auto pool",
     ...rows,
@@ -153,6 +146,30 @@ export function describeAutoModelPool(): string {
     "Explicit-only contained lanes: huggingface · openrouter · ollama-cloud",
     "Trusted local lane: ollama",
   ].join("\n");
+}
+
+export function listAutoModelPool(): Array<{
+  provider: CloudProviderId;
+  lane: string;
+  model: string;
+  status: string;
+  specialty: string;
+}> {
+  const specialties: Record<CloudProviderId, string> = {
+    openai: "structured output · summaries · vision",
+    anthropic: "code · tools · workspace implementation",
+    google: "research · comparison · long-context synthesis",
+  };
+  return (["openai", "anthropic", "google"] as CloudProviderId[]).map((id) => {
+    const provider = getCloudProviderConfig(id);
+    return {
+      provider: id,
+      lane: id === "google" ? "gemini" : id,
+      model: provider.model,
+      status: hasCloudProviderKey(id) ? "ready" : `missing ${provider.apiKeyEnv}`,
+      specialty: specialties[id],
+    };
+  });
 }
 
 export function invalidateCloudProvidersConfig(): void {

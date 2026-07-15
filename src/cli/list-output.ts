@@ -1,4 +1,6 @@
-import { ANSI_COLORS as CLR } from "../tui/theme";
+import { cliColorEnabled, cliHeader } from "./presentation";
+
+const CLR = { reset: "\u001b[0m", accent: "\u001b[38;5;44m", muted: "\u001b[38;5;244m" };
 
 export type ListColumn = { key: string; label: string; width: number };
 export type ListRow = Record<string, string | number | null | undefined>;
@@ -14,11 +16,11 @@ export function renderCliList(input: {
   hint?: string;
   color?: boolean;
 }): string {
-  const color = input.color ?? Boolean(process.stdout.isTTY);
+  const color = input.color ?? cliColorEnabled();
   const paint = (value: string, code: string) => color ? `${code}${value}${CLR.reset}` : value;
   const plural = input.count === 1 ? input.noun : `${input.noun}s`;
   const lines = [
-    `${paint("◆", CLR.accentBright)} ${paint(input.title, `${CLR.bold}${CLR.text}`)} ${paint(`· ${input.summary ?? `${input.count} ${plural}`}`, CLR.muted)}`,
+    cliHeader(input.title, input.summary ?? `${input.count} ${plural}`, color),
   ];
 
   if (!input.rows.length) {

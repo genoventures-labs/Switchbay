@@ -5,6 +5,7 @@ import path from "node:path";
 import {
   cloudProvidersConfigPath,
   describeAutoModelPool,
+  listAutoModelPool,
   getActiveCloudProvider,
   getCloudProviderConfig,
   invalidateCloudProvidersConfig,
@@ -75,4 +76,10 @@ test("auto model pool explains trusted routing and contained lanes", () => {
   expect(description).toContain("code · tools · workspace implementation");
   expect(description).toContain("research · comparison · long-context synthesis");
   expect(description).toContain("Explicit-only contained lanes: huggingface · openrouter · ollama-cloud");
+});
+
+test("auto model pool exposes structured rows for CLI rendering", () => {
+  const rows = listAutoModelPool();
+  expect(rows.map((row) => row.lane)).toEqual(["openai", "anthropic", "gemini"]);
+  expect(rows.every((row) => row.model && row.status && row.specialty)).toBe(true);
 });

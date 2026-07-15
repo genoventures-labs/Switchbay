@@ -13,6 +13,12 @@ test("parses macOS service management commands", () => {
   expect(parseCliArgs(["bun", "index.tsx", "service", "uninstall"]).serviceAction).toBe("uninstall");
 });
 
+test("rejects unknown subsystem actions instead of silently showing status", () => {
+  expect(() => parseCliArgs(["bun", "index.tsx", "engines", "banana"])).toThrow("Unknown engines action");
+  expect(() => parseCliArgs(["bun", "index.tsx", "service", "banana"])).toThrow("Unknown service action");
+  expect(() => parseCliArgs(["bun", "index.tsx", "plugins", "banana"])).toThrow("Unknown plugins action");
+});
+
 test("parses MCP CLI helper commands", () => {
   const status = parseCliArgs(["bun", "index.tsx", "mcp"]);
   expect(status.subcommand).toBe("mcp");

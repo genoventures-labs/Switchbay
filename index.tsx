@@ -30,6 +30,8 @@ import { buildQuickHandoff } from "./src/operator/handoff";
 import { addCloudModel, inferCloudModelProvider } from "./src/runtime/cloud-model-catalog";
 import type { CloudProviderId } from "./src/runtime/cloud-providers";
 import { findAgent, loadAllAgents, saveAgentDefinition, type AgentScope } from "./src/agent/agents";
+import { loadEngineRegistry } from "./src/engines/registry";
+import { renderCliList } from "./src/cli/list-output";
 
 // Ensure config is initialized on first boot
 loadSwitchbayConfig();
@@ -418,12 +420,37 @@ async function runEngineCommand(action: "status" | "sync" | "list" | "templates"
 
     const inventory = await loadEngineBayInventory();
     if (action === "templates") {
-      console.log(inventory.templates.length ? inventory.templates.join("\n") : "No Engine Bay templates found. Run `switchbay engines sync`.");
+      console.log(renderCliList({
+        title: "Engine Templates", count: inventory.templates.length, noun: "template",
+        columns: [{ key: "path", label: "Path", width: 76 }],
+        rows: inventory.templates.map((path) => ({ path })),
+        empty: "No Engine Bay templates found.", hint: "Refresh: switchbay engines sync",
+      }));
       return;
     }
     if (action === "list") {
-      const items = [...inventory.manifests, ...inventory.engineFiles];
-      console.log(items.length ? items.join("\n") : "No Engine Bay files found. Run `switchbay engines sync`.");
+      const registry = await loadEngineRegistry(process.cwd());
+      console.log(renderCliList({
+        title: "Engines",
+        count: registry.engines.length,
+        noun: "engine",
+        summary: `${registry.engines.length} registered`,
+        columns: [
+          { key: "id", label: "ID", width: 22 },
+          { key: "name", label: "Name", width: 28 },
+          { key: "tools", label: "Tools", width: 8 },
+          { key: "approval", label: "Gated", width: 7 },
+        ],
+        rows: registry.engines.map((engine) => ({
+          id: engine.id,
+          name: engine.name,
+          tools: engine.tools.length,
+          approval: engine.tools.filter((tool) => tool.approval === "always").length,
+        })),
+        empty: "No registered engines. Sync Engine Bay or add a workspace manifest.",
+        hint: "Details in the TUI: /engines · Hub files: switchbay engines templates",
+      }));
+      if (registry.warnings.length) console.log(`\n${CLR.muted}${registry.warnings.length} manifest warning(s); run switchbay engines for details.${CLR.reset}`);
       return;
     }
     console.log(await describeEngineBay(false));
@@ -448,13 +475,29 @@ async function runToolboxCommand(
 
     const inventory = await loadToolboxInventory();
     if (action === "templates") {
-      console.log(inventory.templates.length ? inventory.templates.join("\n") : `No skill templates found. Run \`${command} sync\`.`);
+      console.log(renderCliList({
+        title: "Skill Templates", count: inventory.templates.length, noun: "template",
+        columns: [{ key: "path", label: "Path", width: 76 }],
+        rows: inventory.templates.map((path) => ({ path })),
+        empty: "No skill templates found.", hint: `Refresh: ${command} sync`,
+      }));
       return;
     }
     if (action === "list") {
-      console.log(inventory.skills.length
-        ? inventory.skills.map((skill) => `${skill.id} - ${skill.name}: ${skill.description}`).join("\n")
-        : "No skills found.");
+      console.log(renderCliList({
+        title: "Skills",
+        count: inventory.skills.length,
+        noun: "skill",
+        summary: `${inventory.skills.length} available`,
+        columns: [
+          { key: "id", label: "ID", width: 30 },
+          { key: "source", label: "Source", width: 10 },
+          { key: "name", label: "Name", width: 34 },
+        ],
+        rows: inventory.skills.map((skill) => ({ id: skill.id, source: skill.source, name: skill.name })),
+        empty: "No skills found. Sync the Toolbox to load shared skills.",
+        hint: `Read one: ${command} read <id> · Browse descriptions in the TUI: /skills`,
+      }));
       return;
     }
     if (action === "read") {
@@ -482,9 +525,26 @@ async function runPluginCommand(action: "status" | "list" | "inspect", pluginId:
   try {
     if (action === "list") {
       const inventory = await loadPluginInventory();
-      console.log(inventory.plugins.length
-        ? inventory.plugins.map((plugin) => `${plugin.manifest.id} - ${plugin.manifest.name}: ${plugin.manifest.description}`).join("\n")
-        : "No plugins installed. Create one with `/create-plugin` in the TUI.");
+      console.log(renderCliList({
+        title: "Plugins",
+        count: inventory.plugins.length,
+        noun: "plugin",
+        summary: `${inventory.plugins.length} installed`,
+        columns: [
+          { key: "id", label: "ID", width: 24 },
+          { key: "state", label: "State", width: 10 },
+          { key: "assets", label: "Assets", width: 10 },
+          { key: "name", label: "Name", width: 32 },
+        ],
+        rows: inventory.plugins.map((plugin) => ({
+          id: plugin.manifest.id,
+          state: plugin.manifest.enabled ? "enabled" : "disabled",
+          assets: plugin.manifest.agents.length + plugin.manifest.skills.length + plugin.manifest.engines.length + plugin.manifest.guides.length + plugin.manifest.knowledge.length + plugin.manifest.mcp.length,
+          name: plugin.manifest.name,
+        })),
+        empty: "No plugins installed in this workspace.",
+        hint: "Create one in the TUI: /create-plugin · Inspect: switchbay plugins inspect <id>",
+      }));
       return;
     }
 
@@ -572,7 +632,21 @@ ${agent.prompt}
 
     const customCount = agents.filter((agent) => agent.custom).length;
     if (action === "list") {
-      console.log(agents.map((agent) => `${agent.id} [${agent.source ?? "builtin"}] - ${agent.name}: ${agent.description}`).join("\n"));
+      console.log(renderCliList({
+        title: "Agents",
+        count: agents.length,
+        noun: "agent",
+        summary: `${agents.length} available`,
+        columns: [
+          { key: "id", label: "ID", width: 20 },
+          { key: "source", label: "Source", width: 11 },
+          { key: "name", label: "Name", width: 24 },
+          { key: "specialty", label: "Specialty", width: 38 },
+        ],
+        rows: agents.map((agent) => ({ id: agent.id, source: agent.source ?? "builtin", name: agent.name, specialty: agent.description })),
+        empty: "No agents available.",
+        hint: "Read one: switchbay agents read <id> · Activate in the TUI: /agent <id>",
+      }));
       return;
     }
 
@@ -606,12 +680,22 @@ async function runMemoryCommand(action: "status" | "refresh" | "list" | "facts" 
     }
     if (action === "list") {
       const notes = await listMemoryNotes(cwd);
-      console.log(notes.length ? notes.map((note, index) => `${index}. ${note}`).join("\n") : "No memory notes.");
+      console.log(renderCliList({
+        title: "Memory Notes", count: notes.length, noun: "note",
+        columns: [{ key: "index", label: "#", width: 4 }, { key: "note", label: "Note", width: 72 }],
+        rows: notes.map((note, index) => ({ index, note })),
+        empty: "No workspace memory notes yet.", hint: 'Add one: switchbay memory add "use Bun for tests"',
+      }));
       return;
     }
     if (action === "facts") {
       const facts = await readMemoryFacts(cwd);
-      console.log(facts.length ? facts.map((fact) => `${fact.key}: ${fact.value}`).join("\n") : "No memory facts. Run `switchbay memory refresh`.");
+      console.log(renderCliList({
+        title: "Memory Facts", count: facts.length, noun: "fact",
+        columns: [{ key: "key", label: "Key", width: 28 }, { key: "value", label: "Value", width: 56 }],
+        rows: facts.map((fact) => ({ key: fact.key, value: fact.value })),
+        empty: "No structured memory facts yet.", hint: "Build them: switchbay memory refresh",
+      }));
       return;
     }
     console.log(await describeMemory(cwd));
@@ -943,15 +1027,26 @@ async function runModelsCommand(rawLane: string | null) {
     const visibleModels = lane === "cloud" && activeCloudProvider !== "auto"
       ? result.models.filter((model) => model.provider === activeCloudProvider)
       : result.models;
-    const rows = visibleModels.map((model) => formatModelRow(model, selected?.id === model.id));
-    console.log(`${getRuntimeLaneLabel(lane)} models${lane === "cloud" ? ` · mode=${activeCloudProvider}` : ""}`);
-    if (lane === "cloud" && activeCloudProvider === "auto") console.log(`\n${describeAutoModelPool()}\n\nTrusted cloud catalog`);
-    console.log(rows.length ? rows.join("\n") : "No models found.");
+    if (lane === "cloud" && activeCloudProvider === "auto") console.log(`${describeAutoModelPool()}\n`);
+    console.log(renderCliList({
+      title: `${getRuntimeLaneLabel(lane)} Models`,
+      count: visibleModels.length,
+      noun: "model",
+      summary: lane === "cloud" ? `${visibleModels.length} shown · mode=${activeCloudProvider}` : `${visibleModels.length} available`,
+      columns: [
+        { key: "active", label: "", width: 2 },
+        { key: "id", label: "Model", width: 36 },
+        { key: "provider", label: "Provider", width: 12 },
+        { key: "source", label: "Source", width: 12 },
+      ],
+      rows: visibleModels.map((model) => ({ active: selected?.id === model.id ? "●" : "", id: model.id, provider: model.provider, source: model.source })),
+      empty: "No models found for this lane.",
+      hint: `Switch: switchbay model ${lane} <model-id>`,
+    }));
     if (selected && !visibleModels.some((model) => model.id === selected.id)) {
       console.log(`\nSelected: ${selected.id} (not returned by the current model list)`);
     }
     if (result.notice) console.log(`\n${result.notice}`);
-    console.log(`\nSwitch with: switchbay model ${lane} <model-id>`);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`switchbay models: ${msg}`);
@@ -1180,11 +1275,6 @@ function findRuntimeModel(models: RuntimeModelOption[], target: string): Runtime
   return models.find((model) => model.id.toLowerCase() === normalized) ??
     models.find((model) => model.label.toLowerCase() === normalized) ??
     null;
-}
-
-function formatModelRow(model: RuntimeModelOption, selected: boolean): string {
-  const marker = selected ? "*" : " ";
-  return `${marker} ${model.id} (${model.provider}, ${model.source})`;
 }
 
 function normalizeClientProvider(provider: string | undefined) {

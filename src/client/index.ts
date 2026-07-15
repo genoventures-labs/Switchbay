@@ -26,6 +26,9 @@ export type TurnResult = {
   lane: string;
   traceSaved: boolean;
   toolExecutions: Array<{ tool: string; summary: string; ok: boolean; changedFile?: string }>;
+  providerEvents: Array<{ provider: string; type: string; server_managed: true; id?: string; name?: string; status?: string }>;
+  citations: Array<{ provider: string; url?: string; title?: string; start?: number; end?: number }>;
+  artifacts: Array<{ provider: string; id?: string; name?: string; mime_type?: string; container_id?: string; file_id?: string }>;
   workspace: { cwd: string; repoRoot: string | null; branch: string | null; dirtyFiles: string[] };
   pendingApproval?: { id: string; kind: string; title: string; summary: string; commandHint: string; createdAt: number } | null;
   route?: { provider?: string; model?: string; using?: string } | null;

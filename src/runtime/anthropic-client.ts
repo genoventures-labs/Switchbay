@@ -14,12 +14,26 @@ type AnthropicClientOptions = {
   apiBase?: string;
   apiKey?: string;
   fetchImpl?: typeof fetch;
+  managedTools?: boolean;
 };
 
 type AnthropicContentBlock =
-  | { type: "text"; text: string }
+  | { type: "text"; text: string; citations?: unknown[] }
   | { type: "tool_use"; id: string; name: string; input: unknown }
-  | { type: "tool_result"; tool_use_id: string; content: string };
+  | { type: "tool_result"; tool_use_id: string; content: string }
+  | Record<string, unknown>;
+
+type AnthropicResponse = {
+  content?: AnthropicContentBlock[];
+  stop_reason?: string;
+  container?: { id?: string } & Record<string, unknown>;
+};
+
+const ANTHROPIC_SERVER_TOOLS = [
+  { type: "web_search_20250305", name: "web_search" },
+  { type: "web_fetch_20250910", name: "web_fetch" },
+  { type: "code_execution_20250825", name: "code_execution" },
+] as const;
 
 type AnthropicMessage = {
   role: "user" | "assistant";
@@ -30,12 +44,14 @@ export class AnthropicClient {
   private readonly apiBase: string;
   private readonly apiKey?: string;
   private readonly fetchImpl: typeof fetch;
+  private readonly managedTools: boolean;
 
   constructor(options: AnthropicClientOptions = {}) {
     const config = getCloudProviderConfig("anthropic");
     this.apiBase = options.apiBase ?? config.apiBase;
     this.apiKey = options.apiKey ?? getCloudProviderApiKey("anthropic");
     this.fetchImpl = options.fetchImpl ?? fetch;
+    this.managedTools = options.managedTools ?? true;
   }
 
   async createChatCompletion(
@@ -58,11 +74,11 @@ export class AnthropicClient {
       },
       body: JSON.stringify({
         model: request.model ?? getCloudProviderConfig("anthropic").model,
-        max_tokens: 4096,
+        max_tokens: anthropicMaxTokens(),
         ...(converted.system ? { system: converted.system } : {}),
         messages: converted.messages,
         stream: useStream,
-        ...(request.tools && request.tools.length > 0 ? { tools: convertTools(request.tools) } : {}),
+        ...buildToolsPayload(request, this.managedTools),
         ...(request.tool_choice !== undefined ? { tool_choice: convertToolChoice(request.tool_choice) } : {}),
       }),
     });
@@ -74,10 +90,7 @@ export class AnthropicClient {
 
     if (!useStream) {
       const rawText = await response.text();
-      const parsed = JSON.parse(rawText) as {
-        content?: AnthropicContentBlock[];
-        stop_reason?: string;
-      };
+      const parsed = JSON.parse(rawText) as AnthropicResponse;
       const normalized = normalizeAnthropicResponse(parsed);
       normalized._rawText = rawText;
 
@@ -123,6 +136,10 @@ function convertMessages(messages: ChatMessage[]): { system: string; messages: A
     }
 
     if (message.role === "assistant") {
+      if (Array.isArray(message.provider_content)) {
+        converted.push({ role: "assistant", content: message.provider_content as AnthropicContentBlock[] });
+        continue;
+      }
       const blocks: AnthropicContentBlock[] = [];
       const text = stringifyContent(message.content);
       if (text) {
@@ -152,12 +169,31 @@ function convertMessages(messages: ChatMessage[]): { system: string; messages: A
   return { system: system.join("\n\n"), messages: converted };
 }
 
+function buildToolsPayload(request: ChatCompletionRequest, managedTools: boolean): { tools?: unknown[] } {
+  const tools = request.tools?.length ? convertTools(request.tools) : [];
+  if (managedTools && request.tool_choice !== "none") {
+    const names = new Set(tools.map((tool) => String((tool as { name?: unknown }).name ?? "")));
+    for (const serverTool of ANTHROPIC_SERVER_TOOLS) {
+      if (!names.has(serverTool.name)) tools.push({ ...serverTool });
+    }
+  }
+  return tools.length ? { tools } : {};
+}
+
 function convertTools(tools: ToolDefinition[]) {
-  return tools.map((tool) => ({
-    name: tool.function.name,
-    description: tool.function.description ?? "",
-    input_schema: tool.function.parameters ?? { type: "object", properties: {} },
-  }));
+  return tools.map((tool) => {
+    if (tool.function.name === "native_exec") {
+      return { type: "bash_20250124", name: "bash" };
+    }
+    if (tool.function.name === "native_editor") {
+      return { type: "text_editor_20250728", name: "str_replace_based_edit_tool" };
+    }
+    return {
+      name: tool.function.name,
+      description: tool.function.description ?? "",
+      input_schema: tool.function.parameters ?? { type: "object", properties: {} },
+    };
+  });
 }
 
 function convertToolChoice(choice: ChatCompletionRequest["tool_choice"]) {
@@ -169,20 +205,21 @@ function convertToolChoice(choice: ChatCompletionRequest["tool_choice"]) {
   return undefined;
 }
 
-function normalizeAnthropicResponse(response: { content?: AnthropicContentBlock[]; stop_reason?: string }): ChatCompletionResponse {
+function normalizeAnthropicResponse(response: AnthropicResponse): ChatCompletionResponse {
   const textParts: string[] = [];
   const toolCalls: ToolCall[] = [];
+  const content = response.content ?? [];
 
-  for (const block of response.content ?? []) {
+  for (const block of content) {
     if (block.type === "text") {
-      textParts.push(block.text);
+      textParts.push(String(block.text ?? ""));
     }
     if (block.type === "tool_use") {
       toolCalls.push({
-        id: block.id,
+        id: String(block.id ?? ""),
         type: "function",
         function: {
-          name: block.name,
+          name: String(block.name ?? ""),
           arguments: JSON.stringify(block.input ?? {}),
         },
       });
@@ -196,16 +233,21 @@ function normalizeAnthropicResponse(response: { content?: AnthropicContentBlock[
           role: "assistant",
           content: textParts.join(""),
           tool_calls: toolCalls.length > 0 ? toolCalls : undefined,
+          provider_content: content,
         },
-        finish_reason: toolCalls.length > 0 ? "tool_calls" : response.stop_reason ?? "stop",
+        finish_reason: normalizeAnthropicStopReason(response.stop_reason, toolCalls.length > 0),
       },
     ],
+    provider: buildProviderEnvelope(content, response.stop_reason, response.container),
   };
 }
 
 async function readAnthropicStream(response: Response, onToken: (token: string) => void): Promise<ChatCompletionResponse> {
   let accText = "";
-  const toolBlocks: Record<number, { id: string; name: string; inputJson: string }> = {};
+  const contentBlocks: Record<number, Record<string, unknown>> = {};
+  const inputJson: Record<number, string> = {};
+  let stopReason: string | undefined;
+  let container: AnthropicResponse["container"];
 
   const reader = response.body!.getReader();
   const decoder = new TextDecoder();
@@ -229,15 +271,14 @@ async function readAnthropicStream(response: Response, onToken: (token: string) 
       let event: {
         type?: string;
         index?: number;
-        content_block?: {
-          type?: string;
-          id?: string;
-          name?: string;
-        };
+        content_block?: Record<string, unknown>;
+        message?: { container?: AnthropicResponse["container"] };
         delta?: {
           type?: string;
           text?: string;
           partial_json?: string;
+          stop_reason?: string;
+          citation?: unknown;
         };
       };
       try {
@@ -246,38 +287,65 @@ async function readAnthropicStream(response: Response, onToken: (token: string) 
         continue;
       }
 
-      if (event.type === "content_block_start" && event.content_block?.type === "tool_use") {
+      if (event.type === "message_start" && event.message?.container) {
+        container = event.message.container;
+      }
+
+      if (event.type === "content_block_start" && event.content_block) {
         const index = event.index ?? 0;
-        toolBlocks[index] = {
-          id: event.content_block.id ?? "",
-          name: event.content_block.name ?? "",
-          inputJson: "",
-        };
+        contentBlocks[index] = structuredClone(event.content_block);
+        if (event.content_block.type === "tool_use" || event.content_block.type === "server_tool_use") {
+          inputJson[index] = "";
+        }
       }
 
       if (event.type === "content_block_delta" && event.delta?.type === "text_delta" && event.delta.text) {
         accText += event.delta.text;
+        const index = event.index ?? 0;
+        const block = contentBlocks[index] ?? (contentBlocks[index] = { type: "text", text: "" });
+        block.text = String(block.text ?? "") + event.delta.text;
         onToken(event.delta.text);
       }
 
       if (event.type === "content_block_delta" && event.delta?.type === "input_json_delta") {
         const index = event.index ?? 0;
-        if (!toolBlocks[index]) {
-          toolBlocks[index] = { id: "", name: "", inputJson: "" };
-        }
-        toolBlocks[index]!.inputJson += event.delta.partial_json ?? "";
+        inputJson[index] = (inputJson[index] ?? "") + (event.delta.partial_json ?? "");
+      }
+
+      if (event.type === "content_block_delta" && event.delta?.type === "citations_delta" && event.delta.citation) {
+        const index = event.index ?? 0;
+        const block = contentBlocks[index] ?? (contentBlocks[index] = { type: "text", text: "" });
+        const citations = Array.isArray(block.citations) ? block.citations : [];
+        citations.push(event.delta.citation);
+        block.citations = citations;
+      }
+
+      if (event.type === "message_delta" && event.delta?.stop_reason) {
+        stopReason = event.delta.stop_reason;
       }
     }
   }
 
-  const toolCalls = Object.entries(toolBlocks).map(([, block]) => ({
-    id: block.id,
-    type: "function" as const,
-    function: {
-      name: block.name,
-      arguments: block.inputJson || "{}",
-    },
-  }));
+  const content = Object.keys(contentBlocks)
+    .map(Number)
+    .sort((left, right) => left - right)
+    .map((index) => {
+      const block = contentBlocks[index]!;
+      if ((block.type === "tool_use" || block.type === "server_tool_use") && inputJson[index] !== undefined) {
+        block.input = parseJsonValue(inputJson[index] || "{}", block.input ?? {});
+      }
+      return block as AnthropicContentBlock;
+    });
+  const toolCalls = content.flatMap((block, index) => block.type === "tool_use"
+    ? [{
+        id: String(block.id ?? ""),
+        type: "function" as const,
+        function: {
+          name: String(block.name ?? ""),
+          arguments: inputJson[index] || JSON.stringify(block.input ?? {}),
+        },
+      }]
+    : []);
 
   return {
     choices: [
@@ -286,11 +354,138 @@ async function readAnthropicStream(response: Response, onToken: (token: string) 
           role: "assistant",
           content: accText || null,
           tool_calls: toolCalls.length > 0 ? toolCalls : undefined,
+          provider_content: content,
         },
-        finish_reason: toolCalls.length > 0 ? "tool_calls" : "stop",
+        finish_reason: normalizeAnthropicStopReason(stopReason, toolCalls.length > 0),
       },
     ],
+    provider: buildProviderEnvelope(content, stopReason, container),
   };
+}
+
+function clientToolCalls(content: AnthropicContentBlock[]): ToolCall[] {
+  return content.flatMap((block) => block.type === "tool_use"
+    ? [{
+        id: String(block.id ?? ""),
+        type: "function" as const,
+        function: {
+          name: String(block.name ?? ""),
+          arguments: JSON.stringify(block.input ?? {}),
+        },
+      }]
+    : []);
+}
+
+function buildProviderEnvelope(
+  content: AnthropicContentBlock[],
+  stopReason?: string,
+  container?: AnthropicResponse["container"],
+): NonNullable<ChatCompletionResponse["provider"]> {
+  const events: NonNullable<ChatCompletionResponse["provider"]>["events"] = [];
+  const citations: NonNullable<ChatCompletionResponse["provider"]>["citations"] = [];
+  const artifacts: NonNullable<ChatCompletionResponse["provider"]>["artifacts"] = [];
+
+  for (const block of content) {
+    const record = block as Record<string, unknown>;
+    const type = String(record.type ?? "");
+    if (type === "server_tool_use") {
+      events.push({
+        provider: "anthropic",
+        type,
+        server_managed: true,
+        id: optionalString(record.id),
+        name: optionalString(record.name),
+        status: "started",
+        input: record.input,
+      });
+    } else if (type.endsWith("_tool_result")) {
+      const failed = record.is_error === true || record.error !== undefined;
+      events.push({
+        provider: "anthropic",
+        type,
+        server_managed: true,
+        id: optionalString(record.tool_use_id),
+        status: failed ? "failed" : "completed",
+        output: record.content ?? record.output ?? record,
+      });
+    }
+
+    const blockCitations = Array.isArray(record.citations) ? record.citations : [];
+    for (const value of blockCitations) {
+      if (!value || typeof value !== "object") continue;
+      const citation = value as Record<string, unknown>;
+      citations.push({
+        provider: "anthropic",
+        url: optionalString(citation.url),
+        title: optionalString(citation.title),
+        start: optionalNumber(citation.start_char_index ?? citation.start),
+        end: optionalNumber(citation.end_char_index ?? citation.end),
+      });
+    }
+    collectArtifacts(block, artifacts, container?.id);
+  }
+
+  return {
+    events,
+    citations,
+    artifacts,
+    ...(stopReason === "pause_turn"
+      ? { continuation: { provider: "anthropic" as const, kind: "pause_turn", id: container?.id, state: { content, container } } }
+      : {}),
+  };
+}
+
+function collectArtifacts(
+  value: unknown,
+  artifacts: NonNullable<ChatCompletionResponse["provider"]>["artifacts"],
+  containerId?: string,
+): void {
+  if (!value || typeof value !== "object") return;
+  if (Array.isArray(value)) {
+    for (const item of value) collectArtifacts(item, artifacts, containerId);
+    return;
+  }
+  const record = value as Record<string, unknown>;
+  const fileId = optionalString(record.file_id);
+  if (fileId && !artifacts.some((artifact) => artifact.file_id === fileId)) {
+    artifacts.push({
+      provider: "anthropic",
+      file_id: fileId,
+      id: optionalString(record.id),
+      name: optionalString(record.name ?? record.filename),
+      mime_type: optionalString(record.mime_type),
+      container_id: optionalString(record.container_id) ?? containerId,
+    });
+  }
+  for (const nested of Object.values(record)) collectArtifacts(nested, artifacts, containerId);
+}
+
+function optionalString(value: unknown): string | undefined {
+  return typeof value === "string" && value ? value : undefined;
+}
+
+function optionalNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function parseJsonValue(value: string, fallback: unknown): unknown {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallback;
+  }
+}
+
+function anthropicMaxTokens(): number {
+  const configured = Number(Bun.env.SWITCHBAY_ANTHROPIC_MAX_TOKENS ?? 8192);
+  if (!Number.isFinite(configured)) return 8192;
+  return Math.max(1024, Math.min(32768, Math.trunc(configured)));
+}
+
+function normalizeAnthropicStopReason(reason: string | undefined, hasToolCalls: boolean): string {
+  if (reason === "tool_use") return "tool_calls";
+  if (reason) return reason;
+  return hasToolCalls ? "tool_calls" : "stop";
 }
 
 function stringifyContent(content: unknown): string {

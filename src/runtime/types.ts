@@ -5,6 +5,52 @@ export type ChatMessage = {
   content: string | unknown;
   tool_call_id?: string;
   tool_calls?: ToolCall[];
+  /** Provider-native assistant content retained for faithful continuation. */
+  provider_content?: unknown;
+};
+
+export type ProviderName = "anthropic" | "openai" | "google";
+
+export type ProviderToolEvent = {
+  provider: ProviderName;
+  type: string;
+  server_managed: true;
+  id?: string;
+  name?: string;
+  status?: "started" | "completed" | "failed" | "paused";
+  input?: unknown;
+  output?: unknown;
+};
+
+export type ProviderCitation = {
+  provider: ProviderName;
+  url?: string;
+  title?: string;
+  start?: number;
+  end?: number;
+};
+
+export type ProviderArtifact = {
+  provider: ProviderName;
+  id?: string;
+  name?: string;
+  mime_type?: string;
+  container_id?: string;
+  file_id?: string;
+};
+
+export type ProviderContinuation = {
+  provider: ProviderName;
+  kind: string;
+  id?: string;
+  state?: unknown;
+};
+
+export type ProviderEnvelope = {
+  events: ProviderToolEvent[];
+  citations: ProviderCitation[];
+  artifacts: ProviderArtifact[];
+  continuation?: ProviderContinuation;
 };
 
 export type ToolFunction = {
@@ -47,6 +93,7 @@ export type ChatCompletionResponse = {
   choices?: ChatCompletionChoice[];
   output_text?: string;
   _rawText?: string;
+  provider?: ProviderEnvelope;
   meta?: {
     provider?: string;
     model?: string;

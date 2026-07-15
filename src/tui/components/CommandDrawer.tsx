@@ -33,7 +33,7 @@ export function CommandDrawer({
     >
       <Box marginBottom={1}>
         <Text color={brandColor} bold>Commands</Text>
-        <Text color={grayColor}> · arrows browse · tab inserts · enter runs</Text>
+        <Text color={grayColor}> · {commands.length} matches · arrows browse · tab inserts · enter runs</Text>
       </Box>
 
       {commands.length > 0 ? (
@@ -47,7 +47,7 @@ export function CommandDrawer({
               marginTop={0}
               marginBottom={0}
               paddingX={1}
-              paddingY={selected ? 1 : 0}
+              paddingY={0}
               backgroundColor={selected ? TUI_COLORS.surfaceRaised : undefined}
             >
               <Box gap={1}>

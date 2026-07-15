@@ -66,3 +66,26 @@ test("OpenAI client converts local image paths to base64 data URLs", async () =>
     image_url: { url: "data:image/png;base64,iVBORw==" },
   });
 });
+
+test("OpenAI-compatible streaming preserves length on a truncated tool payload", async () => {
+  const chunks = [
+    { choices: [{ delta: { tool_calls: [{ index: 0, id: "call-1", function: { name: "write_file", arguments: '{"path":"large.py","content":"unterminated' } }] }, finish_reason: null }] },
+    { choices: [{ delta: {}, finish_reason: "length" }] },
+  ];
+  const client = new OpenAiClient({
+    apiBase: "https://api.openai.test/v1",
+    apiKey: "test-key",
+    fetchImpl: mockFetch(async () => new Response(
+      `${chunks.map((chunk) => `data: ${JSON.stringify(chunk)}\n\n`).join("")}data: [DONE]\n\n`,
+      { status: 200, headers: { "content-type": "text/event-stream" } },
+    )),
+  });
+
+  const response = await client.createChatCompletion("dev", {
+    model: "gpt-test",
+    messages: [{ role: "user", content: "Write a large file" }],
+  }, { onToken() {} });
+
+  expect(response.choices?.[0]?.finish_reason).toBe("length");
+  expect(response.choices?.[0]?.message?.tool_calls?.[0]?.function.arguments).toContain("unterminated");
+});

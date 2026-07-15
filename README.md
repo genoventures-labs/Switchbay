@@ -340,15 +340,18 @@ Full reference: [API_INTEGRATION.md](docs/API_INTEGRATION.md)
 
 ---
 
-## Key TUI Commands
+## Common TUI Commands
 
 ```text
+/help                       Open the capability and keyboard guide
 /lane · /model              Switch provider or model, mid-session
+/auto                       Restore trusted cloud auto-routing
 /agent <id>                 Activate a specialist agent
 /plan                       Generate and execute a step-by-step plan
 /remember                   Save a workspace memory
 /pin                        Pin a file into future context
 /search                     Search the workspace knowledge index
+/native                     Inspect isolated and provider-managed tools
 /skills sync                Pull latest skills from GitHub
 /engines                    List registered engines
 /trace                      Show the latest turn receipt
@@ -376,6 +379,7 @@ Full reference: [SLASH_COMMANDS.md](docs/SLASH_COMMANDS.md)
 | [PLUGINS.md](docs/PLUGINS.md) | Plugin manifest format, asset types, creating plugins |
 | [MEMORY_KNOWLEDGE_TRACES.md](docs/MEMORY_KNOWLEDGE_TRACES.md) | Memory, Knowledge Index, Trace Ledger, Quick Starts/Rules |
 | [MODEL_READINESS.md](docs/MODEL_READINESS.md) | Workspace profiles, durable plans, automatic knowledge, workflows, context receipts |
+| [NATIVE_TOOLS.md](docs/NATIVE_TOOLS.md) | Provider-managed tools, provider-native interfaces, and Switchbay's isolated model environment |
 | [USER_CONTEXT.md](docs/USER_CONTEXT.md) | Private machine-local profile, work style, active-project, preference, and boundary context |
 | [QUICKSTARTS_AND_RULES.md](docs/QUICKSTARTS_AND_RULES.md) | The quickstarts Switchbay reads before acting, how to write your own |
 | [SLASH_COMMANDS.md](docs/SLASH_COMMANDS.md) | Complete TUI slash command reference |

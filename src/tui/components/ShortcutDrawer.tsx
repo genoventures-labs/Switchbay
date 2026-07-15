@@ -6,20 +6,49 @@ type ShortcutDrawerProps = {
   visible: boolean;
 };
 
-const SHORTCUTS = [
-  { key: "/", label: "Slash commands", description: "Browse and run internal commands" },
-  { key: "@", label: "File mentions", description: "Add file/directory context to your query" },
-  { key: "Ctrl+L", label: "Toggle lane", description: "Cycle Cloud and Ollama model lanes" },
-  { key: "/collapse", label: "Toggle panels", description: "Hide or show right-side telemetry" },
-  { key: "/skills", label: "Skills drawer", description: "Browse reusable model skills" },
-  { key: "/model", label: "Model drawer", description: "Pick a cloud preset or Ollama model" },
-  { key: "/mcp", label: "MCP bridge", description: "Show config or toggle Switchbay's MCP bridge" },
-  { key: "?", label: "Help", description: "Show this shortcuts drawer" },
-  { key: "Ctrl+U", label: "Scroll up", description: "Page up through the transcript" },
-  { key: "Ctrl+D", label: "Scroll down", description: "Page down through the transcript" },
-  { key: "Ctrl+C", label: "Exit", description: "Terminate the current session" },
-  { key: "Esc", label: "Cancel", description: "Clear current input or close drawers" },
-];
+const HELP_SECTIONS = [
+  {
+    title: "Start here",
+    items: [
+      { key: "/", label: "All commands", description: "Search the complete command catalog" },
+      { key: "/model", label: "Models", description: "Choose a lane/model; /auto restores routing" },
+      { key: "/workspace", label: "Workspace", description: "Inspect, add, or hop between projects" },
+      { key: "/plan", label: "Planner", description: "Break work into visible resumable steps" },
+    ],
+  },
+  {
+    title: "Context and work",
+    items: [
+      { key: "/context", label: "Your context", description: "Inspect private machine-local guidance" },
+      { key: "/memory", label: "Memory", description: "Workspace notes and structured facts" },
+      { key: "/index", label: "Knowledge", description: "Index and search sourced project docs" },
+      { key: "/agenda", label: "Daily Board", description: "View or manage today's tasks" },
+      { key: "/trace", label: "Receipts", description: "Inspect turns, tools, routing, and graphs" },
+    ],
+  },
+  {
+    title: "Capabilities",
+    items: [
+      { key: "/agents", label: "Agents", description: "Activate a specialist role" },
+      { key: "/skills", label: "Skills", description: "Browse reusable working methods" },
+      { key: "/engines", label: "Engines", description: "Browse registered tool packs" },
+      { key: "/plugins", label: "Plugins", description: "Inspect bundled capabilities" },
+      { key: "/mcp", label: "MCP", description: "Inspect trusted external integrations" },
+      { key: "/native", label: "Native tools", description: "Inspect isolated and provider tools" },
+    ],
+  },
+  {
+    title: "Keyboard",
+    items: [
+      { key: "@", label: "Mention files", description: "Add a file or directory to your request" },
+      { key: "Ctrl+L", label: "Toggle lane", description: "Cycle trusted cloud and local lanes" },
+      { key: "Ctrl+U/D", label: "Scroll", description: "Page through the persistent work feed" },
+      { key: "/collapse", label: "Panels", description: "Hide or show right-side telemetry" },
+      { key: "Esc", label: "Close", description: "Clear input or close the active drawer" },
+      { key: "Ctrl+C", label: "Exit", description: "End the current TUI process" },
+    ],
+  },
+] as const;
 
 export function ShortcutDrawer({ visible }: ShortcutDrawerProps) {
   if (!visible) return null;
@@ -38,18 +67,20 @@ export function ShortcutDrawer({ visible }: ShortcutDrawerProps) {
       borderColor={grayColor}
     >
       <Box marginBottom={1}>
-        <Text color={brandColor} bold>Keyboard Shortcuts</Text>
+        <Text color={brandColor} bold>Switchbay Help</Text>
+        <Text color={grayColor}>  ? or /help to toggle · type / to search everything</Text>
       </Box>
 
-      {SHORTCUTS.map((s, i) => (
-        <Box key={i} gap={2} paddingX={1}>
-          <Box width={10}>
-            <Text color={greenColor} bold>{s.key}</Text>
-          </Box>
-          <Box width={20}>
-            <Text color={TUI_COLORS.text} bold>{s.label}</Text>
-          </Box>
-          <Text color={grayColor}>└ {s.description}</Text>
+      {HELP_SECTIONS.map((section) => (
+        <Box key={section.title} flexDirection="column" marginBottom={1}>
+          <Text color={greenColor} bold>{section.title.toUpperCase()}</Text>
+          {section.items.map((item) => (
+            <Box key={item.key} gap={1} paddingLeft={1}>
+              <Box width={12}><Text color={brandColor} bold>{item.key}</Text></Box>
+              <Box width={16}><Text color={TUI_COLORS.text}>{item.label}</Text></Box>
+              <Text color={grayColor}>· {item.description}</Text>
+            </Box>
+          ))}
         </Box>
       ))}
     </Box>

@@ -5,8 +5,11 @@ import { getCloudProviderConfig, type CloudProviderId } from "./cloud-providers"
 import { getActiveLocalProvider, getLocalProviderConfig, type LocalProviderId } from "./local-providers";
 import { OllamaClient } from "./ollama-client";
 import { OpenAiClient } from "./openai-client";
+import { OpenAiResponsesClient } from "./openai-responses-client";
+import { GeminiClient } from "./gemini-client";
 import type { ChatCompletionRequest, ChatCompletionResponse, WorkspaceFocus } from "./types";
 import { readConfiguredSecret } from "../config/secrets";
+import { getNativeToolsConfig } from "../config/switchbay-config";
 
 export type ChatRuntimeClient = {
   createChatCompletion(
@@ -33,6 +36,7 @@ export function createRuntimeClient(
   options: RuntimeClientOptions = {},
 ): ChatRuntimeClient {
   const model = options.model?.trim() || undefined;
+  const providerManagedTools = getNativeToolsConfig().providerManaged;
   let client: ChatRuntimeClient;
   let using: string | null = null;
   let routerIntent: string | null = null;
@@ -90,21 +94,23 @@ export function createRuntimeClient(
       routerMode: "explicit",
     });
   } else if (options.provider === "openai") {
-    client = new OpenAiClient();
+    client = providerManagedTools
+      ? new OpenAiResponsesClient({ managedTools: ["web_search", "code_interpreter"] })
+      : new OpenAiClient();
     const config = getCloudProviderConfig("openai");
     using = `cloud/openai/${model ?? config.model}`;
     routerIntent = "explicit_provider";
     routerReason = `Explicit cloud provider selected: ${config.label}.`;
     routerMode = "explicit";
   } else if (options.provider === "anthropic") {
-    client = new AnthropicClient();
+    client = new AnthropicClient({ managedTools: providerManagedTools });
     const config = getCloudProviderConfig("anthropic");
     using = `cloud/anthropic/${model ?? config.model}`;
     routerIntent = "explicit_provider";
     routerReason = `Explicit cloud provider selected: ${config.label}.`;
     routerMode = "explicit";
   } else if (options.provider === "google") {
-    client = new OpenAiClient({ provider: "google" });
+    client = providerManagedTools ? new GeminiClient() : new OpenAiClient({ provider: "google" });
     const config = getCloudProviderConfig("google");
     using = `cloud/google/${model ?? config.model}`;
     routerIntent = "explicit_provider";

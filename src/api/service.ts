@@ -130,9 +130,9 @@ export async function runSwitchbayTurn(input: TurnRequest, options: { requestId?
   state.updatedAt = Date.now();
   await savePersistedSession(state);
   const meta = executedTurn.response.meta;
-  return response(requestId, state.sessionId, content, effectiveRuntimeLane, traceSaved, turn.contextReceipt ?? [], executedTurn.toolExecutions, workspace, state.pendingApproval, meta ? { provider: meta.provider, model: meta.model, using: meta.using } : null);
+  return response(requestId, state.sessionId, content, effectiveRuntimeLane, traceSaved, turn.contextReceipt ?? [], executedTurn.toolExecutions, workspace, state.pendingApproval, meta ? { provider: meta.provider, model: meta.model, using: meta.using } : null, executedTurn.response.provider);
 }
 
-function response(requestId: string, sessionId: string, content: string, lane: TurnResponse["lane"], traceSaved: boolean, contextReceipt: string[], tools: Array<{ tool: string; summary: string; ok: boolean; changedFile?: string }>, workspace: TurnResponse["workspace"], pendingApproval: TurnResponse["pendingApproval"], route: TurnResponse["route"]): TurnResponse {
-  return { requestId, sessionId, content, lane, traceSaved, contextReceipt, toolExecutions: tools.map(({ tool, summary, ok, changedFile }) => ({ tool, summary, ok, changedFile })), workspace, pendingApproval, route };
+function response(requestId: string, sessionId: string, content: string, lane: TurnResponse["lane"], traceSaved: boolean, contextReceipt: string[], tools: Array<{ tool: string; summary: string; ok: boolean; changedFile?: string }>, workspace: TurnResponse["workspace"], pendingApproval: TurnResponse["pendingApproval"], route: TurnResponse["route"], provider = { events: [], citations: [], artifacts: [] } as NonNullable<import("../runtime/types").ChatCompletionResponse["provider"]>): TurnResponse {
+  return { requestId, sessionId, content, lane, traceSaved, contextReceipt, toolExecutions: tools.map(({ tool, summary, ok, changedFile }) => ({ tool, summary, ok, changedFile })), providerEvents: provider.events, citations: provider.citations, artifacts: provider.artifacts, workspace, pendingApproval, route };
 }

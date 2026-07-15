@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import { getCommandMatches, SLASH_COMMANDS } from "./commands";
 
 test("command palette lists only implemented command families", () => {
@@ -103,4 +104,18 @@ test("command palette searches commands, examples, descriptions, and categories"
   expect(getCommandMatches("/plugin").map((item) => item.command)).toContain("/plugins");
   expect(getCommandMatches("/plugin").map((item) => item.command)).toContain("/create-plugin");
   expect(getCommandMatches("/panel").map((item) => item.command)).toContain("/collapse");
+});
+
+test("help registry exposes capability roots and ranks exact subcommands first", () => {
+  const commands = new Set(SLASH_COMMANDS.map((item) => item.command));
+  for (const command of ["/help", "/auto", "/context", "/native", "/workflows", "/trace", "/agents", "/skills", "/engines", "/plugins", "/mcp"]) {
+    expect(commands.has(command)).toBe(true);
+  }
+  expect(getCommandMatches("/native reset")[0]?.command).toBe("/native reset");
+  expect(getCommandMatches("/skills read")[0]?.command).toBe("/skills read");
+});
+
+test("slash command reference covers every searchable command", () => {
+  const reference = readFileSync(new URL("../../docs/SLASH_COMMANDS.md", import.meta.url), "utf8");
+  for (const item of SLASH_COMMANDS) expect(reference).toContain(item.command);
 });

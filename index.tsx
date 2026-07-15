@@ -39,12 +39,15 @@ const options = parseCliArgs(process.argv);
 async function boot() {
   if (options.subcommand === "help") {
     console.log(`
-${CLR.accentBright}${CLR.bold}Switchbay${CLR.reset} — terminal coding agent shell
+${CLR.accentBright}${CLR.bold}Switchbay${CLR.reset} — local-first AI workspace and model router
+
+${CLR.muted}Tip: launch the TUI and press ? for the capability guide, or type / to search commands.${CLR.reset}
 
 ${CLR.accent}${CLR.bold}Usage:${CLR.reset}
   ${CLR.bold}switchbay${CLR.reset}                          Launch the TUI (interactive mode)
   ${CLR.bold}switchbay${CLR.reset} "${CLR.accentBright}query${CLR.reset}"                  One-shot request
   ${CLR.bold}switchbay serve${CLR.reset}                    Start the local HTTP API
+  ${CLR.bold}switchbay serve --detach${CLR.reset}           Start the API as a detached process
   ${CLR.bold}switchbay service install${CLR.reset}          Install the macOS login service
   ${CLR.bold}switchbay service status${CLR.reset}           Show background service status
   ${CLR.bold}switchbay service restart${CLR.reset}          Restart the background service
@@ -60,16 +63,17 @@ ${CLR.accent}${CLR.bold}Sessions:${CLR.reset}
 
 ${CLR.accent}${CLR.bold}Models and Lanes:${CLR.reset}
   ${CLR.bold}switchbay models${CLR.reset}                   List models for the active lane
+  ${CLR.bold}switchbay models --lane${CLR.reset} <lane>     List models for a specific lane
   ${CLR.bold}switchbay model${CLR.reset}                    Show the active lane model
   ${CLR.bold}switchbay model${CLR.reset} <id>               Pin a model for the active lane
   ${CLR.bold}switchbay model${CLR.reset} <lane> <id>        Pin a model for a specific lane
-  ${CLR.bold}switchbay model add openai${CLR.reset} <id>    Add a custom cloud model to the local catalog
+  ${CLR.bold}switchbay model add openai${CLR.reset} <id>    Add a custom cloud model; optional ${CLR.accent}--label${CLR.reset}
   ${CLR.bold}switchbay --lane cloud --add-model${CLR.reset} <id>
-  ${CLR.bold}switchbay model pull${CLR.reset} <id|url>      Pull/load a model through the active local provider
+  ${CLR.bold}switchbay model pull${CLR.reset} <id|url>      Pull a local model; optional ${CLR.accent}--quant${CLR.reset} <type>
   ${CLR.bold}switchbay cloud-provider${CLR.reset}           Show cloud provider/router config
-  ${CLR.bold}switchbay cloud-provider set${CLR.reset} <id>  Switch cloud provider: ${CLR.accentBright}auto | openai | anthropic | gemini${CLR.reset}
+  ${CLR.bold}switchbay cloud-provider set${CLR.reset} <id>  Switch provider: ${CLR.accentBright}auto | openai | anthropic | google${CLR.reset} (gemini alias)
   ${CLR.bold}switchbay local-provider${CLR.reset}           Show local provider config
-  ${CLR.bold}switchbay local-provider set${CLR.reset} <id>  Switch local provider: ${CLR.accentBright}ollama${CLR.reset}
+  ${CLR.bold}switchbay local-provider set ollama${CLR.reset} Switch the local provider to Ollama
   ${CLR.bold}switchbay mcp${CLR.reset}                      Show Switchbay MCP bridge config
   ${CLR.bold}switchbay mcp init${CLR.reset}                 Create default Switchbay MCP config
   ${CLR.bold}switchbay mcp catalog${CLR.reset}              List trusted MCP config options
@@ -100,12 +104,13 @@ ${CLR.accent}${CLR.bold}Extensions:${CLR.reset}
   ${CLR.bold}switchbay agents list${CLR.reset}              List built-in, user, workspace, and plugin agents
   ${CLR.bold}switchbay agents read${CLR.reset} <id>         Print an agent definition
   ${CLR.bold}switchbay agent create --name${CLR.reset} <n> ${CLR.accent}--specialty${CLR.reset} <role>
+  ${CLR.bold}  --approach${CLR.reset} <text> ${CLR.accent}--rules${CLR.reset} <text> ${CLR.accent}--scope${CLR.reset} <user|workspace>
   ${CLR.bold}switchbay agent create${CLR.reset} "Name" "Role or domain"
   ${CLR.bold}switchbay engines${CLR.reset}                  Show Engine Bay cache status
   ${CLR.bold}switchbay engines sync${CLR.reset}             Pull the Switchbay-Engines GitHub repo
   ${CLR.bold}switchbay engines list${CLR.reset}             List cached engine files and manifests
   ${CLR.bold}switchbay engines templates${CLR.reset}        List cached templates
-  ${CLR.bold}switchbay skills${CLR.reset}                   Show available Bay skills
+  ${CLR.bold}switchbay skills${CLR.reset}                   Show available model and agent skills
   ${CLR.bold}switchbay skills sync${CLR.reset}              Pull the GitHub-backed skills repo
   ${CLR.bold}switchbay skills list${CLR.reset}              List available skills
   ${CLR.bold}switchbay skills templates${CLR.reset}         List cached skill templates
@@ -115,20 +120,22 @@ ${CLR.accent}${CLR.bold}Extensions:${CLR.reset}
   ${CLR.bold}switchbay plugins inspect${CLR.reset} <id>     Print a plugin manifest and assets
 
 ${CLR.accent}${CLR.bold}Maintenance:${CLR.reset}
-  ${CLR.bold}switchbay update${CLR.reset}                   Print update instructions
+  ${CLR.bold}switchbay update${CLR.reset}                   Update, rebuild, and refresh the local service
   ${CLR.bold}switchbay version${CLR.reset}                  Print version
 
 ${CLR.accent}${CLR.bold}Options:${CLR.reset}
   ${CLR.bold}-s, --surface${CLR.reset} <type>   Surface context (default: dev)
   ${CLR.bold}-p, --profile${CLR.reset} <name>   Working style (default: switchbay)
   ${CLR.bold}-m, --mode${CLR.reset} <name>      Agent mode: ${CLR.accentBright}build | design | debug${CLR.reset} (default: build)
-  ${CLR.bold}--lane${CLR.reset} <name>          Runtime lane: ${CLR.accentBright}cloud | local | huggingface | openrouter | ollama-cloud | mcp${CLR.reset}
+  ${CLR.bold}--lane${CLR.reset} <name>          Lane/provider: ${CLR.accentBright}cloud | openai | anthropic | gemini | cloud-mcp | local | ollama-cloud | openrouter | huggingface${CLR.reset}
   ${CLR.bold}--vision${CLR.reset} <path|url>     Attach an image and pin this turn to OpenAI vision
   ${CLR.bold}--hop${CLR.reset} <name>           Travel to a whitelisted location before launching
   ${CLR.bold}--resume${CLR.reset} <val>         Resume last saved session, or specific ID/Index (0=latest)
   ${CLR.bold}--new${CLR.reset}                  Force a fresh session even if a saved one exists
   ${CLR.bold}--purge${CLR.reset} <duration>     Purge sessions older than duration (1d, 5d, 2w, etc.)
   ${CLR.bold}-d, --detach${CLR.reset}               Run the API server in the background (detached mode)
+  ${CLR.bold}-h, --help${CLR.reset}                 Show this help
+  ${CLR.bold}-v, --version${CLR.reset}              Print the installed version
 `);
     return;
   }

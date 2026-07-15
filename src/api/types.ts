@@ -1,4 +1,5 @@
 import type { RuntimeLane } from "../config/env";
+import type { ProviderArtifact, ProviderCitation, ProviderToolEvent } from "../runtime/types";
 
 export type TurnRequest = {
   input: string;
@@ -25,6 +26,9 @@ export type TurnResponse = {
     ok: boolean;
     changedFile?: string;
   }>;
+  providerEvents: ProviderToolEvent[];
+  citations: ProviderCitation[];
+  artifacts: ProviderArtifact[];
   workspace: {
     cwd: string;
     repoRoot: string | null;

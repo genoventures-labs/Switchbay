@@ -7,6 +7,12 @@ export type SlashCommand = {
 
 export const SLASH_COMMANDS: SlashCommand[] = [
   {
+    category: "session",
+    command: "/help",
+    description: "Open the Switchbay capability and keyboard guide.",
+    example: "/help",
+  },
+  {
     category: "runtime",
     command: "/auto",
     description: "Clear the pinned cloud model and restore trusted auto-routing.",
@@ -45,7 +51,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   {
     category: "session",
     command: "/compact",
-    description: "Summarize this session into compressed context and clear the transcript.",
+    description: "Compress older model context while keeping the visible work feed.",
     example: "/compact",
   },
   {
@@ -275,6 +281,12 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     command: "/context",
     description: "Show the private machine-local context loaded for every model turn.",
     example: "/context read working-style",
+  },
+  {
+    category: "runtime",
+    command: "/native",
+    description: "Inspect or toggle provider-native interfaces and the isolated Switchbay execution environment.",
+    example: "/native on",
   },
   {
     category: "planning",
@@ -540,6 +552,23 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     description: "Open the file picker and describe an edit intent.",
     example: "/edit",
   },
+  { category: "context", command: "/memory refresh", description: "Rebuild operational workspace memory.", example: "/memory refresh" },
+  { category: "context", command: "/memory facts", description: "Show structured workspace facts.", example: "/memory facts" },
+  { category: "context", command: "/profile refresh", description: "Rebuild the structured workspace profile.", example: "/profile refresh" },
+  { category: "context", command: "/context path", description: "Print the private machine-local context directory.", example: "/context path" },
+  { category: "context", command: "/context read", description: "Read one private context file.", example: "/context read working-style" },
+  { category: "runtime", command: "/native on", description: "Enable provider-native and isolated tools.", example: "/native on" },
+  { category: "runtime", command: "/native off", description: "Disable provider-native and isolated tools.", example: "/native off" },
+  { category: "runtime", command: "/native reset", description: "Rebuild this session's disposable environment.", example: "/native reset" },
+  { category: "planning", command: "/workflow save", description: "Save a reusable named workflow.", example: "/workflow save release :: Test, build, and summarize" },
+  { category: "planning", command: "/workflow run", description: "Run a saved workflow by ID.", example: "/workflow run release" },
+  { category: "context", command: "/index refresh", description: "Rebuild the sourced Workspace Knowledge index.", example: "/index refresh" },
+  { category: "context", command: "/rules create", description: "Open the guided operating-rule creator.", example: "/rules create" },
+  { category: "engines", command: "/engine-bay sync", description: "Sync engine templates from GitHub.", example: "/engine-bay sync" },
+  { category: "engines", command: "/engine-bay templates", description: "List cached engine templates.", example: "/engine-bay templates" },
+  { category: "skills", command: "/skills list", description: "Print all available skills as text.", example: "/skills list" },
+  { category: "skills", command: "/skills read", description: "Read a skill's full instructions.", example: "/skills read code-review-pass" },
+  { category: "plugins", command: "/plugins list", description: "Print installed workspace plugins as text.", example: "/plugins list" },
 ];
 
 export function getCommandMatches(query: string): SlashCommand[] {
@@ -550,13 +579,26 @@ export function getCommandMatches(query: string): SlashCommand[] {
   }
 
   const search = trimmed.slice(1);
-  return SLASH_COMMANDS.filter((item) => {
+  return SLASH_COMMANDS.map((item, index) => {
     const haystack = [
       item.command.slice(1),
       item.description,
       item.example,
       item.category,
     ].join(" ").toLowerCase();
-    return haystack.includes(search);
-  }).slice(0, 8);
+    const command = item.command.slice(1).toLowerCase();
+    const score = command === search
+      ? 0
+      : command.startsWith(search)
+        ? 1
+        : command.includes(search)
+          ? 2
+          : haystack.includes(search)
+            ? 3
+            : 99;
+    return { item, index, score };
+  }).filter(({ score }) => score < 99)
+    .sort((a, b) => a.score - b.score || a.item.command.length - b.item.command.length || a.index - b.index)
+    .slice(0, 8)
+    .map(({ item }) => item);
 }

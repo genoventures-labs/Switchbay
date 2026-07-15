@@ -33,7 +33,7 @@ async function install(): Promise<string> {
   if (!built.ok) throw new Error(built.stderr || "Failed to build Switchbay service bundle.");
   try { await readFile(token, "utf8"); } catch { await writeFile(token, randomBytes(32).toString("hex") + "\n", { mode: 0o600 }); }
   await chmod(token, 0o600);
-  const providerNames = ["OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GOOGLE_API_KEY", "OLLAMA_API_KEY", "OPENROUTER_API_KEY", "HF_TOKEN"];
+  const providerNames = ["OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GOOGLE_API_KEY", "OLLAMA_API_KEY", "OPENROUTER_API_KEY", "HF_TOKEN", "SWITCHBAY_ANTHROPIC_MAX_TOKENS", "SWITCHBAY_NATIVE_TOOLS"];
   let existingEnv = "";
   try { existingEnv = await readFile(envFile, "utf8"); } catch {}
   const providerEnv = new Map(existingEnv.split("\n").flatMap(line => {

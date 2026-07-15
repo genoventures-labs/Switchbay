@@ -6,10 +6,13 @@ import {
 } from "./cloud-providers";
 import { AnthropicClient } from "./anthropic-client";
 import { OpenAiClient } from "./openai-client";
+import { OpenAiResponsesClient } from "./openai-responses-client";
+import { GeminiClient } from "./gemini-client";
 import { containsImageReferenceText } from "./image-inputs";
 import { parseModelAddress } from "./model-identity";
 import type { ChatRuntimeClient } from "./client";
 import type { ChatCompletionRequest, ChatCompletionResponse, ChatMessage, WorkspaceFocus } from "./types";
+import { getNativeToolsConfig } from "../config/switchbay-config";
 
 type ProviderName = CloudProviderId;
 
@@ -35,9 +38,12 @@ export class CloudRouterClient implements ChatRuntimeClient {
   private readonly google: ChatRuntimeClient;
 
   constructor(options: CloudRouterClientOptions = {}) {
-    this.openAi = options.openAi ?? new OpenAiClient();
-    this.anthropic = options.anthropic ?? new AnthropicClient();
-    this.google = options.google ?? new OpenAiClient({ provider: "google" });
+    const providerManagedTools = getNativeToolsConfig().providerManaged;
+    this.openAi = options.openAi ?? (providerManagedTools
+      ? new OpenAiResponsesClient({ managedTools: ["web_search", "code_interpreter"] })
+      : new OpenAiClient());
+    this.anthropic = options.anthropic ?? new AnthropicClient({ managedTools: providerManagedTools });
+    this.google = options.google ?? (providerManagedTools ? new GeminiClient() : new OpenAiClient({ provider: "google" }));
   }
 
   async createChatCompletion(

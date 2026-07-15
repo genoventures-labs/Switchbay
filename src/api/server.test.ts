@@ -34,6 +34,8 @@ test("capabilities and status expose machine-readable service state", async () =
   const handler = createApiHandler();
   const capabilities: any = await (await handler(new Request("http://local/v1/capabilities"))).json();
   expect(capabilities.features).toContain("streaming");
+  expect(capabilities.features).toContain("native-tools");
+  expect(capabilities.nativeTools.environment.backend).toBeTruthy();
   const status: any = await (await handler(new Request("http://local/v1/status"))).json();
   expect(status).toMatchObject({ ok: true, apiVersion: "1" });
 });

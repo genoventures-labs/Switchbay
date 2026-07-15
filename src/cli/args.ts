@@ -11,6 +11,7 @@ export type CliOptions = {
   newSession: boolean;
   purge: string | null;
   visionPath?: string | null;
+  detach?: boolean;
   subcommand: "run" | "serve" | "service" | "update" | "version" | "help" | "engines" | "skills" | "toolbox" | "plugins" | "agents" | "memory" | "knowledge" | "trace" | "usage" | "graph" | "radar" | "handoff" | "mcp" | "models" | "model" | "local-provider" | "cloud-provider" | "agenda" | "task";
   graphAction?: "trace";
   serviceAction?: "install" | "status" | "restart" | "uninstall";

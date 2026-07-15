@@ -19,6 +19,12 @@ import { fuzzyMatchLocations, listTravelLocations, travelTo } from "../tools/tra
 import { findAgent, loadAllAgents } from "./agents";
 import { loadGuides } from "../context/guides";
 import { loadPluginInventory, readPlugin } from "../plugins/registry";
+import {
+  describeNativeEnvironment,
+  ensureNativeEnvironment,
+  executeNativeEditor,
+  runInNativeEnvironment,
+} from "../environment/native-environment";
 
 // Commands that still require approval in the private-tool lane because they
 // are destructive, privileged, publishing, or have broad external impact.
@@ -371,6 +377,49 @@ export const AGENT_TOOLS: ToolDefinition[] = [
           description: "Run the most likely repository test command with lightweight auto-detection.",
           parameters: { type: "object", properties: {} },
       },
+  },
+  {
+    type: "function",
+    function: {
+      name: "native_env_status",
+      description: "Show the disposable Switchbay execution environment and its isolation policy.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "native_exec",
+      description: "Run Bash inside Switchbay's disposable, network-denied environment. It receives a secret-filtered workspace snapshot and cannot write to the real repository.",
+      parameters: {
+        type: "object",
+        properties: {
+          command: { type: "string", description: "Command to run inside the isolated snapshot." },
+          timeout_ms: { type: "number", description: "Optional timeout from 100 to 120000 milliseconds." },
+        },
+        required: ["command"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "native_editor",
+      description: "Read or edit files inside Switchbay's disposable snapshot. Changes remain isolated and never modify the real repository.",
+      parameters: {
+        type: "object",
+        properties: {
+          command: { type: "string", description: "One of view, create, str_replace, or insert." },
+          path: { type: "string", description: "Workspace-relative path or the corresponding absolute source-workspace path." },
+          file_text: { type: "string", description: "Full content for create." },
+          old_str: { type: "string", description: "Unique text to replace." },
+          new_str: { type: "string", description: "Replacement or inserted text." },
+          insert_line: { type: "number", description: "Zero-based line after which to insert." },
+          view_range: { type: "array", description: "Optional [start,end] one-based line range." },
+        },
+        required: ["command", "path"],
+      },
+    },
   },
   {
     type: "function",
@@ -881,7 +930,7 @@ export type AgentToolExecution = {
 export async function executeToolCall(
   name: string,
   args: any,
-  options: { cwd: string }
+  options: { cwd: string; sessionId?: string }
 ): Promise<AgentToolExecution> {
   const cwd = options.cwd;
 
@@ -1315,6 +1364,45 @@ export async function executeToolCall(
             const output = String(err.message || err).trim();
             return { tool: name, ok: false, summary: `Tests FAILED: ${testCommand}`, body: `Tests failed:\n\n${output}` };
           }
+      }
+
+      case "native_env_status": {
+        return {
+          tool: name,
+          ok: true,
+          summary: "Inspected Switchbay native environment",
+          body: await describeNativeEnvironment(options.sessionId, cwd),
+        };
+      }
+
+      case "native_exec":
+      case "bash": {
+        if (name === "bash" && String(args.restart || "").trim()) {
+          throw new Error("Persistent Bash restart is not supported in the disposable Switchbay environment. Reissue a complete command.");
+        }
+        const command = String(args.command || "").trim();
+        if (!command) throw new Error("Native Bash requires a command.");
+        const environment = await ensureNativeEnvironment(options.sessionId ?? "one-shot", cwd);
+        const result = await runInNativeEnvironment(environment, command, { timeoutMs: Number(args.timeout_ms) || undefined });
+        const output = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();
+        return {
+          tool: name,
+          ok: result.ok,
+          summary: result.ok ? `Native environment ran: ${command.split(/\s+/)[0]}` : "Native environment command failed",
+          body: [
+            `Environment: ${environment.id} · ${environment.backend} · network denied`,
+            `Exit: ${result.exitCode}${result.timedOut ? " · timed out" : ""}${result.truncated ? " · output capped" : ""}`,
+            "",
+            output || "Done.",
+          ].join("\n"),
+        };
+      }
+
+      case "native_editor":
+      case "str_replace_based_edit_tool": {
+        const environment = await ensureNativeEnvironment(options.sessionId ?? "one-shot", cwd);
+        const result = await executeNativeEditor(environment, args as Record<string, unknown>);
+        return { tool: name, ...result };
       }
 
       case "shell": {
@@ -1872,8 +1960,8 @@ function inferToolCategory(name: string): string {
   if (name.startsWith("web_")) return "web";
   if (name.startsWith("memory_") || name.startsWith("gumops_memory_")) return "memory";
   if (name.startsWith("gumroad_") || name.startsWith("gumops_")) return "business";
-  if (["read_file", "read_file_range", "read_json", "summarize_file", "list_directory", "glob_files", "search_files", "create_file", "write_file", "apply_patch"].includes(name)) return "filesystem";
-  if (["run_tests", "verify", "shell"].includes(name)) return "execution";
+  if (["read_file", "read_file_range", "read_json", "summarize_file", "list_directory", "glob_files", "search_files", "create_file", "write_file", "apply_patch", "native_editor", "str_replace_based_edit_tool"].includes(name)) return "filesystem";
+  if (["run_tests", "verify", "shell", "native_exec", "bash"].includes(name)) return "execution";
   if (name.includes("model_tool")) return "registry";
   return "general";
 }

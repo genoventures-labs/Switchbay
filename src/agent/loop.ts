@@ -14,6 +14,9 @@ import type {
   ChatCompletionRequest,
   ChatCompletionResponse,
   ChatMessage,
+  ProviderArtifact,
+  ProviderCitation,
+  ProviderToolEvent,
   ToolDefinition as RuntimeToolDefinition,
 } from "../runtime/types";
 import { createMcpToolRuntime } from "../runtime/mcp-client";
@@ -53,6 +56,8 @@ import { buildWorkspaceProfilePromptBlock, workspaceProfilePath } from "../works
 import { activePlanPath, buildActivePlanPromptBlock } from "../planner/store";
 import { buildWorkflowsPromptBlock, listWorkflows } from "../workflows/store";
 import { formatUserContextPromptBlock, loadUserContext } from "../context/user-context";
+import { getNativeToolsConfig } from "../config/switchbay-config";
+import { nativeEnvironmentAvailability } from "../environment/native-environment";
 
 export async function generatePlan(
   client: ChatRuntimeClient,
@@ -415,6 +420,9 @@ export type BuiltTurn = {
 export type ExecutedTurn = {
   response: ChatCompletionResponse;
   toolExecutions: AgentToolExecution[];
+  providerEvents?: ProviderToolEvent[];
+  citations?: ProviderCitation[];
+  artifacts?: ProviderArtifact[];
 };
 
 export function extractAssistantText(
@@ -537,6 +545,8 @@ export async function buildTurn(input: {
     buildWorkflowsPromptBlock(cwd),
   ]);
   const userContextBlock = formatUserContextPromptBlock(userContext);
+  const nativeTools = getNativeToolsConfig();
+  const nativeEnvironment = nativeEnvironmentAvailability();
 
   // Inject pinned files
   let pinsBlock = "";
@@ -597,6 +607,7 @@ GROUNDING RULES:
 10. If a user asks to enter, inspect, or continue in another project, call workspace_hop before reading files or running commands there. Finding a path is not the same as changing the active workspace.
 11. If grounding tools fail, report the failure and stop. Never fabricate a repository snapshot, package metadata, git state, or file contents after failed reads or commands.
 12. For Gumroad data, use typed gumroad_* tools, not generic run_engine_tool. gumroad_sales_summary is all-time only. For weekly, month-to-date, or date-specific reporting, use gumroad_sales_range with an explicit YYYY-MM-DD range. If the user says only "weekly" and does not identify the week, ask which date range they mean; never invent it.
+13. Use native_exec/native_editor for untrusted code, calculations, prototypes, and provider-native Bash/editor work. That environment is a disposable snapshot: changes there do not modify the real workspace. Use Switchbay's ordinary workspace tools only when the user actually wants repository changes.
 `;
   // Proactively embed live workspace context so the model can answer questions about
   // the project, recent changes, and git state without server-side tool calls.
@@ -682,6 +693,7 @@ You have access to tools that execute on the user's local machine via this app's
       workflowsBlock ? `workflows:${(await listWorkflows(cwd)).length}` : "",
       input.activeAgentId ? `agent:${input.activeAgentId}` : "",
       effectiveToolMode === "switchbay-mcp" ? "mcp:enabled" : "",
+      nativeTools.enabled && nativeEnvironment.available ? `native-env:${nativeEnvironment.backend}` : "",
     ].filter(Boolean),
   };
 }
@@ -777,11 +789,16 @@ export async function executeTurn(input: {
   signal?: AbortSignal;
 }): Promise<ExecutedTurn> {
   const toolExecutions: AgentToolExecution[] = [];
+  const providerEvents: ProviderToolEvent[] = [];
+  const citations: ProviderCitation[] = [];
+  const artifacts: ProviderArtifact[] = [];
   let currentCwd = input.cwd ?? process.cwd();
   const messages: ChatMessage[] = [...input.turn.request.messages];
   const MAX_ITERATIONS = input.maxIterations ?? 24;
   let emptyReplyRetries = 0;
   const MAX_EMPTY_REPLY_RETRIES = 1;
+  let providerContinuationRetries = 0;
+  const MAX_PROVIDER_CONTINUATIONS = 4;
 
   const { loadEngineRegistry } = await import("../engines/registry");
   const registry = await loadEngineRegistry(input.cwd ?? process.cwd());
@@ -789,8 +806,13 @@ export async function executeTurn(input: {
   const hasThinkapse = registry.engines.some((e) => e.id === "thinkapse");
 
   let filteredTools: RuntimeToolDefinition[] = AGENT_TOOLS;
+  const nativeToolsConfig = getNativeToolsConfig();
+  const nativeEnvironment = nativeEnvironmentAvailability();
+  if (!nativeToolsConfig.enabled || !nativeEnvironment.available) {
+    filteredTools = filteredTools.filter((tool) => !["native_env_status", "native_exec", "native_editor"].includes(tool.function.name));
+  }
   if (!hasGumOps || !hasThinkapse) {
-    filteredTools = AGENT_TOOLS.filter((t) => {
+    filteredTools = filteredTools.filter((t) => {
       const name = t.function?.name ?? "";
       if (!hasGumOps && (
         name.startsWith("gumops_") ||
@@ -844,6 +866,15 @@ export async function executeTurn(input: {
     );
     input.onRoute?.(response);
 
+    if (response.provider) {
+      providerEvents.push(...response.provider.events);
+      citations.push(...response.provider.citations);
+      artifacts.push(...response.provider.artifacts);
+      for (const event of response.provider.events) {
+        input.onStep?.(`${event.provider}: ${event.name ?? event.type}${event.status ? ` (${event.status})` : ""}`);
+      }
+    }
+
     const choice = response.choices?.[0];
     const assistantMessage = choice?.message;
     const assistantText = extractAssistantText(response);
@@ -852,6 +883,21 @@ export async function executeTurn(input: {
     const inlineToolCalls = nativeToolCalls.length === 0 ? parseInlineToolCalls(assistantText) : [];
     const toolCalls = nativeToolCalls.length > 0 ? nativeToolCalls : inlineToolCalls;
     const cleanedText = inlineToolCalls.length > 0 ? stripInlineToolCalls(assistantText) : assistantText;
+
+    if (
+      toolCalls.length === 0 &&
+      response.provider?.continuation &&
+      assistantMessage?.provider_content != null &&
+      providerContinuationRetries < MAX_PROVIDER_CONTINUATIONS
+    ) {
+      providerContinuationRetries += 1;
+      messages.push({
+        role: "assistant",
+        content: assistantMessage.content ?? "",
+        provider_content: assistantMessage.provider_content,
+      });
+      continue;
+    }
 
     if (toolCalls.length === 0 && cleanedText === "" && emptyReplyRetries < MAX_EMPTY_REPLY_RETRIES) {
       emptyReplyRetries += 1;
@@ -876,10 +922,13 @@ export async function executeTurn(input: {
             }],
           },
           toolExecutions,
+          providerEvents,
+          citations,
+          artifacts,
         };
       }
       if (input.onStep) input.onStep("Done.");
-      return { response, toolExecutions };
+      return { response, toolExecutions, providerEvents, citations, artifacts };
     }
 
 
@@ -891,17 +940,19 @@ export async function executeTurn(input: {
       role: "assistant",
       content: inlineToolCalls.length > 0 ? cleanedText : (assistantMessage?.content ?? ""),
       tool_calls: toolCalls,
+      provider_content: assistantMessage?.provider_content,
     });
 
     for (const toolCall of toolCalls) {
       if (input.signal?.aborted) throw new DOMException("Turn cancelled", "AbortError");
       const toolName = toolCall.function.name;
-      let args: Record<string, unknown> = {};
-      try {
-        args = JSON.parse(toolCall.function.arguments) as Record<string, unknown>;
-      } catch {
-        // ignore malformed
-      }
+      const parsedArguments = parseToolArgumentsForExecution(
+        toolName,
+        toolCall.function.arguments,
+        filteredTools,
+        choice?.finish_reason,
+      );
+      const args = parsedArguments.ok ? parsedArguments.args : {};
 
       if (input.onStep) {
         let label = toolName.toLowerCase();
@@ -913,13 +964,22 @@ export async function executeTurn(input: {
         else if (toolName === "write_file") label = `writing ${args.path}`;
         else if (toolName === "apply_patch") label = `patching ${args.path}`;
         else if (toolName === "create_file") label = `creating ${args.path}`;
+        else if (toolName === "native_exec" || toolName === "bash") label = `native: ${String(args.command || "").slice(0, 40)}`;
+        else if (toolName === "native_editor" || toolName === "str_replace_based_edit_tool") label = `native edit: ${args.path}`;
         else if (toolName === "patch") label = `patching ${args.path}`;
         input.onStep(`${label}...`);
       }
 
-      const result = mcpRuntime?.owns(toolName)
-        ? await mcpRuntime.call(toolName, args, input.signal)
-        : await executeToolCall(toolName, args, { cwd: currentCwd });
+      const result: AgentToolExecution = parsedArguments.ok
+        ? (mcpRuntime?.owns(toolName)
+            ? { tool: toolName, ...await mcpRuntime.call(toolName, args, input.signal) }
+            : await executeToolCall(toolName, args, { cwd: currentCwd, sessionId: input.sessionId }))
+        : {
+            tool: toolName,
+            ok: false,
+            summary: `${toolName} rejected before execution`,
+            body: parsedArguments.error,
+          };
       if (result.travel?.toPath) currentCwd = result.travel.toPath;
 
       toolExecutions.push({
@@ -949,10 +1009,77 @@ export async function executeTurn(input: {
   return {
     response: { choices: [{ message: { role: "assistant", content: summary }, finish_reason: "length" }] },
     toolExecutions,
+    providerEvents,
+    citations,
+    artifacts,
   };
   } finally {
     await mcpRuntime?.close();
   }
+}
+
+function parseToolArgumentsForExecution(
+  toolName: string,
+  rawArguments: string,
+  tools: RuntimeToolDefinition[],
+  finishReason?: string,
+): { ok: true; args: Record<string, unknown> } | { ok: false; error: string } {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rawArguments || "{}");
+  } catch {
+    const truncated = finishReason === "max_tokens" || finishReason === "length";
+    return {
+      ok: false,
+      error: [
+        `Switchbay rejected ${toolName} because its arguments were not valid JSON (${rawArguments.length} characters).`,
+        truncated
+          ? `The provider stopped with ${finishReason}, so this tool call was truncated before execution.`
+          : "The tool payload may have been truncated or incorrectly serialized.",
+        "Reissue one tool call with complete valid arguments. For large files, use smaller write_file or apply_patch operations; do not use a shell heredoc as a serialization workaround.",
+      ].join("\n"),
+    };
+  }
+
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return { ok: false, error: `Switchbay rejected ${toolName}: tool arguments must be a JSON object. Reissue the call with named parameters.` };
+  }
+
+  const args = parsed as Record<string, unknown>;
+  const definition = tools.find((tool) => tool.function.name === toolName);
+  const schema = definition?.function.parameters as {
+    required?: unknown;
+    properties?: Record<string, { type?: unknown }>;
+  } | undefined;
+  const required = Array.isArray(schema?.required)
+    ? schema.required.filter((name): name is string => typeof name === "string")
+    : [];
+  const missing = required.filter((name) => !Object.prototype.hasOwnProperty.call(args, name) || args[name] === undefined || args[name] === null);
+  if (missing.length > 0) {
+    return {
+      ok: false,
+      error: `Switchbay rejected ${toolName} before execution because required parameters were missing: ${missing.join(", ")}. Reissue one complete tool call with valid JSON.`,
+    };
+  }
+
+  const mismatched = required.filter((name) => {
+    const expected = schema?.properties?.[name]?.type;
+    const value = args[name];
+    if (expected === "string") return typeof value !== "string";
+    if (expected === "number") return typeof value !== "number" || !Number.isFinite(value);
+    if (expected === "boolean") return typeof value !== "boolean";
+    if (expected === "array") return !Array.isArray(value);
+    if (expected === "object") return !value || typeof value !== "object" || Array.isArray(value);
+    return false;
+  });
+  if (mismatched.length > 0) {
+    return {
+      ok: false,
+      error: `Switchbay rejected ${toolName} before execution because required parameters had the wrong type: ${mismatched.join(", ")}. Reissue one complete tool call matching the tool schema.`,
+    };
+  }
+
+  return { ok: true, args };
 }
 
 function unresolvedGroundingFailure(executions: AgentToolExecution[]): AgentToolExecution | null {

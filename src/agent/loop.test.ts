@@ -293,6 +293,29 @@ test("executeTurn returns a text-only response without tool work", async () => {
   expect(steps.at(-1)).toBe("Done.");
 });
 
+test("executeTurn replays provider continuation without executing managed events locally", async () => {
+  const providerContent = [{ type: "server_tool_use", id: "srv-1", name: "web_search", input: { query: "Switchbay" } }];
+  const { client, calls } = createMockClient([
+    {
+      choices: [{ message: { role: "assistant", content: "", provider_content: providerContent }, finish_reason: "pause_turn" }],
+      provider: {
+        events: [{ provider: "anthropic", type: "server_tool_use", name: "web_search", server_managed: true, status: "paused" }],
+        citations: [],
+        artifacts: [],
+        continuation: { provider: "anthropic", kind: "pause_turn", state: providerContent },
+      },
+    },
+    createResponse("Search complete."),
+  ]);
+
+  const result = await executeTurn({ client: client as ChatRuntimeClient, sessionId: "provider-continuation", surface: "dev", turn: createTurn() });
+
+  expect(extractAssistantText(result.response)).toBe("Search complete.");
+  expect(result.toolExecutions).toHaveLength(0);
+  expect(result.providerEvents).toHaveLength(1);
+  expect(calls[1]?.messages.at(-1)?.provider_content).toEqual(providerContent);
+});
+
 test("buildTurn injects Toolbox skills into system context", async () => {
   const cwd = await mkdtemp(join(tmpdir(), "switchbay-toolbox-context-"));
   const turn = await buildTurn({
@@ -705,6 +728,88 @@ test("executeTurn ignores malformed inline tool call markup", async () => {
 
   expect(result.toolExecutions).toHaveLength(0);
   expect(extractAssistantText(result.response)).toBe(malformed);
+});
+
+test("executeTurn rejects truncated native tool arguments before filesystem execution", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "switchbay-truncated-tool-"));
+  const truncated = createResponse(null, [{
+    id: "call-write",
+    type: "function",
+    function: {
+      name: "write_file",
+      arguments: '{"path":"large.py","content":"unterminated',
+    },
+  }]);
+  const truncatedChoice = truncated.choices?.[0];
+  if (!truncatedChoice) throw new Error("Expected a mock response choice.");
+  truncatedChoice.finish_reason = "max_tokens";
+  const { client, calls } = createMockClient([truncated, createResponse("Retried safely.")]);
+
+  const result = await executeTurn({
+    client: client as ChatRuntimeClient,
+    cwd,
+    sessionId: "test-session",
+    surface: "dev",
+    turn: createTurn(),
+  });
+
+  expect(result.toolExecutions).toHaveLength(1);
+  expect(result.toolExecutions[0]?.ok).toBe(false);
+  expect(result.toolExecutions[0]?.body).toContain("truncated before execution");
+  expect(await Bun.file(join(cwd, "large.py")).exists()).toBe(false);
+  expect(calls[1]?.messages.at(-1)?.content).toContain("Reissue one tool call");
+  expect(extractAssistantText(result.response)).toBe("Retried safely.");
+});
+
+test("executeTurn rejects missing required tool parameters before execution", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "switchbay-missing-tool-"));
+  const { client } = createMockClient([
+    createResponse(null, [{
+      id: "call-create",
+      type: "function",
+      function: { name: "create_file", arguments: "{}" },
+    }]),
+    createResponse("Corrected."),
+  ]);
+
+  const result = await executeTurn({
+    client: client as ChatRuntimeClient,
+    cwd,
+    sessionId: "test-session",
+    surface: "dev",
+    turn: createTurn(),
+  });
+
+  expect(result.toolExecutions[0]?.ok).toBe(false);
+  expect(result.toolExecutions[0]?.body).toContain("required parameters were missing: path, content");
+  expect(extractAssistantText(result.response)).toBe("Corrected.");
+});
+
+test("executeTurn runs Claude native Bash inside the disposable environment", async () => {
+  if (process.platform !== "darwin") return;
+  const cwd = await mkdtemp(join(tmpdir(), "switchbay-native-loop-"));
+  await writeFile(join(cwd, "source.txt"), "real workspace\n");
+  const { client } = createMockClient([
+    createResponse(null, [{
+      id: "call-native-bash",
+      type: "function",
+      function: { name: "bash", arguments: JSON.stringify({ command: "printf isolated > generated.txt" }) },
+    }]),
+    createResponse("Native work completed safely."),
+  ]);
+
+  const result = await executeTurn({
+    client: client as ChatRuntimeClient,
+    cwd,
+    sessionId: `native-${Date.now()}`,
+    surface: "dev",
+    turn: createTurn(),
+  });
+
+  expect(result.toolExecutions[0]?.tool).toBe("bash");
+  expect(result.toolExecutions[0]?.ok).toBe(true);
+  expect(result.toolExecutions[0]?.body).toContain("network denied");
+  expect(await Bun.file(join(cwd, "generated.txt")).exists()).toBe(false);
 });
 
 test("executeTurn preserves shell pending metadata from gated commands", async () => {

@@ -19,6 +19,14 @@ export type SwitchbayConfig = {
   selected_models: Partial<Record<RuntimeLane, SelectedRuntimeModel>>;
   /** Operator surfaces for Switchbay's local-first daily cockpit. */
   operator: OperatorConfig;
+  /** Provider-native interfaces and Switchbay's isolated execution environment. */
+  nativeTools: NativeToolsConfig;
+};
+
+export type NativeToolsConfig = {
+  enabled: boolean;
+  environment: "isolated";
+  providerManaged: boolean;
 };
 
 export type OperatorConfig = {
@@ -53,6 +61,11 @@ const DEFAULTS: SwitchbayConfig = {
     startupOverview: true,
     dailyBoard: true,
   },
+  nativeTools: {
+    enabled: true,
+    environment: "isolated",
+    providerManaged: true,
+  },
 };
 
 let _cached: SwitchbayConfig | null = null;
@@ -75,6 +88,7 @@ export function loadSwitchbayConfig(): SwitchbayConfig {
           : DEFAULTS.discover_exclude,
         selected_models: normalizeSelectedModels(parsed.selected_models),
         operator: normalizeOperatorConfig(parsed.operator),
+        nativeTools: normalizeNativeToolsConfig(parsed.nativeTools),
       };
     } else {
       _cached = { ...DEFAULTS };
@@ -134,6 +148,25 @@ export function getOperatorConfig(): OperatorConfig {
   return applyOperatorEnv(loadSwitchbayConfig().operator);
 }
 
+export function getNativeToolsConfig(): NativeToolsConfig {
+  const configured = loadSwitchbayConfig().nativeTools;
+  return {
+    enabled: normalizeBooleanEnv(Bun.env.SWITCHBAY_NATIVE_TOOLS, configured.enabled),
+    environment: "isolated",
+    providerManaged: normalizeBooleanEnv(Bun.env.SWITCHBAY_PROVIDER_TOOLS, configured.providerManaged),
+  };
+}
+
+export function setNativeToolsEnabled(enabled: boolean): SwitchbayConfig {
+  const config = loadSwitchbayConfig();
+  const next: SwitchbayConfig = {
+    ...config,
+    nativeTools: { ...config.nativeTools, enabled },
+  };
+  saveSwitchbayConfig(next);
+  return next;
+}
+
 export function resolveLocationInput(location: string): string {
   const unquoted = stripWrappingQuotes(location.trim());
   return path.resolve(unquoted.replace(/^~/, os.homedir()));
@@ -178,6 +211,18 @@ function normalizeOperatorConfig(value: unknown): OperatorConfig {
     enabled: normalizeBoolean(raw.enabled, DEFAULTS.operator.enabled),
     startupOverview: normalizeBoolean(raw.startupOverview, DEFAULTS.operator.startupOverview),
     dailyBoard: normalizeBoolean(raw.dailyBoard, DEFAULTS.operator.dailyBoard),
+  };
+}
+
+function normalizeNativeToolsConfig(value: unknown): NativeToolsConfig {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return { ...DEFAULTS.nativeTools };
+  }
+  const raw = value as Record<string, unknown>;
+  return {
+    enabled: normalizeBoolean(raw.enabled, DEFAULTS.nativeTools.enabled),
+    environment: "isolated",
+    providerManaged: normalizeBoolean(raw.providerManaged, DEFAULTS.nativeTools.providerManaged),
   };
 }
 

@@ -12,6 +12,16 @@ export ANTHROPIC_API_KEY=...
 export GOOGLE_API_KEY=...
 ```
 
+Anthropic tool calls use an 8,192-token output allowance by default. Switchbay detects incomplete streamed tool JSON and rejects it before any filesystem or shell execution, then asks the model to retry with a smaller complete operation. Override the allowance when needed:
+
+```bash
+export SWITCHBAY_ANTHROPIC_MAX_TOKENS=16384
+```
+
+The macOS and Linux service installers preserve this override in the service environment.
+
+Provider-native client interfaces and Switchbay's isolated execution environment are enabled by default. Claude receives its trained Bash and text-editor schemas; other providers receive equivalent Switchbay functions. Inspect or toggle them with `/native`, `/native on`, and `/native off`. See [NATIVE_TOOLS.md](NATIVE_TOOLS.md).
+
 Switchbay stores cloud provider defaults in `~/.switchbay/cloud-providers.json`. Use it to keep provider routing, API bases, key env names, and default models portable without rewriting shell startup files:
 
 ```bash

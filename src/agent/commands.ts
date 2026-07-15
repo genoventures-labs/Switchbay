@@ -51,6 +51,8 @@ import { buildQuickHandoff } from "../operator/handoff";
 import { ensureWorkspaceProfile, formatWorkspaceProfile, refreshWorkspaceProfile } from "../workspace/profile";
 import { formatWorkflows, listWorkflows, readWorkflow, saveWorkflow } from "../workflows/store";
 import { describeUserContext, ensureUserContext, readUserContextFile } from "../context/user-context";
+import { getNativeToolsConfig, setNativeToolsEnabled } from "../config/switchbay-config";
+import { describeNativeEnvironment, resetNativeEnvironment } from "../environment/native-environment";
 
 export type LocalCommandResult = {
   handled: boolean;
@@ -424,6 +426,24 @@ export async function tryLocalCommand(
     return { handled: true, assistantMessage: "Usage: `/context`, `/context path`, or `/context read <file>`." };
   }
 
+  if (trimmed === "/native" || trimmed.startsWith("/native ")) {
+    const rest = trimmed.slice("/native".length).trim().toLowerCase();
+    if (rest === "on" || rest === "off") {
+      const enabled = rest === "on";
+      setNativeToolsEnabled(enabled);
+      return { handled: true, assistantMessage: `Provider-native interfaces and the Switchbay isolated environment are now **${enabled ? "enabled" : "disabled"}**.` };
+    }
+    if (rest === "reset") {
+      await resetNativeEnvironment(options.sessionId);
+      return { handled: true, assistantMessage: "Reset this session's disposable native environment. The real workspace was not changed." };
+    }
+    const config = getNativeToolsConfig();
+    return {
+      handled: true,
+      assistantMessage: `${await describeNativeEnvironment(options.sessionId, options.workspace?.cwd ?? process.cwd())}\nEnabled: **${config.enabled ? "yes" : "no"}**\n\nCommands: \`/native on\` · \`/native off\` · \`/native reset\``,
+    };
+  }
+
   if (trimmed === "/profile" || trimmed.startsWith("/profile ")) {
     const cwd = options.workspace?.cwd ?? process.cwd();
     const refresh = trimmed.slice("/profile".length).trim() === "refresh";
@@ -515,7 +535,7 @@ export async function tryLocalCommand(
   }
 
   if (trimmed === "/stop") {
-    return { handled: true, assistantMessage: "Plan stopped.", activateAgent: undefined };
+    return { handled: true, assistantMessage: "No active plan to stop." };
   }
 
   if (trimmed === "/compact") {

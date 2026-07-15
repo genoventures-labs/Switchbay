@@ -106,6 +106,8 @@ update_env() {
 
 update_env OPENAI_API_KEY
 update_env ANTHROPIC_API_KEY
+update_env SWITCHBAY_ANTHROPIC_MAX_TOKENS
+update_env SWITCHBAY_NATIVE_TOOLS
 update_env GOOGLE_API_KEY
 update_env OLLAMA_API_KEY
 update_env OPENROUTER_API_KEY

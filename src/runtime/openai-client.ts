@@ -90,6 +90,7 @@ async function readOpenAiStream(response: Response, onToken: (token: string) => 
   let accText = "";
   const toolCallMap: Record<number, { id: string; name: string; arguments: string }> = {};
   let hasToolCalls = false;
+  let finishReason: string | undefined;
 
   const reader = response.body!.getReader();
   const decoder = new TextDecoder();
@@ -112,6 +113,7 @@ async function readOpenAiStream(response: Response, onToken: (token: string) => 
 
       let chunk: {
         choices?: Array<{
+          finish_reason?: string | null;
           delta?: {
             content?: string;
             tool_calls?: Array<{
@@ -128,7 +130,9 @@ async function readOpenAiStream(response: Response, onToken: (token: string) => 
         continue;
       }
 
-      const delta = chunk.choices?.[0]?.delta;
+      const streamedChoice = chunk.choices?.[0];
+      if (streamedChoice?.finish_reason) finishReason = streamedChoice.finish_reason;
+      const delta = streamedChoice?.delta;
       if (!delta) continue;
 
       if (delta.content) {
@@ -167,7 +171,7 @@ async function readOpenAiStream(response: Response, onToken: (token: string) => 
           content: accText || null,
           tool_calls: toolCalls,
         },
-        finish_reason: hasToolCalls ? "tool_calls" : "stop",
+        finish_reason: finishReason ?? (hasToolCalls ? "tool_calls" : "stop"),
       },
     ],
   };

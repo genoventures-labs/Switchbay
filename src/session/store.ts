@@ -47,6 +47,7 @@ export type SessionAction =
   | { type: "activity/add"; kind: "info" | "tool" | "status" | "error"; message: string }
   | { type: "travel/completed"; toPath: string; label: string; workspace: WorkspaceSnapshot | null }
   | { type: "transcript/cleared" }
+  | { type: "feed/cleared" }
   | { type: "conversation/replaced"; messages: import("../runtime/types").ChatMessage[] }
   | { type: "agent/activated"; agentId: string | null }
   | { type: "plan/created"; plan: import("../agent/turn-state").ActivePlan }
@@ -425,6 +426,8 @@ export function sessionReducer(
         changedFiles: [],
         lastPatchPreview: null,
       };
+    case "feed/cleared":
+      return { ...state, transcript: [], streamingText: "" };
     case "conversation/replaced":
       return { ...state, conversation: action.messages };
     case "agent/activated":

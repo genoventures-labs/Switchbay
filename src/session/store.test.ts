@@ -98,6 +98,23 @@ test("local command entries do not mutate model conversation", () => {
   expect(local.currentObjective).toBe(completed.currentObjective);
 });
 
+test("clearing the visible feed preserves model conversation context", () => {
+  const completed = sessionReducer(
+    sessionReducer(createState(), {
+      type: "turn/submitted",
+      message: { role: "user", content: "keep this context" },
+      objective: "Keep context",
+      pendingPlan: [],
+      mode: "build",
+      resolvedProfile: "switchbay",
+    }),
+    { type: "turn/completed", content: "remembered" },
+  );
+  const cleared = sessionReducer(completed, { type: "feed/cleared" });
+  expect(cleared.transcript).toEqual([]);
+  expect(cleared.conversation).toEqual(completed.conversation);
+});
+
 test("plan step progression reaches awaiting_continue then complete", () => {
   const plan: ActivePlan = {
     id: "plan-1",

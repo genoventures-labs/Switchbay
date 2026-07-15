@@ -975,6 +975,11 @@ export function SwitchbayApp({
     }
 
     // HANDLE SLASH COMMANDS
+    if (trimmedVal === "/help" || trimmedVal === "/?") {
+      setComposerMode("shortcut_picker");
+      return;
+    }
+
     if (trimmedVal === "/sessions") {
       const sessions = await listSessions();
       const recent = sessions.slice(0, 10);
@@ -1211,6 +1216,13 @@ export function SwitchbayApp({
     if (state.activePlan) {
       const { activePlan } = state;
 
+      if (trimmedVal === "stop" || trimmedVal === "/stop") {
+        dispatch({ type: "plan/stopped" });
+        dispatch({ type: "assistant/appended", message: `Plan stopped at step ${Math.min(activePlan.currentStep + 1, activePlan.steps.length)}/${activePlan.steps.length}.` });
+        setQuerySync("");
+        return;
+      }
+
       if (activePlan.status === "pending_approval") {
         const intent = parseApprovalIntent(trimmedVal);
         if (intent === "apply" || intent === "always") {
@@ -1231,12 +1243,6 @@ export function SwitchbayApp({
       }
 
       if (activePlan.status === "awaiting_continue") {
-        if (trimmedVal === "stop" || trimmedVal === "/stop") {
-          dispatch({ type: "plan/stopped" });
-          dispatch({ type: "assistant/appended", message: `Plan stopped at step ${activePlan.currentStep + 1}/${activePlan.steps.length}.` });
-          setQuerySync("");
-          return;
-        }
         if (trimmedVal === "skip") {
           dispatch({ type: "plan/step-skipped" });
           setQuerySync("");
@@ -1654,6 +1660,11 @@ export function SwitchbayApp({
       toolMode,
     });
     if (localCommand.handled) {
+      if (localCommand.clearTranscript) {
+        dispatch({ type: "feed/cleared" });
+        setTranscriptScrollOffset(0);
+        return;
+      }
       dispatch({ type: "local-command/submitted", input: value });
 
       if (localCommand.dailyBoardChanged) {
@@ -1988,6 +1999,15 @@ export function SwitchbayApp({
       }
       let autoApprovedShellContent: string | null = null;
       let autoApprovedShellFailed = false;
+
+      for (const providerEvent of executedTurn.providerEvents ?? []) {
+        dispatch({
+          type: "tool/executed",
+          tool: `${providerEvent.provider}/${providerEvent.name ?? providerEvent.type}`,
+          summary: providerEvent.status ?? "completed",
+          ok: providerEvent.status !== "failed",
+        });
+      }
 
       for (const toolExecution of executedTurn.toolExecutions) {
         dispatch({

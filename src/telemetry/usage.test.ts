@@ -27,12 +27,18 @@ test("terminal chart primitives render deterministic text", () => {
 });
 
 test("usage formats trace estimates and route bars", () => {
-  const output = formatUsage([record(), record({ id: "trace-2", runtime: { lane: "local", toolMode: "standard", provider: "ollama", model: "qwen" } })], new Date("2026-07-12T20:00:00Z"));
+  const output = formatUsage([record({ runtime: { lane: "cloud", toolMode: "standard", provider: "openai", model: "gpt-5.4-mini" } }), record({ id: "trace-2", runtime: { lane: "local", toolMode: "standard", provider: "ollama", model: "qwen" } })], new Date("2026-07-12T20:00:00Z"));
   expect(output).toContain("Turns");
   expect(output).toContain("total 100");
   expect(output).toContain("openai");
   expect(output).toContain("ollama");
-  expect(output).toContain("tokens are estimates");
+  expect(output).toContain("Estimated API spend");
+  expect(output).toContain("Session");
+  expect(output).toContain("Today");
+  expect(output).toContain("7 days");
+  expect(output).toContain("Lifetime");
+  expect(output).toContain("Spend by provider");
+  expect(output).toContain("token counts and spend are estimates");
 });
 
 test("trace graph renders ordered tools and failures", () => {

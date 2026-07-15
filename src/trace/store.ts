@@ -111,7 +111,7 @@ export async function saveTraceRecord(input: {
       receipt: input.turn.contextReceipt ?? [],
       systemPromptChars: systemPrompt.length,
       promptChars,
-      estimatedPromptTokens: estimateTokens(systemPrompt) + estimateTokens(String(input.userPrompt)),
+      estimatedPromptTokens: input.turn.request.messages.reduce((sum, message) => sum + estimateTokens(JSON.stringify(message.content ?? "")), 0),
     },
     actions: {
       toolCount: tools.length,

@@ -106,7 +106,7 @@ Type `/` in the Switchbay TUI to search this catalog. Type `?` or `/help` for th
 /restore <index>      Apply a checkpoint
 /trace                Show the latest durable turn receipt
 /trace export         Print the latest trace JSON path
-/usage                Graph turns, routes, tokens, and tools
+/usage                Graph turns, routes, tokens, tools, and estimated spend
 /graph trace          Render the latest turn as a flow graph
 /radar                Run read-only local friction checks
 /handoff              Build a compact next-session handoff

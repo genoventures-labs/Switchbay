@@ -380,6 +380,7 @@ Full reference: [SLASH_COMMANDS.md](docs/SLASH_COMMANDS.md)
 | [MEMORY_KNOWLEDGE_TRACES.md](docs/MEMORY_KNOWLEDGE_TRACES.md) | Memory, Knowledge Index, Trace Ledger, Quick Starts/Rules |
 | [MODEL_READINESS.md](docs/MODEL_READINESS.md) | Workspace profiles, durable plans, automatic knowledge, workflows, context receipts |
 | [NATIVE_TOOLS.md](docs/NATIVE_TOOLS.md) | Provider-managed tools, provider-native interfaces, and Switchbay's isolated model environment |
+| [USAGE_COSTS.md](docs/USAGE_COSTS.md) | Session/day/week/lifetime usage graphs and approximate API spend |
 | [USER_CONTEXT.md](docs/USER_CONTEXT.md) | Private machine-local profile, work style, active-project, preference, and boundary context |
 | [QUICKSTARTS_AND_RULES.md](docs/QUICKSTARTS_AND_RULES.md) | The quickstarts Switchbay reads before acting, how to write your own |
 | [SLASH_COMMANDS.md](docs/SLASH_COMMANDS.md) | Complete TUI slash command reference |

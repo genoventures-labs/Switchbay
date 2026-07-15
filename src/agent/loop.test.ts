@@ -261,6 +261,7 @@ test("model-tool registry describes native tools and specialist resources", asyn
   expect(listed.ok).toBe(true);
   expect(listed.body).toContain("workspace_hop\tworkspace\twrite");
   expect(listed.body).toContain("git_push\tgit\tapproval");
+  expect(listed.body).toContain("usage_cost_summary\ttelemetry\tread");
 
   const described = await executeToolCall("describe_model_tool", { name: "read_agent" }, { cwd });
   expect(described.body).toContain('"category": "agents"');

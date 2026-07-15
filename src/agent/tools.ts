@@ -25,6 +25,7 @@ import {
   executeNativeEditor,
   runInNativeEnvironment,
 } from "../environment/native-environment";
+import { formatUsage, listTraceRecords } from "../telemetry/usage";
 
 // Commands that still require approval in the private-tool lane because they
 // are destructive, privileged, publishing, or have broad external impact.
@@ -58,6 +59,14 @@ export const AGENT_TOOLS: ToolDefinition[] = [
       name: "describe_model_tool",
       description: "Show the description, input schema, category, and execution policy for one native model tool.",
       parameters: { type: "object", properties: { name: { type: "string", description: "Exact native model-tool name." } }, required: ["name"] },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "usage_cost_summary",
+      description: "Calculate approximate session, day, week, and lifetime model API spend from local Switchbay traces and render usage graphs.",
+      parameters: { type: "object", properties: {} },
     },
   },
   {
@@ -954,6 +963,11 @@ export async function executeToolCall(
           summary: `Described model tool ${requested}`,
           body: JSON.stringify({ ...modelToolMetadata(requested), ...definition.function }, null, 2),
         };
+      }
+
+      case "usage_cost_summary": {
+        const records = await listTraceRecords(cwd);
+        return { tool: name, ok: true, summary: `Calculated usage and estimated spend across ${records.length} traced turns`, body: formatUsage(records) };
       }
 
       case "list_agents": {
@@ -1941,7 +1955,7 @@ function positiveNumberOrDefault(value: unknown, fallback: number): number {
 }
 
 function modelToolMetadata(name: string): { category: string; policy: "read" | "write" | "approval" | "external" } {
-  if (/^(list_|read_|summarize_|search_|glob_|diff_|git_(status|log|show|blame|diff)|memory_(status|facts)|knowledge_)/.test(name)) {
+  if (/^(list_|read_|summarize_|search_|glob_|diff_|usage_|git_(status|log|show|blame|diff)|memory_(status|facts)|knowledge_)/.test(name)) {
     return { category: inferToolCategory(name), policy: name.startsWith("web_") ? "external" : "read" };
   }
   if (/^(git_push|gumroad_refund_sale)$/.test(name)) return { category: inferToolCategory(name), policy: "approval" };
@@ -1963,5 +1977,6 @@ function inferToolCategory(name: string): string {
   if (["read_file", "read_file_range", "read_json", "summarize_file", "list_directory", "glob_files", "search_files", "create_file", "write_file", "apply_patch", "native_editor", "str_replace_based_edit_tool"].includes(name)) return "filesystem";
   if (["run_tests", "verify", "shell", "native_exec", "bash"].includes(name)) return "execution";
   if (name.includes("model_tool")) return "registry";
+  if (name.startsWith("usage_")) return "telemetry";
   return "general";
 }

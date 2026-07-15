@@ -96,7 +96,7 @@ ${CLR.accent}${CLR.bold}Context and Memory:${CLR.reset}
   ${CLR.bold}switchbay knowledge search${CLR.reset} <query> Search sourced workspace snippets
   ${CLR.bold}switchbay trace${CLR.reset}                    Show latest turn trace
   ${CLR.bold}switchbay trace export${CLR.reset}             Print latest trace file path
-  ${CLR.bold}switchbay usage${CLR.reset}                    Graph traced turns, routes, tokens, and tools
+  ${CLR.bold}switchbay usage${CLR.reset}                    Graph turns, tokens, tools, and estimated API spend
   ${CLR.bold}switchbay graph trace${CLR.reset}               Graph the latest agent turn flow
   ${CLR.bold}switchbay radar${CLR.reset}                    Run read-only local friction checks
   ${CLR.bold}switchbay handoff${CLR.reset}                  Print a compact next-session handoff

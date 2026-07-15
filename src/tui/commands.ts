@@ -351,7 +351,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   {
     category: "runtime",
     command: "/usage",
-    description: "Graph traced turns, routes, estimated tokens, and tool activity.",
+    description: "Graph traced turns, routes, tokens, tools, and estimated API spend.",
     example: "/usage",
   },
   {

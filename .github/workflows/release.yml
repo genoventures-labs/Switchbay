@@ -62,11 +62,9 @@ jobs:
             
             # Update files locally
             sed -i "s/\"version\": \".*\"/\"version\": \"$NEW_VERSION\"/" package.json
-            sed -i "s/switchbay [0-9]*\.[0-9]*\.[0-9]*/switchbay $NEW_VERSION/" src/cli/args.ts
             sed -i "s/version-[0-9]*\.[0-9]*\.[0-9]*/version-$NEW_VERSION/" README.md
-            sed -i "s/version=\"[0-9]*\.[0-9]*\.[0-9]*\"/version=\"$NEW_VERSION\"/" src/tui/components/Transcript.tsx
-            
-            git add package.json src/cli/args.ts README.md src/tui/components/Transcript.tsx
+
+            git add package.json README.md
             git commit -m "release: switchbay v$NEW_VERSION [skip ci]"
             git tag "v$NEW_VERSION"
             git push origin main

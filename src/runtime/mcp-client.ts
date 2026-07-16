@@ -3,6 +3,7 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { ToolDefinition } from "./types";
 import { loadSwitchbayMcpConfig, resolveMcpServerConfigs, type McpServerConfig } from "./mcp-config";
+import { SWITCHBAY_VERSION } from "../version";
 
 type ConnectedServer = { id: string; config: McpServerConfig; client: Client; tools: Map<string, string> };
 
@@ -25,7 +26,7 @@ export async function createMcpToolRuntime(cwd: string): Promise<McpToolRuntime>
     if (config.enabled === false) continue;
     try {
       validateServerConfig(id, config);
-      const client = new Client({ name: "switchbay", version: "1.6.12" }, { capabilities: {} });
+      const client = new Client({ name: "switchbay", version: SWITCHBAY_VERSION }, { capabilities: {} });
       const transport = config.url
         ? new StreamableHTTPClientTransport(new URL(expandEnv(config.url)), {
             requestInit: { headers: expandRecord(config.headers) },

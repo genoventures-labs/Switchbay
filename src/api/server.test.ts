@@ -1,10 +1,11 @@
 import { expect, test } from "bun:test";
 import { createApiHandler } from "./server";
+import { SWITCHBAY_VERSION } from "../version";
 
 test("health reports the local service", async () => {
   const response = await createApiHandler()(new Request("http://local/health"));
   expect(response.status).toBe(200);
-  expect(await response.json()).toMatchObject({ ok: true, service: "switchbay" });
+  expect(await response.json()).toMatchObject({ ok: true, service: "switchbay", version: SWITCHBAY_VERSION });
 });
 
 test("bearer auth protects API routes but not health", async () => {
@@ -35,7 +36,8 @@ test("capabilities and status expose machine-readable service state", async () =
   const capabilities: any = await (await handler(new Request("http://local/v1/capabilities"))).json();
   expect(capabilities.features).toContain("streaming");
   expect(capabilities.features).toContain("native-tools");
+  expect(capabilities.serviceVersion).toBe(SWITCHBAY_VERSION);
   expect(capabilities.nativeTools.environment.backend).toBeTruthy();
   const status: any = await (await handler(new Request("http://local/v1/status"))).json();
-  expect(status).toMatchObject({ ok: true, apiVersion: "1" });
+  expect(status).toMatchObject({ ok: true, apiVersion: "1", serviceVersion: SWITCHBAY_VERSION });
 });

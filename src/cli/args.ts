@@ -1,4 +1,5 @@
 import { DEFAULTS } from "../config/defaults";
+import { SWITCHBAY_VERSION } from "../version";
 
 export type CliOptions = {
   surface: string;
@@ -615,7 +616,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
         modelLane: null,
       };
     } else if (arg === "version" || arg === "--version" || arg === "-v") {
-      console.log("switchbay 1.6.22");
+      console.log(`switchbay ${SWITCHBAY_VERSION}`);
       process.exit(0);
     } else if (arg === undefined || arg === "help" || arg === "--help" || arg === "-h") {
       return { surface, profile, mode, lane, initialQuery: "", hop: null, resume: false, newSession: false, purge: null, subcommand: "help", engineAction: "status", toolboxAction: "status", toolboxSkill: null, memoryAction: "status", memoryNote: null, knowledgeAction: "status", knowledgeQuery: null, traceAction: "last", mcpAction: "status", modelTarget: null, modelLane: null };

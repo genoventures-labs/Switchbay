@@ -8,6 +8,7 @@ import { MarkdownText } from "./MarkdownText";
 import { WelcomeBoard } from "./WelcomeBoard";
 import { PlanPanel } from "./PlanPanel";
 import { TUI_COLORS } from "../theme";
+import { SWITCHBAY_VERSION } from "../../version";
 
 type TranscriptProps = {
   lane: string;
@@ -42,7 +43,7 @@ export function Transcript({
       {entries.length === 0 && !streamingText ? (
         <WelcomeBoard
           appName="Switchbay"
-          version="1.6.22"
+          version={SWITCHBAY_VERSION}
           lane={lane}
           cwd={process.cwd()}
           terminalWidth={terminalWidth}

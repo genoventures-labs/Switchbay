@@ -10,6 +10,7 @@ import { runSwitchbayTurn } from "./service";
 import { approve, cancelApproval, getApproval } from "./approvals";
 import { getNativeToolsConfig } from "../config/switchbay-config";
 import { nativeEnvironmentAvailability } from "../environment/native-environment";
+import { SWITCHBAY_VERSION } from "../version";
 
 let turnQueue: Promise<void> = Promise.resolve();
 let queueDepth = 0;
@@ -24,17 +25,18 @@ export function createApiHandler(options: { token?: string; runTurn?: typeof run
     const url = new URL(req.url);
     if (url.pathname !== "/health" && token && !authorized(req, token)) return fail("Unauthorized", 401, "unauthorized");
     try {
-      if (req.method === "GET" && url.pathname === "/health") return json({ ok: true, service: "switchbay", version: "1.6.4" });
+      if (req.method === "GET" && url.pathname === "/health") return json({ ok: true, service: "switchbay", version: SWITCHBAY_VERSION });
       if (req.method === "GET" && url.pathname === "/v1/capabilities") {
         const native = nativeEnvironmentAvailability();
         return json({
           apiVersion: "1",
+          serviceVersion: SWITCHBAY_VERSION,
           features: ["turns", "streaming", "cancellation", "sessions", "approvals", "memory", "knowledge", "traces", "native-tools", "isolated-environment", "provider-managed-tools", "provider-citations", "provider-artifacts"],
           streaming: "sse",
           nativeTools: { enabled: getNativeToolsConfig().enabled, providerManaged: getNativeToolsConfig().providerManaged, environment: native },
         });
       }
-      if (req.method === "GET" && url.pathname === "/v1/status") return json({ ok: true, apiVersion: "1", queueDepth, activeRequests: activeRequests.size, nativeTools: { enabled: getNativeToolsConfig().enabled, providerManaged: getNativeToolsConfig().providerManaged, environment: nativeEnvironmentAvailability() } });
+      if (req.method === "GET" && url.pathname === "/v1/status") return json({ ok: true, apiVersion: "1", serviceVersion: SWITCHBAY_VERSION, queueDepth, activeRequests: activeRequests.size, nativeTools: { enabled: getNativeToolsConfig().enabled, providerManaged: getNativeToolsConfig().providerManaged, environment: nativeEnvironmentAvailability() } });
       if (req.method === "POST" && url.pathname === "/v1/turn") {
         const body = await readBody(req);
         if (typeof body.input !== "string" || !body.input.trim()) return fail("input is required", 400, "bad_request");

@@ -6,6 +6,11 @@ test("parses the local API server command", () => {
   expect(parseCliArgs(["bun", "index.tsx", "serve"]).subcommand).toBe("serve");
 });
 
+test("parses visual workspace commands", () => {
+  expect(parseCliArgs(["bun", "index.tsx", "open"]).subcommand).toBe("open");
+  expect(parseCliArgs(["bun", "index.tsx", "web-serve"]).subcommand).toBe("web-serve");
+});
+
 test("parses macOS service management commands", () => {
   expect(parseCliArgs(["bun", "index.tsx", "service"]).serviceAction).toBe("status");
   expect(parseCliArgs(["bun", "index.tsx", "service", "install"]).serviceAction).toBe("install");

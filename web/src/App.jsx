@@ -14,18 +14,6 @@ const nav = [
   ["Plugins", Plug], ["Guides", BookOpen], ["Trace", Pulse], ["Usage", BracketsCurly],
 ];
 
-const initialMessages = [
-  { id: 1, role: "user", body: "Clean up the model routing and make the selection behavior predictable." },
-  { id: 2, role: "assistant", model: "Claude Sonnet 4.6", body: "I found the pin and automatic lane state sharing one path. I’m separating them, then I’ll verify explicit model calls and `/auto`.", meta: "10:14 AM" },
-  { id: 3, role: "progress", body: "Good — the explicit provider path is clean. I’m checking session persistence next.", meta: "10:16 AM" },
-];
-
-const demoSteps = [
-  { label: "Inspect routing state", state: "done", detail: "Read 4 files" },
-  { label: "Separate pin and auto state", state: "active", detail: "model-selection.ts" },
-  { label: "Verify model switching", state: "queued", detail: "Tests waiting" },
-];
-
 function BrandMark() {
   return <div className="brand-mark" aria-hidden="true"><span>S</span></div>;
 }
@@ -36,9 +24,9 @@ function AppIcon({ Icon }) {
 
 export function App() {
   const [activeNav, setActiveNav] = useState("Home");
-  const [messages, setMessages] = useState(initialMessages);
+  const [messages, setMessages] = useState([]);
   const [sessionId, setSessionId] = useState(null);
-  const [sessionTitle, setSessionTitle] = useState("Routing architecture cleanup");
+  const [sessionTitle, setSessionTitle] = useState("New session");
   const [input, setInput] = useState("");
   const [running, setRunning] = useState(false);
   const [connected, setConnected] = useState(false);
@@ -48,7 +36,8 @@ export function App() {
   const [openModelGroups, setOpenModelGroups] = useState(() => new Set(["auto"]));
   const [model, setModel] = useState({ id: "auto", label: "Auto routing", lane: "cloud", provider: "auto" });
   const [modelOptions, setModelOptions] = useState([{ id: "auto", label: "Auto routing", lane: "cloud", provider: "auto" }]);
-  const [steps, setSteps] = useState(demoSteps);
+  const [steps, setSteps] = useState([]);
+  const [job, setJob] = useState(null);
   const feedRef = useRef(null);
 
   useEffect(() => {
@@ -80,10 +69,9 @@ export function App() {
     setRunning(true);
     setRailOpen(true);
     setSteps([
-      { label: "Understand the request", state: "done", detail: "Intent resolved" },
-      { label: "Work through the task", state: "active", detail: "In progress" },
-      { label: "Verify the result", state: "queued", detail: "Waiting" },
+      { label: "Route the request", state: "active", detail: model.id === "auto" ? "Automatic routing" : model.label },
     ]);
+    setJob({ startedAt: Date.now(), tools: [], files: [], context: [], route: null, error: null });
 
     // This first workspace slice stays safe by using the live service when it is
     // open locally without auth, and falls back to an honest preview response.
@@ -114,28 +102,32 @@ export function App() {
           if (event === "token" && typeof data.token === "string") {
             received += data.token;
             setMessages((items) => items.map((item) => item.id === replyId ? { ...item, body: received } : item));
-          } else if (event === "done" && !received) {
-            const answer = data.output ?? data.text ?? data.message ?? "The turn completed successfully.";
-            received = String(answer);
-            setMessages((items) => items.map((item) => item.id === replyId ? { ...item, body: received } : item));
+          } else if (event === "step" && typeof data.step === "string") {
+            setSteps((items) => [...items.map((item) => ({ ...item, state: "done" })), { label: data.step, state: "active", detail: "In progress" }]);
+          } else if (event === "done") {
+            if (!received) {
+              const answer = data.content ?? data.output ?? data.text ?? data.message ?? "The turn completed without a text response.";
+              received = String(answer);
+              setMessages((items) => items.map((item) => item.id === replyId ? { ...item, body: received } : item));
+            }
             if (data.sessionId) setSessionId(data.sessionId);
-          } else if (event === "done" && data.sessionId) {
-            setSessionId(data.sessionId);
+            setJob((current) => ({ ...current, tools: data.toolExecutions || [], files: [...new Set((data.toolExecutions || []).map((tool) => tool.changedFile).filter(Boolean))], context: data.contextReceipt || [], route: data.route || { provider: data.lane }, workspace: data.workspace, pendingApproval: data.pendingApproval || null, finishedAt: Date.now() }));
           } else if (event === "error") {
             throw new Error(data.message || "The turn failed");
           }
         }
         if (done) break;
       }
-    } catch {
-      await new Promise((resolve) => setTimeout(resolve, 900));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "The turn failed";
       setMessages((items) => [...items, {
-        id: Date.now() + 1, role: "assistant", model: model.label,
-        body: "The workspace surface is ready. The local service is protected, so this preview kept the request on-device without exposing its token to the browser. The next integration step is a same-origin service bridge.", meta: "now",
+        id: Date.now() + 1, role: "assistant", model: "Switchbay",
+        body: `**Turn failed:** ${message}`, meta: "now",
       }]);
+      setJob((current) => ({ ...current, error: message, finishedAt: Date.now() }));
     } finally {
       setRunning(false);
-      setSteps((items) => items.map((step) => ({ ...step, state: "done", detail: step.label === "Verify the result" ? "Complete" : step.detail })));
+      setSteps((items) => items.map((step) => ({ ...step, state: "done", detail: "Complete" })));
     }
   };
 
@@ -147,6 +139,7 @@ export function App() {
     setSteps([]);
     setInput("");
     setRunning(false);
+    setJob(null);
     setRailOpen(false);
     setActiveNav("Home");
   };
@@ -223,7 +216,7 @@ export function App() {
             </div>
 
             <div className="feed" ref={feedRef}>
-              <div className="date-rule"><span>Today · July 16</span></div>
+              <div className="date-rule"><span>Today · {new Date().toLocaleDateString(undefined, { month: "long", day: "numeric" })}</span></div>
               {!messages.length && <div className="new-session-state"><span><Sparkle size={22} weight="duotone" /></span><h2>Start something new</h2><p>Ask a model, describe a job, or choose a specialist from the workspace.</p><div><button onClick={() => setInput("Inspect this workspace and give me a concise status.")}>Workspace status</button><button onClick={() => setInput("Help me plan the next implementation milestone.")}>Plan a milestone</button></div></div>}
               {messages.map((message) => <Message key={message.id} message={message} />)}
               {steps.length > 0 && <WorkSequence steps={steps} running={running} />}
@@ -244,7 +237,7 @@ export function App() {
             </div>
           </div>
 
-          {railOpen && <DetailsRail steps={steps} connected={connected} onClose={() => setRailOpen(false)} />}
+          {railOpen && <DetailsRail steps={steps} job={job} running={running} connected={connected} onClose={() => setRailOpen(false)} />}
         </section> : <CatalogPage page={activeNav} connected={connected} />}
       </main>
     </div>
@@ -472,7 +465,7 @@ function Message({ message }) {
 
 function WorkSequence({ steps, running }) {
   return <section className="work-sequence">
-    <div className="sequence-head"><div><ListChecks size={18} /><strong>Work sequence</strong></div><span>{running ? "In progress" : "3 steps"}</span></div>
+    <div className="sequence-head"><div><ListChecks size={18} /><strong>Work sequence</strong></div><span>{running ? "In progress" : `${steps.length} ${steps.length === 1 ? "step" : "steps"}`}</span></div>
     {steps.map((step, index) => <div className={`sequence-row ${step.state}`} key={`${step.label}-${index}`}>
       <div className="step-marker">{step.state === "done" ? <Check size={13} weight="bold" /> : step.state === "active" ? <span /> : index + 1}</div>
       <div><strong>{step.label}</strong><span>{step.detail}</span></div>
@@ -481,27 +474,34 @@ function WorkSequence({ steps, running }) {
   </section>;
 }
 
-function DetailsRail({ steps, connected, onClose }) {
+function DetailsRail({ steps, job, running, connected, onClose }) {
+  const tools = job?.tools || [];
+  const files = job?.files || [];
+  const context = job?.context || [];
+  const checks = tools.filter((tool) => /test|check|verify|build|lint/i.test(`${tool.tool} ${tool.summary}`));
+  const route = job?.route;
   return <aside className="details-rail">
     <div className="rail-head"><div><p className="eyebrow">Live execution</p><h2>Job details</h2></div><button onClick={onClose} className="icon-button"><X size={18} /></button></div>
-    <RailSection title="Plan" value="3 steps">
-      <div className="mini-plan">{steps.map((step, index) => <div key={step.label}><span className={step.state}>{step.state === "done" ? <Check size={11} /> : index + 1}</span><p>{step.label}<small>{step.detail}</small></p></div>)}</div>
+    <RailSection title="Activity" value={steps.length ? `${steps.length} steps` : "Waiting"}>
+      {steps.length ? <div className="mini-plan">{steps.map((step, index) => <div key={`${step.label}-${index}`}><span className={step.state}>{step.state === "done" ? <Check size={11} /> : index + 1}</span><p>{step.label}<small>{step.detail}</small></p></div>)}</div> : <RailEmpty label="No active run." />}
     </RailSection>
-    <RailSection title="Changed files" value="2">
-      <div className="file-row"><File size={15} /><span>model-selection.ts</span><em>+18 −4</em></div>
-      <div className="file-row"><File size={15} /><span>router.ts</span><em>+6 −2</em></div>
+    <RailSection title="Changed files" value={String(files.length)}>
+      {files.map((file) => <div className="file-row" key={file}><File size={15} /><span>{file}</span></div>)}
+      {!files.length && <RailEmpty label={running ? "Watching for changes…" : "No files changed."} />}
     </RailSection>
-    <RailSection title="Verification" value="Passed">
-      <div className="verification"><CheckCircle size={18} weight="fill" /><div><strong>bun test</strong><span>42 passed · 1.2s</span></div></div>
+    <RailSection title="Verification" value={checks.length ? (checks.every((tool) => tool.ok) ? "Passed" : "Failed") : "Not run"}>
+      {checks.map((tool, index) => <div className="verification" key={`${tool.tool}-${index}`}><CheckCircle size={18} weight="fill" /><div><strong>{tool.tool}</strong><span>{tool.summary}</span></div></div>)}
+      {!checks.length && <RailEmpty label="No verification recorded." />}
     </RailSection>
-    <RailSection title="Context" value="4 sources">
-      <div className="context-row"><Code size={15} /><span>Runtime router</span></div>
-      <div className="context-row"><BookOpen size={15} /><span>Model routing guide</span></div>
-      <div className="context-row"><HardDrives size={15} /><span>Session state</span></div>
+    <RailSection title="Context" value={`${context.length} sources`}>
+      {context.map((source, index) => <div className="context-row" key={`${source}-${index}`}><BookOpen size={15} /><span>{source}</span></div>)}
+      {!context.length && <RailEmpty label={running ? "Loading context…" : "No context receipt yet."} />}
     </RailSection>
-    <div className="rail-footer"><div><span>Service</span><strong className={connected ? "success" : "muted"}>{connected ? "Connected" : "Preview mode"}</strong></div><div><span>Est. cost</span><strong>$0.0036</strong></div></div>
+    <div className="rail-footer"><div><span>Service</span><strong className={connected ? "success" : "muted"}>{connected ? "Connected" : "Offline"}</strong></div><div><span>Route</span><strong>{route?.using || route?.model || route?.provider || "—"}</strong></div></div>
   </aside>;
 }
+
+function RailEmpty({ label }) { return <p className="rail-empty">{label}</p>; }
 
 function RailSection({ title, value, children }) {
   return <section className="rail-section"><div className="rail-section-title"><h3>{title}</h3><span>{value}</span></div>{children}</section>;

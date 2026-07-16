@@ -53,6 +53,19 @@ async function boot() {
     return;
   }
 
+  if (options.subcommand === "open") {
+    const { openSwitchbayWorkspace } = await import("./src/web/launcher");
+    console.log(await openSwitchbayWorkspace());
+    return;
+  }
+
+  if (options.subcommand === "web-serve") {
+    const { startWebWorkspaceServer } = await import("./src/web/server");
+    const server = startWebWorkspaceServer();
+    console.log(`Switchbay workspace listening on http://${server.hostname}:${server.port}`);
+    return;
+  }
+
   if (options.subcommand === "serve") {
     const port = Number(Bun.env.SWITCHBAY_API_PORT ?? 7349);
     const host = Bun.env.SWITCHBAY_API_HOST ?? "127.0.0.1";

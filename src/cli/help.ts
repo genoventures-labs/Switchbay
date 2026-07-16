@@ -4,7 +4,8 @@ type Entry = [command: string, description: string];
 
 const GROUPS: Array<[string, Entry[]]> = [
   ["WORKSPACE", [
-    ["switchbay", "Open the interactive workspace"],
+    ["switchbay", "Open the terminal workspace"],
+    ["switchbay open", "Open the visual workspace"],
     ['switchbay "<request>"', "Run a one-shot request"],
     ["switchbay --resume [id]", "Resume a saved session"],
     ["switchbay agenda", "Open today's Daily Board"],
@@ -65,4 +66,3 @@ export function renderCliHelp(color = cliColorEnabled()): string {
   );
   return lines.join("\n");
 }
-

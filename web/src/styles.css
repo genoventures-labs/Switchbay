@@ -126,6 +126,7 @@ h1 { font-size: 20px; line-height: 1.2; letter-spacing: -.02em; margin: 0; font-
 .lane-label svg { color: var(--accent); }
 .send-button { height: 32px; min-width: 76px; border: 0; border-radius: 7px; background: var(--accent); color: #031012; display: flex; align-items: center; justify-content: center; gap: 7px; cursor: pointer; font-size: 10px; font-weight: 700; }
 .send-button:hover:not(:disabled) { background: var(--accent-bright); }.send-button:disabled { opacity: .35; cursor: default; }
+.rail-empty { margin: 8px 0 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
 .composer-hint { text-align: center; margin: 7px 0 0; color: #4f5a60; font: 8px "JetBrains Mono",monospace; }
 
 .details-rail { min-height: 0; overflow-y: auto; border-left: 1px solid var(--line); background: #0b0f12; padding: 20px 18px; scrollbar-color:#2b353a transparent; }

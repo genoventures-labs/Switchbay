@@ -17,10 +17,10 @@
     },
     "./package.json": "./package.json"
   },
-  "files": ["dist", "bin", "README.md", "docs/LOCAL_API_README.md"],
+  "files": ["dist", "bin", "README.md", "docs/LOCAL_API_README.md", "web/dist"],
   "sideEffects": false,
   "scripts": {
-    "build": "bun run build:client && bun build index.tsx --compile --outfile bin/switchbay-native",
+    "build": "bun run build:client && bun run web:build && bun build index.tsx --compile --outfile bin/switchbay-native",
     "build:client": "bun build src/client/index.ts --target browser --outdir dist/client && bunx tsc -p tsconfig.client.json",
     "web:dev": "bun run --cwd web dev",
     "web:build": "bun run --cwd web build",

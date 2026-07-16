@@ -154,17 +154,21 @@ triggers: [launch, release]
 
 test("generatePluginDefinition produces a bounded workspace plugin manifest", async () => {
   const cwd = await mkdtemp(join(tmpdir(), "switchbay-plugin-draft-"));
-
+  const previous = Bun.env.SWITCHBAY_PLUGIN_AUTHORING_PATH;
+  Bun.env.SWITCHBAY_PLUGIN_AUTHORING_PATH = cwd;
   const draft = await generatePluginDefinition({
     name: "Repo Ops",
     purpose: "Bundle repo hygiene agents and skills.",
     contents: "agents, skills, engines",
     notes: "Local workspace only.",
-  }, cwd);
+  }, cwd).finally(() => {
+    if (previous === undefined) delete Bun.env.SWITCHBAY_PLUGIN_AUTHORING_PATH;
+    else Bun.env.SWITCHBAY_PLUGIN_AUTHORING_PATH = previous;
+  });
 
   const manifest = JSON.parse(draft.content);
   expect(draft.id).toBe("repo-ops");
-  expect(draft.savePath).toContain("Switchbay/plugins/repo-ops/plugin.json");
+  expect(draft.savePath).toBe(join(cwd, "plugins", "repo-ops", "plugin.json"));
   expect(manifest.enabled).toBe(true);
   expect(manifest.agents).toEqual([]);
   expect(manifest.skills).toEqual([]);

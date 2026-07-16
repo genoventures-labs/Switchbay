@@ -3,6 +3,7 @@ import os from "node:os";
 import fs from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { runCommand } from "../tools/shell";
+import { sharedAssetRoot } from "../config/authoring-paths";
 
 export const DEFAULT_ENGINE_BAY_REPO = "https://github.com/genoventures-labs/Switchbay-Engines.git";
 
@@ -99,8 +100,12 @@ export async function describeEngineBay(sync = false): Promise<string> {
 
 export async function engineBayManifestPaths(): Promise<string[]> {
   const inventory = await loadEngineBayInventory();
-  if (!inventory.exists) return [];
-  return inventory.manifests.map((file) => path.join(inventory.path, file));
+  const authoringRoot = sharedAssetRoot("engine");
+  const authoring = existsSync(authoringRoot)
+    ? (await findRelativeFiles(authoringRoot, isManifestFile)).map((file) => path.join(authoringRoot, file))
+    : [];
+  const cached = inventory.exists ? inventory.manifests.map((file) => path.join(inventory.path, file)) : [];
+  return [...new Set([...authoring, ...cached])];
 }
 
 async function readHead(repoPath: string): Promise<string | null> {

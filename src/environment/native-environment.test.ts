@@ -6,6 +6,7 @@ import {
   ensureNativeEnvironment,
   executeNativeEditor,
   nativeEnvironmentAvailability,
+  publishNativeEnvironmentFiles,
   resolveNativeEnvironmentPath,
   runInNativeEnvironment,
 } from "./native-environment";
@@ -69,4 +70,16 @@ test("native editor mutates only the disposable snapshot", async () => {
   await writeFile(outside, "outside\n");
   await symlink(outside, join(handle.workspace, "linked.txt"));
   await expect(executeNativeEditor(handle, { command: "view", path: "linked.txt" })).rejects.toThrow("symlink");
+});
+
+test("verified native files can be published back to the real workspace", async () => {
+  if (!nativeEnvironmentAvailability().available) return;
+  const source = await mkdtemp(join(tmpdir(), "switchbay-native-publish-source-"));
+  const runtime = await mkdtemp(join(tmpdir(), "switchbay-native-publish-runtime-"));
+  await writeFile(join(source, "draft.txt"), "before", "utf8");
+  const handle = await ensureNativeEnvironment("publish-session", source, runtime);
+  await executeNativeEditor(handle, { command: "str_replace", path: "draft.txt", old_str: "before", new_str: "after" });
+  const result = await publishNativeEnvironmentFiles(handle, ["draft.txt"]);
+  expect(result.published).toEqual(["draft.txt"]);
+  expect(await readFile(join(source, "draft.txt"), "utf8")).toBe("after");
 });

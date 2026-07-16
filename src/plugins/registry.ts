@@ -2,6 +2,7 @@ import path from "node:path";
 import fs from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { workspaceStorageDir } from "../config/paths";
+import { sharedAssetRoot } from "../config/authoring-paths";
 
 export type PluginAssetKind = "agents" | "skills" | "engines" | "guides" | "knowledge" | "mcp";
 
@@ -40,35 +41,27 @@ export function pluginsRoot(cwd = process.cwd()): string {
 
 export async function loadPluginInventory(cwd = process.cwd()): Promise<PluginInventory> {
   const root = pluginsRoot(cwd);
+  const sourceRoot = path.join(sharedAssetRoot("plugin", cwd), "plugins");
   const warnings: string[] = [];
   const plugins: LoadedSwitchbayPlugin[] = [];
 
-  if (!existsSync(root)) return { path: root, plugins, warnings };
-
-  let entries: Array<{ name: string; isDirectory: () => boolean }>;
-  try {
-    entries = await fs.readdir(root, { withFileTypes: true });
-  } catch (err) {
-    return {
-      path: root,
-      plugins,
-      warnings: [`${root}: ${err instanceof Error ? err.message : String(err)}`],
-    };
-  }
-
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    const pluginRoot = path.join(root, entry.name);
-    const manifestPath = path.join(pluginRoot, "plugin.json");
-    if (!existsSync(manifestPath)) continue;
-
-    try {
-      const raw = await fs.readFile(manifestPath, "utf-8");
-      const manifest = normalizePluginManifest(JSON.parse(raw));
-      const missing = await collectMissingAssets(pluginRoot, manifest);
-      plugins.push({ manifest, root: pluginRoot, manifestPath, missing });
-    } catch (err) {
-      warnings.push(`${manifestPath}: ${err instanceof Error ? err.message : String(err)}`);
+  for (const candidateRoot of [...new Set([sourceRoot, root])]) {
+    if (!existsSync(candidateRoot)) continue;
+    let entries: Array<{ name: string; isDirectory: () => boolean }>;
+    try { entries = await fs.readdir(candidateRoot, { withFileTypes: true }); }
+    catch (err) { warnings.push(`${candidateRoot}: ${err instanceof Error ? err.message : String(err)}`); continue; }
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const pluginRoot = path.join(candidateRoot, entry.name);
+      const manifestPath = path.join(pluginRoot, "plugin.json");
+      if (!existsSync(manifestPath)) continue;
+      try {
+        const raw = await fs.readFile(manifestPath, "utf-8");
+        const manifest = normalizePluginManifest(JSON.parse(raw));
+        if (plugins.some((plugin) => plugin.manifest.id === manifest.id)) continue;
+        const missing = await collectMissingAssets(pluginRoot, manifest);
+        plugins.push({ manifest, root: pluginRoot, manifestPath, missing });
+      } catch (err) { warnings.push(`${manifestPath}: ${err instanceof Error ? err.message : String(err)}`); }
     }
   }
 

@@ -111,7 +111,7 @@ test("generateEngineManifest produces a workspace engine draft", async () => {
 
   expect(draft.id).toBe("file-helper");
   expect(draft.name).toBe("File Helper");
-  expect(draft.savePath).toContain(".switchbay/engines/file-helper.engine.json");
+  expect(draft.savePath).toContain("Switchbay Engines/engines/Shell/FileHelper/file_helper.engine.json");
   expect(JSON.parse(draft.content).tools[0].name).toBe("list_files");
 });
 
@@ -148,7 +148,7 @@ triggers: [launch, release]
   });
 
   expect(draft.id).toBe("launch-check");
-  expect(draft.savePath).toContain(".switchbay/toolbox/skills/launch-check.skill.md");
+  expect(draft.savePath).toContain("Engine Toolboxes/skills/launch-check.skill.md");
   expect(draft.content).toContain("id: launch-check");
 });
 
@@ -164,7 +164,7 @@ test("generatePluginDefinition produces a bounded workspace plugin manifest", as
 
   const manifest = JSON.parse(draft.content);
   expect(draft.id).toBe("repo-ops");
-  expect(draft.savePath).toContain(".switchbay/plugins/repo-ops/plugin.json");
+  expect(draft.savePath).toContain("Switchbay/plugins/repo-ops/plugin.json");
   expect(manifest.enabled).toBe(true);
   expect(manifest.agents).toEqual([]);
   expect(manifest.skills).toEqual([]);

@@ -7,8 +7,8 @@ import {
   PROJECT_CONTEXT_FILE,
   existingProjectContextPath,
   existingWorkspaceDataPath,
-  workspaceStorageDir,
 } from "../config/paths";
+import { describeSharedAssetRoots, engineAuthoringPath, pluginAuthoringPath, skillAuthoringPath } from "../config/authoring-paths";
 import type { ChatRuntimeClient } from "../runtime/client";
 import type {
   ChatCompletionRequest,
@@ -221,7 +221,7 @@ Brief:
 
   const content = stripMarkdownFence(extractAssistantText(resp).trim());
   if (!content) throw new Error("The model returned no skill content.");
-  const savePath = join(workspaceStorageDir(process.cwd()), "toolbox", "skills", `${id}.skill.md`);
+  const savePath = skillAuthoringPath(id);
   return { id, name: answers.name, content: `${content}\n`, savePath };
 }
 
@@ -244,7 +244,7 @@ export async function generatePluginDefinition(
 
   const manifest = normalizePluginManifest(pluginManifestTemplate(id, answers.name.trim(), description));
   const content = `${JSON.stringify(manifest, null, 2)}\n`;
-  const savePath = join(workspaceStorageDir(cwd), "plugins", manifest.id, "plugin.json");
+  const savePath = pluginAuthoringPath(manifest.id, cwd);
   return { id: manifest.id, name: manifest.name, content, savePath };
 }
 
@@ -325,7 +325,7 @@ Brief:
     name: manifest.name || answers.name,
   };
   const content = `${JSON.stringify(normalized, null, 2)}\n`;
-  const savePath = join(workspaceStorageDir(process.cwd()), "engines", `${normalized.id}.engine.json`);
+  const savePath = engineAuthoringPath({ id: normalized.id, name: normalized.name, commands: answers.commands });
   return { id: normalized.id, name: normalized.name, content, savePath };
 }
 
@@ -594,6 +594,10 @@ Runtime Lane: ${input.runtimeLane ?? "cloud"}
 Tool Mode: ${effectiveToolMode}
 Identity: Speak as the model you actually are. Switchbay owns the workspace, tools, memory, safety gates, and working standards; it is not a fictional assistant identity.${userContextBlock}${oriMdBlock}${workspaceProfileBlock}${memoryBlock}${knowledgeBlock}${pinsBlock}${activePlanBlock}${workflowsBlock}${agentBlock}${capabilityDirectoryBlock}${toolboxBlock}${guidesBlock}${switchbayMcpBlock}
 
+SHARED AUTHORING REPOSITORIES:
+${describeSharedAssetRoots(cwd)}
+When creating or modifying a reusable engine, skill, or plugin, workspace_hop to its source repository first and use ordinary create_file/write_file/apply_patch tools there. Never author reusable assets inside ~/.switchbay caches. Native environment changes are disposable until explicitly published.
+
 GROUNDING RULES:
 1. You are running inside a local development tool.
 2. Runtime lane and profile may influence style, but the current workspace is the active world.
@@ -607,7 +611,7 @@ GROUNDING RULES:
 10. If a user asks to enter, inspect, or continue in another project, call workspace_hop before reading files or running commands there. Finding a path is not the same as changing the active workspace.
 11. If grounding tools fail, report the failure and stop. Never fabricate a repository snapshot, package metadata, git state, or file contents after failed reads or commands.
 12. For Gumroad data, use typed gumroad_* tools, not generic run_engine_tool. gumroad_sales_summary is all-time only. For weekly, month-to-date, or date-specific reporting, use gumroad_sales_range with an explicit YYYY-MM-DD range. If the user says only "weekly" and does not identify the week, ask which date range they mean; never invent it.
-13. Use native_exec/native_editor for untrusted code, calculations, prototypes, and provider-native Bash/editor work. That environment is a disposable snapshot: changes there do not modify the real workspace. Use Switchbay's ordinary workspace tools only when the user actually wants repository changes.
+13. Use native_exec/native_editor for untrusted code, calculations, prototypes, and provider-native Bash/editor work. That environment is a disposable snapshot: changes there do not modify the real workspace. When verified native changes should become real repository work, call native_publish with the exact file paths. Use Switchbay's ordinary workspace tools directly when the user explicitly wants repository changes.
 `;
   // Proactively embed live workspace context so the model can answer questions about
   // the project, recent changes, and git state without server-side tool calls.

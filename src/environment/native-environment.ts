@@ -207,6 +207,33 @@ export async function executeNativeEditor(
   throw new Error(`Unsupported native editor command: ${command || "missing"}.`);
 }
 
+export async function publishNativeEnvironmentFiles(
+  handle: NativeEnvironmentHandle,
+  paths: string[],
+): Promise<{ published: string[]; skipped: string[] }> {
+  const published: string[] = [];
+  const skipped: string[] = [];
+  for (const requested of paths) {
+    const source = resolveNativeEnvironmentPath(handle, requested);
+    const rel = relative(handle.workspace, source);
+    const info = await stat(source).catch(() => null);
+    if (!info?.isFile()) {
+      skipped.push(`${requested}: not a file`);
+      continue;
+    }
+    const target = resolve(handle.sourceCwd, rel);
+    const targetRel = relative(handle.sourceCwd, target);
+    if (targetRel === ".." || targetRel.startsWith(`..${sep}`) || isAbsolute(targetRel)) {
+      skipped.push(`${requested}: outside source workspace`);
+      continue;
+    }
+    await mkdir(dirname(target), { recursive: true });
+    await copyFile(source, target);
+    published.push(rel);
+  }
+  return { published, skipped };
+}
+
 async function assertNoSymlinkTraversal(root: string, target: string): Promise<void> {
   const rel = relative(root, target);
   let current = root;

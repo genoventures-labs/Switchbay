@@ -23,6 +23,7 @@ import {
   describeNativeEnvironment,
   ensureNativeEnvironment,
   executeNativeEditor,
+  publishNativeEnvironmentFiles,
   runInNativeEnvironment,
 } from "../environment/native-environment";
 import { formatUsage, listTraceRecords } from "../telemetry/usage";
@@ -30,6 +31,13 @@ import { formatUsage, listTraceRecords } from "../telemetry/usage";
 // Commands that still require approval in the private-tool lane because they
 // are destructive, privileged, publishing, or have broad external impact.
 const ALWAYS_APPROVE_PATTERN = /\b(rm|rmdir|git\s+push|git\s+reset|git\s+clean|npm\s+publish|bun\s+publish|sudo|chmod|chown|dd|mkfs|fdisk|curl\s.*\|\s*(?:bash|sh)|wget\s.*\|\s*(?:bash|sh))\b/i;
+
+export function resolveToolFilePath(cwd: string, requested: unknown): string {
+  const value = String(requested ?? "").trim();
+  if (!value) throw new Error("A file path is required.");
+  const expanded = value === "~" ? os.homedir() : value.startsWith("~/") ? path.join(os.homedir(), value.slice(2)) : value;
+  return path.isAbsolute(expanded) ? path.normalize(expanded) : path.resolve(cwd, expanded);
+}
 
 export type ToolDefinition = {
   type: "function";
@@ -427,6 +435,20 @@ export const AGENT_TOOLS: ToolDefinition[] = [
           view_range: { type: "array", description: "Optional [start,end] one-based line range." },
         },
         required: ["command", "path"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "native_publish",
+      description: "Publish selected files from the disposable native environment back into the corresponding real workspace paths after verification.",
+      parameters: {
+        type: "object",
+        properties: {
+          paths: { type: "array", description: "Workspace-relative file paths to copy from the isolated snapshot into the real repository." },
+        },
+        required: ["paths"],
       },
     },
   },
@@ -1111,7 +1133,7 @@ export async function executeToolCall(
       }
 
       case "create_file": {
-        const filePath = path.join(cwd, args.path);
+        const filePath = resolveToolFilePath(cwd, args.path);
         await fs.mkdir(path.dirname(filePath), { recursive: true });
         await fs.writeFile(filePath, args.content, "utf-8");
         const lines = String(args.content).split("\n");
@@ -1127,7 +1149,7 @@ export async function executeToolCall(
       }
 
       case "write_file": {
-        const filePath = path.join(cwd, args.path);
+        const filePath = resolveToolFilePath(cwd, args.path);
         let before = "";
         try { before = await fs.readFile(filePath, "utf-8"); } catch { /* new file */ }
         const after = String(args.content);
@@ -1152,7 +1174,7 @@ export async function executeToolCall(
       }
 
       case "apply_patch": {
-        const filePath = path.join(cwd, args.path);
+        const filePath = resolveToolFilePath(cwd, args.path);
         const content = await fs.readFile(filePath, "utf-8");
         const search = String(args.search ?? "");
         const replace = String(args.replace ?? "");
@@ -1417,6 +1439,23 @@ export async function executeToolCall(
         const environment = await ensureNativeEnvironment(options.sessionId ?? "one-shot", cwd);
         const result = await executeNativeEditor(environment, args as Record<string, unknown>);
         return { tool: name, ...result };
+      }
+
+      case "native_publish": {
+        const paths = Array.isArray(args.paths) ? args.paths.map(String).filter(Boolean) : [];
+        if (!paths.length) throw new Error("native_publish requires at least one file path.");
+        const environment = await ensureNativeEnvironment(options.sessionId ?? "one-shot", cwd);
+        const result = await publishNativeEnvironmentFiles(environment, paths);
+        return {
+          tool: name,
+          ok: result.published.length > 0 && result.skipped.length === 0,
+          summary: `Published ${result.published.length} native file${result.published.length === 1 ? "" : "s"} to the real workspace`,
+          body: [
+            result.published.length ? `Published:\n${result.published.map((file) => `- ${file}`).join("\n")}` : "No files published.",
+            result.skipped.length ? `Skipped:\n${result.skipped.map((file) => `- ${file}`).join("\n")}` : "",
+          ].filter(Boolean).join("\n\n"),
+          changedFile: result.published[0],
+        };
       }
 
       case "shell": {

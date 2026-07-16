@@ -14,6 +14,7 @@ test("cost calculator prices known cloud models and treats local inference as ze
   expect(estimateTraceCost(record("anthropic", "claude-sonnet-4-6"))).toBe(18);
   expect(estimateTraceCost(record("google", "gemini-3.5-flash"))).toBe(10.5);
   expect(estimateTraceCost(record("ollama", "qwen"))).toBe(0);
+  expect(estimateTraceCost({ ...record("ollama", "qwen"), runtime: { lane: "local", toolMode: "standard" } })).toBe(0);
 });
 
 test("cost calculator reports unpriced custom models instead of guessing", () => {

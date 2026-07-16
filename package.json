@@ -22,6 +22,8 @@
   "scripts": {
     "build": "bun run build:client && bun build index.tsx --compile --outfile bin/switchbay-native",
     "build:client": "bun build src/client/index.ts --target browser --outdir dist/client && bunx tsc -p tsconfig.client.json",
+    "web:dev": "bun run --cwd web dev",
+    "web:build": "bun run --cwd web build",
     "test": "bun test",
     "postinstall": "bun scripts/postinstall.mjs"
   },

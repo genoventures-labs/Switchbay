@@ -6,11 +6,25 @@ import { describeKnowledgeIndex, refreshKnowledgeIndex, searchKnowledgeIndex } f
 import { describeMemory, refreshMemory } from "../memory/store";
 import { listSessions } from "../session/persistence";
 import { describeLatestTrace } from "../trace/store";
+import { loadLatestTrace } from "../trace/store";
+import { listTraceRecords } from "../telemetry/usage";
+import { estimateCost, estimateTraceCost } from "../telemetry/cost";
+import { listTravelLocations } from "../tools/travel";
+import { getCloudModelPresets, listRuntimeModels } from "../runtime/models";
+import { clearSelectedRuntimeModel, loadSwitchbayConfig, setSelectedRuntimeModel } from "../config/switchbay-config";
+import { setActiveCloudProvider } from "../runtime/cloud-providers";
+import { loadEngineRegistry } from "../engines/registry";
+import { loadAllAgents } from "../agent/agents";
+import { loadToolboxInventory } from "../toolbox/hub";
+import { loadGuides } from "../context/guides";
+import { loadPluginInventory } from "../plugins/registry";
 import { runSwitchbayTurn } from "./service";
 import { approve, cancelApproval, getApproval } from "./approvals";
 import { getNativeToolsConfig } from "../config/switchbay-config";
 import { nativeEnvironmentAvailability } from "../environment/native-environment";
 import { SWITCHBAY_VERSION } from "../version";
+import { createAuthoredResource } from "../authoring/resources";
+import { importSkill, previewSkillImport } from "../toolbox/skill-bridge";
 
 let turnQueue: Promise<void> = Promise.resolve();
 let queueDepth = 0;
@@ -57,7 +71,74 @@ export function createApiHandler(options: { token?: string; runTurn?: typeof run
         if (req.method === "POST" && approvalMatch[2]) { const body = await readBody(req); if (typeof body.approvalId !== "string") return fail("approvalId is required", 400, "bad_request"); if (approvalMatch[2] === "approve") return json(await enqueue(() => approve(id, body.approvalId))); return json(await enqueue(() => cancelApproval(id, body.approvalId))); }
       }
       if (req.method === "GET" && url.pathname === "/v1/sessions") return json({ sessions: await listSessions({ clientId: url.searchParams.get("clientId") ?? undefined, workspace: url.searchParams.get("workspace") ?? undefined }) });
+      if (req.method === "POST" && url.pathname === "/v1/resources") {
+        const body = await readBody(req);
+        const cwd = await workspaceFrom(typeof body.workspace === "string" ? body.workspace : undefined);
+        const resource = await createAuthoredResource({
+          kind: body.kind,
+          name: typeof body.name === "string" ? body.name : "",
+          description: typeof body.description === "string" ? body.description : "",
+          triggers: typeof body.triggers === "string" ? body.triggers : "",
+          instructions: typeof body.instructions === "string" ? body.instructions : "",
+          guardrails: typeof body.guardrails === "string" ? body.guardrails : "",
+          guideKind: body.guideKind,
+          version: typeof body.version === "string" ? body.version : undefined,
+        }, cwd);
+        return json({ resource }, 201);
+      }
+      if (req.method === "POST" && (url.pathname === "/v1/skills/bridge/preview" || url.pathname === "/v1/skills/bridge/import")) {
+        const body = await readBody(req);
+        const cwd = await workspaceFrom(typeof body.workspace === "string" ? body.workspace : undefined);
+        const input = {
+          content: typeof body.content === "string" ? body.content : undefined,
+          sourcePath: typeof body.sourcePath === "string" ? body.sourcePath : undefined,
+          filename: typeof body.filename === "string" ? body.filename : undefined,
+          provider: body.provider,
+          mode: body.mode,
+          name: typeof body.name === "string" ? body.name : undefined,
+          description: typeof body.description === "string" ? body.description : undefined,
+        };
+        const skill = url.pathname.endsWith("/preview") ? await previewSkillImport(input, cwd) : await importSkill(input, cwd);
+        return json({ skill }, url.pathname.endsWith("/import") ? 201 : 200);
+      }
+      if (req.method === "POST" && url.pathname === "/v1/models/select") {
+        const body = await readBody(req);
+        const id = typeof body.id === "string" ? body.id.trim() : "";
+        const lane = body.lane === "local" || body.lane === "cloud-mcp" ? body.lane : "cloud";
+        if (id === "auto") {
+          clearSelectedRuntimeModel("cloud"); clearSelectedRuntimeModel("cloud-mcp"); setActiveCloudProvider("auto");
+          return json({ selected: null, mode: "auto", lane: "cloud" });
+        }
+        if (!id) return fail("id is required", 400, "bad_request");
+        const candidates = lane === "local" ? (await listRuntimeModels("local")).models : getCloudModelPresets().map(model => ({ ...model, lane }));
+        const selected = candidates.find(model => model.id === id && (!body.provider || model.provider === body.provider));
+        if (!selected) return fail(`Unknown ${lane} model: ${id}`, 400, "bad_request");
+        setSelectedRuntimeModel(lane, { id: selected.id, provider: selected.provider });
+        if (selected.provider === "openai" || selected.provider === "anthropic" || selected.provider === "google") setActiveCloudProvider(selected.provider);
+        return json({ selected: { id: selected.id, provider: selected.provider }, mode: "explicit", lane });
+      }
       const cwd = await workspaceFrom(url.searchParams.get("workspace"));
+      if (req.method === "GET" && url.pathname === "/v1/workspaces") return json({ current: cwd, workspaces: await listTravelLocations() });
+      if (req.method === "GET" && url.pathname === "/v1/models") {
+        const local = await withTimeout(listRuntimeModels("local"), 1800, { models: [], notice: "Local model discovery timed out." });
+        return json({ selected: loadSwitchbayConfig().selected_models, cloud: getCloudModelPresets(), local: local.models, notice: local.notice });
+      }
+      if (req.method === "GET" && url.pathname === "/v1/engines") {
+        const registry = await loadEngineRegistry(cwd);
+        return json({ engines: registry.engines.map(engine => ({ id: engine.id, name: engine.name, description: engine.description, tools: engine.tools.map(tool => ({ name: tool.name, description: tool.description, approval: tool.approval ?? "auto", required: tool.required ?? [] })) })), warnings: registry.warnings });
+      }
+      if (req.method === "GET" && url.pathname === "/v1/agents") return json({ agents: (await loadAllAgents(cwd)).map(agent => ({ id: agent.id, name: agent.name, description: agent.description, source: agent.source ?? "builtin", custom: Boolean(agent.custom) })) });
+      if (req.method === "GET" && url.pathname === "/v1/skills") {
+        const inventory = await loadToolboxInventory(cwd);
+        return json({ status: inventory.exists ? "ready" : "not synced", repo: inventory.repo, head: inventory.head, skills: inventory.skills.map(skill => ({ id: skill.id, name: skill.name, description: skill.description, source: skill.source, languages: skill.languages, agents: skill.agents, tags: skill.tags, triggers: skill.triggers })) });
+      }
+      if (req.method === "GET" && url.pathname === "/v1/guides") return json({ guides: (await loadGuides(cwd)).map(guide => ({ id: guide.id, title: guide.title, description: guide.description, kind: guide.kind, source: guide.source, triggers: guide.triggers, body: guide.body })) });
+      if (req.method === "GET" && url.pathname === "/v1/plugins") {
+        const inventory = await loadPluginInventory(cwd);
+        return json({ path: inventory.path, warnings: inventory.warnings, plugins: inventory.plugins.map(plugin => ({ ...plugin.manifest, missing: plugin.missing })) });
+      }
+      if (req.method === "GET" && url.pathname === "/v1/trace/record") return json({ trace: (await loadLatestTrace(cwd))?.record ?? null });
+      if (req.method === "GET" && url.pathname === "/v1/usage") return json(buildUsageSummary(await listTraceRecords(cwd)));
       if (req.method === "GET" && url.pathname === "/v1/memory") return json({ content: await describeMemory(cwd) });
       if (req.method === "POST" && url.pathname === "/v1/memory/refresh") { const body = await readBody(req, true); return json({ content: await refreshMemory(await workspaceFrom(body.workspace)) }); }
       if (req.method === "GET" && url.pathname === "/v1/knowledge") return json({ content: await describeKnowledgeIndex(cwd) });
@@ -93,6 +174,24 @@ async function workspaceFrom(value: unknown): Promise<string> { const cwd = reso
 async function requireWorkspace(value: unknown): Promise<void> { if (typeof value !== "string" || !value.trim()) throw new Error("workspace must be a directory path"); const info = await stat(resolve(value)).catch(() => null); if (!info?.isDirectory()) throw new Error(`workspace is not a directory: ${value}`); }
 function authorized(req: Request, token: string) { const supplied = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? ""; const a = Buffer.from(supplied); const b = Buffer.from(token); return a.length === b.length && timingSafeEqual(a, b); }
 function isLoopback(host: string) { return host === "127.0.0.1" || host === "localhost" || host === "::1"; }
+async function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> { return Promise.race([promise, new Promise<T>(resolve => setTimeout(() => resolve(fallback), ms))]); }
+function buildUsageSummary(records: Awaited<ReturnType<typeof listTraceRecords>>) {
+  const now = new Date(); const today = new Date(now); today.setHours(0, 0, 0, 0); const week = new Date(today); week.setDate(week.getDate() - 6);
+  const latestSession = records[0]?.sessionId;
+  const ranges = { session: records.filter(record => record.sessionId === latestSession), today: records.filter(record => Date.parse(record.createdAt) >= today.getTime()), week: records.filter(record => Date.parse(record.createdAt) >= week.getTime()), lifetime: records };
+  const days = Array.from({ length: 7 }, (_, index) => { const date = new Date(week); date.setDate(week.getDate() + index); const next = new Date(date); next.setDate(date.getDate() + 1); const rows = records.filter(record => { const time = Date.parse(record.createdAt); return time >= date.getTime() && time < next.getTime(); }); return { date: date.toISOString().slice(0, 10), turns: rows.length, usd: estimateCost(rows).usd }; });
+  const providers = new Map<string, { turns: number; usd: number; pricedTurns: number; unpricedTurns: number }>();
+  for (const record of records) {
+    const name = record.runtime.provider ?? record.runtime.lane;
+    const current = providers.get(name) ?? { turns: 0, usd: 0, pricedTurns: 0, unpricedTurns: 0 };
+    const cost = estimateTraceCost(record);
+    current.turns += 1;
+    if (cost == null) current.unpricedTurns += 1;
+    else { current.pricedTurns += 1; current.usd += cost; }
+    providers.set(name, current);
+  }
+  return { totals: { turns: records.length, promptTokens: records.reduce((sum, record) => sum + record.context.estimatedPromptTokens, 0), answerTokens: records.reduce((sum, record) => sum + record.result.estimatedAnswerTokens, 0), toolCalls: records.reduce((sum, record) => sum + record.actions.toolCount, 0), changedFiles: new Set(records.flatMap(record => record.actions.changedFiles)).size }, costs: Object.fromEntries(Object.entries(ranges).map(([key, rows]) => [key, estimateCost(rows)])), days, providers: [...providers].map(([provider, value]) => ({ provider, ...value })) };
+}
 function apiToken(): string {
   const direct = Bun.env.SWITCHBAY_API_TOKEN?.trim();
   if (direct) return direct;

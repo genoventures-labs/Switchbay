@@ -61,8 +61,7 @@ test("loads workspace plugin manifests and exposes plugin assets", async () => {
   );
 
   const inventory = await loadPluginInventory(cwd);
-  expect(inventory.plugins).toHaveLength(1);
-  expect(inventory.plugins[0]?.manifest.id).toBe("repo-ops");
+  expect(inventory.plugins.some((plugin) => plugin.manifest.id === "repo-ops")).toBe(true);
 
   const previousCwd = process.cwd();
   process.chdir(cwd);

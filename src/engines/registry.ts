@@ -77,6 +77,11 @@ export async function loadEngineRegistry(cwd = process.cwd()): Promise<EngineReg
     engines.set(plannerEngine.id, plannerEngine);
   }
 
+  const skillBridgeEngine = createSkillBridgeEngine(cwd);
+  if (!engines.has(skillBridgeEngine.id)) {
+    engines.set(skillBridgeEngine.id, skillBridgeEngine);
+  }
+
   const gumOpsEngine = await discoverGumOpsEngine(cwd);
   const hasExplicitGumOpsPath = Boolean(Bun.env.SWITCHBAY_GUMOPS_PATH?.trim() || Bun.env.GUMOPS_PATH?.trim());
   if (gumOpsEngine && (hasExplicitGumOpsPath || !engines.has(gumOpsEngine.id))) {
@@ -231,6 +236,26 @@ async function discoverEngineManifestPaths(cwd: string): Promise<string[]> {
   paths.push(...await engineBayManifestPaths());
   paths.push(...await pluginAssetPaths("engines", cwd));
   return [...new Set(paths)];
+}
+
+function createSkillBridgeEngine(cwd: string): EngineManifest {
+  const scriptPath = path.join(import.meta.dir, "..", "toolbox", "skill-bridge-cli.ts");
+  const command = (action: string) => `bun ${shellQuote(scriptPath)} ${action} {{source_path}} {{provider}} {{mode}}`;
+  const parameters = {
+    source_path: { type: "string", description: "Absolute path to a skill Markdown file or folder containing SKILL.md." },
+    provider: { type: "string", description: "Source format: auto, openai, claude, gemini, or generic." },
+    mode: { type: "string", description: "preserve keeps the original body; convert normalizes Switchbay sections." },
+  };
+  return {
+    id: "skill-bridge",
+    name: "Skill Bridge",
+    description: "Preview, import, and convert OpenAI, Claude, Gemini, and generic Markdown skills into Switchbay's synced skill repository.",
+    cwd,
+    tools: [
+      { name: "preview_skill_import", description: "Inspect a foreign skill and preview its normalized Switchbay metadata and content without writing files.", command: command("preview"), required: ["source_path", "provider", "mode"], parameters },
+      { name: "import_skill", description: "Import a foreign skill into the synced Switchbay toolbox, preserving or converting its body.", command: command("import"), required: ["source_path", "provider", "mode"], parameters, approval: "always", approval_reason: "Importing a skill writes a new file to the shared Engine Toolboxes source repository." },
+    ],
+  };
 }
 
 function createCreativeEngine(cwd: string): EngineManifest {

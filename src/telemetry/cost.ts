@@ -29,7 +29,7 @@ export function modelPrice(provider?: string | null, model?: string | null): Mod
 }
 
 export function estimateTraceCost(record: TraceRecord): number | null {
-  const price = modelPrice(record.runtime.provider, record.runtime.model);
+  const price = modelPrice(record.runtime.provider ?? record.runtime.lane, record.runtime.model);
   if (!price) return null;
   return (record.context.estimatedPromptTokens * price.input + record.result.estimatedAnswerTokens * price.output) / 1_000_000;
 }

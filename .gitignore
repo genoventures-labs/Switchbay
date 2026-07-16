@@ -1,5 +1,6 @@
 # dependencies
 node_modules/
+.npm-cache/
 
 # environment & secrets
 .env
@@ -12,6 +13,7 @@ node_modules/
 # build output
 dist/
 bin/switchbay-native
+output/
 
 # system & editor
 .DS_Store

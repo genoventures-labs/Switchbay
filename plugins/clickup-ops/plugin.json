@@ -1,0 +1,13 @@
+{
+  "id": "clickup-ops",
+  "name": "ClickUp Ops",
+  "description": "Project operations for ClickUp through the guarded ClickUp engine and synced task, sprint, and delivery skills.",
+  "version": "0.1.0",
+  "enabled": true,
+  "agents": ["agents/project-operator.md"],
+  "skills": [],
+  "engines": [],
+  "guides": ["guides/clickup-ops.md"],
+  "knowledge": [],
+  "mcp": []
+}

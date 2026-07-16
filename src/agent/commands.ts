@@ -744,7 +744,12 @@ async function handleWorkspaceCommand(
     if (action === "hop" || action === "open" || action === "switch") {
       const query = stripWrappingQuotes(parts.slice(1).join(" ").trim());
       if (!query) return { handled: true, assistantMessage: "Usage: `/workspace hop <name-or-path>`" };
-      const matches = await fuzzyMatchLocations(query);
+      let matches = await fuzzyMatchLocations(query);
+      const explicitPath = resolveLocationInput(query);
+      if (!matches.length && existsSync(explicitPath)) {
+        addWhitelistedLocation(explicitPath);
+        matches = await fuzzyMatchLocations(explicitPath);
+      }
       if (!matches.length) {
         return { handled: true, assistantMessage: `No workspace matched \`${query}\`. Use \`/workspace list\` or \`/workspace add <path>\`.` };
       }
@@ -782,10 +787,16 @@ function parseConversationalWorkspaceHopIntent(input: string): { query: string; 
     .replace(/^[,\s]*(hey|hi|yo|ok|okay)?\s*switchbay[,\s:;-]*/i, "")
     .replace(/[.!?]+$/g, "")
     .trim();
+  const quoted = normalized.match(/^(?:please\s+)?(?:hop|switch|jump|travel|cd)(?:\s+(?:to|into|over\s+to|in\s+to))?\s+(?:the\s+)?(?:(?:workspace|repo|repository|project)\s+)?(["'])(.+?)\1(?:\s*[,;.!-]+\s*|\s+)(.+)$/i);
+  if (quoted?.[2]) {
+    const followUp = quoted[3]?.trim();
+    return { query: quoted[2].trim(), ...(followUp ? { followUp } : {}) };
+  }
+
   const { primary, followUp } = splitFollowUpIntent(normalized);
 
   const patterns = [
-    /^(?:please\s+)?(?:hop|switch|jump|travel|cd)(?:\s+(?:to|into|over\s+to))?\s+(?:the\s+)?(?:(?:workspace|repo|repository|project)\s+)?(.+)$/i,
+    /^(?:please\s+)?(?:hop|switch|jump|travel|cd)(?:\s+(?:to|into|over\s+to|in\s+to))?\s+(?:the\s+)?(?:(?:workspace|repo|repository|project)\s+)?(.+)$/i,
     /^(?:please\s+)?(?:go\s+to|take\s+me\s+to|open)\s+(?:the\s+)?(?:workspace|repo|repository|project)\s+(.+)$/i,
     /^(?:please\s+)?(?:go\s+to|take\s+me\s+to|open)\s+(.+?)\s+(?:workspace|repo|repository|project)$/i,
   ];

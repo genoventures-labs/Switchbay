@@ -1400,6 +1400,16 @@ test("workspace slash commands show, add, and hop known workspaces", async () =>
     expect(hopWithFollowUp.followUpInput).toBe("What's changed in git?");
 
     process.chdir(originalCwd);
+    const freshRepo = await mkdtemp(join(tmpdir(), "Fresh Workspace "));
+    const explicitFreshHop = await tryLocalCommand(
+      `hop in to "${freshRepo}", it is a fresh repo. Read the docs and tell me what should be built`,
+      baseOptions,
+    );
+    expect(explicitFreshHop.handled).toBe(true);
+    expect(explicitFreshHop.travel?.toPath).toBe(freshRepo);
+    expect(explicitFreshHop.followUpInput).toBe("it is a fresh repo. Read the docs and tell me what should be built");
+
+    process.chdir(originalCwd);
     const addressedHop = await tryLocalCommand(`Claude, hop in to ${basename(target)}`, baseOptions);
     expect(addressedHop.handled).toBe(false);
 

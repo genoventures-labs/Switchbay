@@ -52,26 +52,14 @@ jobs:
           NEW_VERSION="$major.$minor.$((patch + 1))"
           echo "New version: $NEW_VERSION"
           
-          if [ -n "$TAP_GITHUB_TOKEN" ]; then
-            # Make sure release.sh uses the GITHUB_TOKEN or TAP_GITHUB_TOKEN for authenticated clone/push
-            # We configure git to use the token for GitHub requests
-            git config --global url."https://x-access-token:${TAP_GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"
-            
-            chmod +x ./scripts/release.sh
-            ./scripts/release.sh "$NEW_VERSION"
-          else
-            echo "TAP_GITHUB_TOKEN secret not set. Skipping brew formula update, but performing local version tag and release..."
-            
-            # Update files locally
-            sed -i "s/\"version\": \".*\"/\"version\": \"$NEW_VERSION\"/" package.json
-            sed -i "s/version-[0-9]*\.[0-9]*\.[0-9]*/version-$NEW_VERSION/" README.md
+          # Use TAP_GITHUB_TOKEN if set; otherwise fall back to GITHUB_TOKEN for push auth.
+          # TAP_GITHUB_TOKEN must have write access to genoventures-labs/homebrew-tap.
+          # Without it, the tap formula will NOT be updated and brew upgrade will stall.
+          AUTH_TOKEN="${TAP_GITHUB_TOKEN:-$GITHUB_TOKEN}"
+          git config --global url."https://x-access-token:${AUTH_TOKEN}@github.com/".insteadOf "https://github.com/"
 
-            git add package.json README.md
-            git commit -m "release: switchbay v$NEW_VERSION [skip ci]"
-            git tag "v$NEW_VERSION"
-            git push origin main
-            git push origin "v$NEW_VERSION"
-            
-            # Create standard GitHub Release
-            gh release create "v$NEW_VERSION" --title "v$NEW_VERSION" --notes "Release v$NEW_VERSION"
-          fi
+          chmod +x ./scripts/release.sh
+          ./scripts/release.sh "$NEW_VERSION" || {
+            echo "::warning::release.sh failed (tap push likely needs TAP_GITHUB_TOKEN with write access to homebrew-tap)"
+            exit 1
+          }

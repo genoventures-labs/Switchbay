@@ -6,14 +6,14 @@ import { loadCloudModelCatalog } from "./cloud-model-catalog";
 import { getActiveLocalProvider, getLocalProviderConfig } from "./local-providers";
 import { readConfiguredSecret } from "../config/secrets";
 
-export type RuntimeModelProvider = CloudProvider | "ollama" | "ollama-cloud" | "openrouter" | "huggingface";
+export type RuntimeModelProvider = CloudProvider | "ollama" | "ollama-cloud" | "openrouter" | "huggingface" | "apple-fm";
 
 export type RuntimeModelOption = {
   id: string;
   label: string;
   lane: RuntimeLane;
   provider: RuntimeModelProvider;
-  source: "auto" | "preset" | "custom" | "ollama" | "ollama-cloud" | "openrouter" | "huggingface";
+  source: "auto" | "preset" | "custom" | "ollama" | "ollama-cloud" | "openrouter" | "huggingface" | "apple-fm";
 };
 
 export type RuntimeModelList = {
@@ -73,8 +73,53 @@ export async function listRuntimeModels(lane: RuntimeLane, localProvider = getAc
 
   if (lane === "openrouter") return listOpenRouterModels();
   if (lane === "huggingface") return listHuggingFaceModels();
+  if (lane === "apple") return listAppleFmModels();
 
-  return listOllamaModels(undefined, localProvider);
+  if (localProvider === "apple-fm") return listAppleFmModels();
+  return listOllamaModels(undefined, localProvider as "ollama" | "ollama-cloud");
+}
+
+export async function listAppleFmModels(): Promise<RuntimeModelList> {
+  return {
+    models: [
+      {
+        id: "apple-fm/core",
+        label: "AFM 3 Core  ·  3B dense  ·  on-device  ·  fast",
+        lane: "apple" as const,
+        provider: "apple-fm" as const,
+        source: "apple-fm" as const,
+      },
+      {
+        id: "apple-fm/core-advanced",
+        label: "AFM 3 Core Advanced  ·  20B sparse  ·  on-device  ·  multimodal",
+        lane: "apple" as const,
+        provider: "apple-fm" as const,
+        source: "apple-fm" as const,
+      },
+      {
+        id: "apple-fm/cloud",
+        label: "AFM 3 Cloud  ·  Private Cloud Compute  ·  fast",
+        lane: "apple" as const,
+        provider: "apple-fm" as const,
+        source: "apple-fm" as const,
+      },
+      {
+        id: "apple-fm/cloud-pro",
+        label: "AFM 3 Cloud Pro  ·  Private Cloud Compute  ·  reasoning",
+        lane: "apple" as const,
+        provider: "apple-fm" as const,
+        source: "apple-fm" as const,
+      },
+      {
+        id: "apple-fm/image",
+        label: "AFM 3 Cloud Image  ·  image generation  ·  coming soon",
+        lane: "apple" as const,
+        provider: "apple-fm" as const,
+        source: "apple-fm" as const,
+      },
+    ],
+    notice: "Apple Intelligence runs on-device (Core, Core Advanced) and via Private Cloud Compute (Cloud, Cloud Pro). Requires macOS 26 Tahoe with Apple Intelligence enabled.",
+  };
 }
 
 export async function listHuggingFaceModels(fetchImpl: FetchLike = fetch): Promise<RuntimeModelList> {

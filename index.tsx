@@ -1386,6 +1386,18 @@ async function runCliMode(options: any, resumeId: string | null) {
   const addressed = parseModelAddress(options.initialQuery);
   process.stdout.write(`\n${CLR.accent}⏺${CLR.reset} ${CLR.text}${CLR.bold}${addressed?.speaker ?? "Auto"}${CLR.reset} ${CLR.muted}(thinking...)${CLR.reset}\n`);
   try {
+    const deepResearchContext = options.deepResearch ? `DEEP RESEARCH MODE
+You have been invoked with --deep-research. Follow this workflow strictly:
+
+1. PLAN — before searching, outline the key questions, angles, and sources needed. Share a brief plan.
+2. SEARCH WIDE — use the web-search engine (web_search tool) with multiple distinct queries to gather sources. Aim for at least 5–8 diverse results per angle.
+3. READ DEEP — use web_scrape on the most relevant URLs to pull full content, not just snippets.
+4. INSTANCE — create a research_instance to store notes and sources durably (research-helpers engine).
+5. SYNTHESIZE — after gathering evidence, analyze patterns, contradictions, and gaps before concluding.
+6. DELIVER — write a structured markdown report via create_markdown. Separate direct evidence, inferred patterns, and open questions clearly.
+
+Do not skip steps or rush to a conclusion. Cite every claim with its source URL. Flag anything that needs verification.` : undefined;
+
     const result = await runSwitchbayTurn({
       input: options.visionPath ? `${options.initialQuery}\n\nImage: ${options.visionPath}` : options.initialQuery,
       lane: options.visionPath ? "openai" : options.lane,
@@ -1396,6 +1408,7 @@ async function runCliMode(options: any, resumeId: string | null) {
       newSession: options.newSession,
       clientId: sessionId ? undefined : "cli",
       workspace: process.cwd(),
+      extraSystemContext: deepResearchContext,
     }, {
       onStep: (title) => process.stdout.write(`  ${CLR.muted}└ ${title}${CLR.reset}\n`),
     });

@@ -3,7 +3,7 @@ import path from "node:path";
 import { DEFAULTS } from "../config/defaults";
 import { userConfigPath } from "../config/paths";
 
-export type LocalProviderId = "ollama" | "ollama-cloud";
+export type LocalProviderId = "ollama" | "ollama-cloud" | "apple-fm";
 
 export type LocalProviderConfig = {
   id: LocalProviderId;
@@ -34,6 +34,12 @@ const DEFAULT_CONFIG: LocalProvidersConfig = {
       apiBase: "https://ollama.com/api",
       model: "gpt-oss:120b",
     },
+    "apple-fm": {
+      id: "apple-fm",
+      label: "Apple Intelligence",
+      apiBase: "local",
+      model: "default",
+    },
   },
 };
 
@@ -51,6 +57,9 @@ export function normalizeLocalProvider(value?: string | null): LocalProviderId |
   }
   if (normalized === "ollama-cloud" || normalized === "ollama_cloud" || normalized === "oc" || normalized === "ollama.com") {
     return "ollama-cloud";
+  }
+  if (normalized === "apple-fm" || normalized === "apple" || normalized === "apple-intelligence" || normalized === "ai" || normalized === "on-device") {
+    return "apple-fm";
   }
   return null;
 }
@@ -104,7 +113,7 @@ export function describeLocalProviders(): string {
     "",
     ...rows,
     "",
-    "Switch with `/lane ollama`, `/lane ollama-cloud`, or `switchbay local-provider set ollama|ollama-cloud`.",
+    "Switch with `/lane ollama`, `/lane ollama-cloud`, `/lane apple`, or `switchbay local-provider set ollama|ollama-cloud|apple-fm`.",
   ].join("\n");
 }
 
@@ -113,9 +122,10 @@ export function invalidateLocalProvidersConfig(): void {
 }
 
 function normalizeConfig(parsed: Partial<LocalProvidersConfig>): LocalProvidersConfig {
-  const providers = {
-    ollama: normalizeProvider(parsed.providers?.ollama, DEFAULT_CONFIG.providers.ollama),
+  const providers: Record<LocalProviderId, LocalProviderConfig> = {
+    ollama: normalizeProvider(parsed.providers?.["ollama"], DEFAULT_CONFIG.providers["ollama"]),
     "ollama-cloud": normalizeProvider(parsed.providers?.["ollama-cloud"], DEFAULT_CONFIG.providers["ollama-cloud"]),
+    "apple-fm": normalizeProvider(parsed.providers?.["apple-fm"], DEFAULT_CONFIG.providers["apple-fm"]),
   };
   const active = normalizeLocalProvider(parsed.active) ?? DEFAULT_CONFIG.active;
   return applyEnv({ active, providers });
@@ -152,6 +162,12 @@ function applyEnv(config: LocalProvidersConfig): LocalProvidersConfig {
         ...config.providers["ollama-cloud"],
         apiBase: ollamaCloudBase ? normalizeProviderBase("ollama-cloud", ollamaCloudBase, config.providers["ollama-cloud"].apiBase) : config.providers["ollama-cloud"].apiBase,
         model: ollamaCloudModel?.trim() || config.providers["ollama-cloud"].model,
+      },
+      "apple-fm": {
+        id: "apple-fm" as const,
+        label: config.providers["apple-fm"]?.label ?? "Apple Intelligence",
+        apiBase: config.providers["apple-fm"]?.apiBase ?? "local",
+        model: Bun.env.SWITCHBAY_APPLE_FM_MODEL?.trim() || config.providers["apple-fm"]?.model || "default",
       },
     },
   };

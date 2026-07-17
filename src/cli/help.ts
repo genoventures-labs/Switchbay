@@ -55,10 +55,11 @@ export function renderCliHelp(color = cliColorEnabled()): string {
   }
   lines.push(
     "", "  OPTIONS",
-    "  --lane <lane>                                  cloud | local | openai | anthropic | gemini | cloud-mcp | ollama-cloud | openrouter | huggingface",
+    "  --lane <lane>                                  cloud | local | apple | openai | anthropic | gemini | cloud-mcp | ollama-cloud | openrouter | huggingface",
     "  --hop <workspace>                              Open another known workspace",
     "  --vision <path|url>                            Attach an image for this turn",
     "  --new                                          Start a clean session",
+    "  --deep-research                                Run structured multi-step research (search → read → instance → report)",
     "  --purge <1d|1w|...>                            Remove older saved sessions",
     "  -s, --surface <type>  -p, --profile <name>     Set working context",
     "  -m, --mode <build|design|debug>                Set operating mode",

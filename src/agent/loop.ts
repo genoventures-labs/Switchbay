@@ -33,6 +33,7 @@ import {
 } from "./agents";
 import { buildToolboxPromptBlock, loadToolboxInventory } from "../toolbox/hub";
 import { loadEngineRegistry } from "../engines/registry";
+import { engineRegistryToToolDefinitions } from "../engines/tool-bridge";
 import { buildGuidesPromptBlock, generateRuleDraft, type RuleDraftAnswers, type PendingRuleDraft } from "../context/guides";
 import type { RuntimeLane, ToolMode } from "../config/env";
 import { buildSwitchbayMcpPromptBlock, formatIntegrationLabel, loadSwitchbayMcpConfig } from "../runtime/mcp-config";
@@ -837,6 +838,13 @@ export async function executeTurn(input: {
     ? await createMcpToolRuntime(input.cwd ?? process.cwd())
     : null;
   if (mcpRuntime) filteredTools = [...filteredTools, ...mcpRuntime.tools];
+
+  // Auto-generate tool definitions from the engine registry so every engine
+  // tool is callable by any provider without a separate wrapper. Names already
+  // present in filteredTools (built-ins + MCP) are skipped to avoid shadowing.
+  const existingToolNames = new Set(filteredTools.map(t => t.function.name));
+  const engineBridgeTools = engineRegistryToToolDefinitions(registry, { exclude: existingToolNames });
+  filteredTools = [...filteredTools, ...engineBridgeTools];
 
   try {
   for (let iteration = 0; iteration < MAX_ITERATIONS; iteration += 1) {

@@ -1,5 +1,6 @@
 import { getRuntimeLane, type RuntimeLane } from "../config/env";
 import { AnthropicClient } from "./anthropic-client";
+import { AppleFmClient } from "./apple-fm-client";
 import { CloudRouterClient } from "./cloud-router-client";
 import { getCloudProviderConfig, type CloudProviderId } from "./cloud-providers";
 import { getActiveLocalProvider, getLocalProviderConfig, type LocalProviderId } from "./local-providers";
@@ -42,10 +43,41 @@ export function createRuntimeClient(
   let routerIntent: string | null = null;
   let routerReason: string | null = null;
   let routerMode: string | null = null;
-  if (lane === "local") {
+  if (lane === "apple") {
+    const appleModel = model ?? Bun.env.SWITCHBAY_APPLE_FM_MODEL?.trim() ?? "default";
+    client = new AppleFmClient({ model: appleModel });
+    using = `local/apple-fm/${appleModel}`;
+    routerIntent = "local_provider";
+    routerReason = "Apple Intelligence (on-device) selected.";
+    routerMode = "explicit";
+    return new RuntimeRouteTagClient(client, {
+      using,
+      provider: "apple-fm",
+      model: appleModel,
+      routerIntent,
+      routerReason,
+      routerMode,
+    });
+  } else if (lane === "local") {
     const localProvider = options.localProvider ?? getActiveLocalProvider();
     if (localProvider === "ollama-cloud" && !readConfiguredSecret("OLLAMA_API_KEY")) throw new Error("Missing OLLAMA_API_KEY");
-    client = new OllamaClient({ provider: localProvider });
+    if (localProvider === "apple-fm") {
+      const appleModel = model ?? getLocalProviderConfig("apple-fm").model ?? "default";
+      client = new AppleFmClient({ model: appleModel });
+      using = `local/apple-fm/${appleModel}`;
+      routerIntent = "local_provider";
+      routerReason = "Apple Intelligence (on-device) selected via local lane.";
+      routerMode = options.localProvider ? "explicit" : "configured";
+      return new RuntimeRouteTagClient(client, {
+        using,
+        provider: "apple-fm",
+        model: appleModel,
+        routerIntent,
+        routerReason,
+        routerMode,
+      });
+    }
+    client = new OllamaClient({ provider: localProvider as "ollama" | "ollama-cloud" });
     const config = getLocalProviderConfig(localProvider);
     using = `${localProvider === "ollama-cloud" ? "cloud/ollama" : "local/ollama"}/${model ?? config.model ?? "default"}`;
     routerIntent = "local_provider";
@@ -139,6 +171,7 @@ export function getRuntimeLaneLabel(lane: RuntimeLane = getRuntimeLane()): strin
   if (lane === "local") return "Ollama";
   if (lane === "openrouter") return "OpenRouter";
   if (lane === "huggingface") return "Hugging Face";
+  if (lane === "apple") return "Apple Intelligence";
   return "Cloud";
 }
 

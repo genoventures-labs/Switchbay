@@ -44,6 +44,10 @@ export function modelOptionForAddress(address: ModelAddress): RuntimeModelOption
     const id = Bun.env.SWITCHBAY_HF_MODEL?.trim() || "openai/gpt-oss-120b:groq";
     return { id, label: id, lane: "huggingface", provider: "huggingface", source: "huggingface" };
   }
+  if (address.lane === "apple" || address.localProvider === "apple-fm") {
+    const model = Bun.env.SWITCHBAY_APPLE_FM_MODEL?.trim() || "default";
+    return { id: `apple-fm/${model}`, label: "Apple Intelligence", lane: "apple", provider: "apple-fm", source: "apple-fm" };
+  }
   const provider = address.localProvider ?? "ollama";
   const config = getLocalProviderConfig(provider);
   return { id: config.model ?? "", label: config.label, lane: "local", provider, source: provider };

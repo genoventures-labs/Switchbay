@@ -108,6 +108,7 @@ export async function runSwitchbayTurn(input: TurnRequest, options: { requestId?
     activeAgentId: state.activeAgentId,
     runtimeLane,
     toolMode,
+    extraSystemContext: input.extraSystemContext,
   });
   const executedTurn = await executeTurn({ client, cwd, sessionId: state.sessionId, surface: state.surface, turn, workspace, signal: options.signal, onToken: options.onToken, onStep: options.onStep });
   const content = extractAssistantText(executedTurn.response) || synthesizeAssistantFallback(prompt, executedTurn.toolExecutions, workspace);

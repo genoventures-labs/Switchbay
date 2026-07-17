@@ -14,7 +14,7 @@ function readFirstEnv(...keys: string[]): string | undefined {
   return undefined;
 }
 
-export type RuntimeLane = "cloud" | "cloud-mcp" | "local" | "openrouter" | "huggingface";
+export type RuntimeLane = "cloud" | "cloud-mcp" | "local" | "openrouter" | "huggingface" | "apple";
 export type ToolMode = "standard" | "switchbay-mcp";
 export type CloudProvider = "auto" | "openai" | "anthropic" | "google";
 
@@ -25,6 +25,7 @@ export function normalizeRuntimeLane(value?: string | null): RuntimeLane {
   }
   if (lane === "openrouter" || lane === "open-router" || lane === "or") return "openrouter";
   if (lane === "huggingface" || lane === "hugging-face" || lane === "hf" || lane === "hf-cloud") return "huggingface";
+  if (lane === "apple" || lane === "apple-fm" || lane === "apple-intelligence" || lane === "ai" || lane === "on-device") return "apple";
   if (
     lane === "local" ||
     lane === "ollama" ||

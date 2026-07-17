@@ -10,7 +10,9 @@ export async function openSwitchbayWorkspace(): Promise<string> {
     child.unref();
     await waitFor(`${WEB_URL}/switchbay-health`, "visual workspace");
   }
-  openBrowser(WEB_URL);
+  const cwd = process.cwd();
+  const url = cwd ? `${WEB_URL}?workspace=${encodeURIComponent(cwd)}` : WEB_URL;
+  openBrowser(url);
   return cliPage({ title: "Switchbay Workspace", state: "Online", body: `Opened ${WEB_URL}\nThe local API and visual workspace are ready.` });
 }
 

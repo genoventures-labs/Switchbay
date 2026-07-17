@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import {
   ArrowUp, BookOpen, BracketsCurly, CaretDown, CaretRight, Check, CheckCircle,
@@ -38,12 +38,26 @@ export function App() {
   const [modelOptions, setModelOptions] = useState([{ id: "auto", label: "Auto routing", lane: "cloud", provider: "auto" }]);
   const [steps, setSteps] = useState([]);
   const [job, setJob] = useState(null);
+  const [workspace, setWorkspace] = useState("");
   const feedRef = useRef(null);
 
   useEffect(() => {
     fetch("/switchbay-api/health").then((r) => setConnected(r.ok)).catch(() => setConnected(false));
-    fetch(`/switchbay-api/v1/models?workspace=${encodeURIComponent("/Users/cass/Documents/GitHub/Switchbay")}`)
-      .then((response) => response.ok ? response.json() : Promise.reject())
+    const urlWorkspace = new URLSearchParams(window.location.search).get("workspace");
+    const workspacePromise = urlWorkspace
+      ? Promise.resolve(urlWorkspace)
+      : fetch("/switchbay-api/v1/workspaces")
+          .then((r) => r.ok ? r.json() : Promise.reject())
+          .then((data) => {
+            if (data.current && !data.current.includes("/.switchbay/")) return data.current;
+            return data.workspaces?.find(w => w.isGit)?.absPath || data.workspaces?.[0]?.absPath || data.current || "";
+          });
+    workspacePromise
+      .then((cwd) => {
+        setWorkspace(cwd);
+        return fetch(`/switchbay-api/v1/models?workspace=${encodeURIComponent(cwd)}`);
+      })
+      .then((r) => r.ok ? r.json() : Promise.reject())
       .then((data) => {
         const options = [{ id: "auto", label: "Auto routing", lane: "cloud", provider: "auto" }, ...(data.cloud || []), ...(data.local || [])];
         setModelOptions(options);
@@ -56,8 +70,12 @@ export function App() {
       }).catch(() => {});
   }, []);
 
-  useEffect(() => {
-    feedRef.current?.scrollTo({ top: feedRef.current.scrollHeight, behavior: "smooth" });
+  useLayoutEffect(() => {
+    const feed = feedRef.current;
+    if (!feed) return;
+    requestAnimationFrame(() => {
+      feed.scrollTop = feed.scrollHeight;
+    });
   }, [messages, running]);
 
   const send = async () => {
@@ -79,7 +97,7 @@ export function App() {
       const response = await fetch("/switchbay-api/v1/turn/stream", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ input: body, workspace: "/Users/cass/Documents/GitHub/Switchbay", clientId: "switchbay-web", sessionId: sessionId || undefined, newSession: !sessionId }),
+        body: JSON.stringify({ input: body, workspace, clientId: "switchbay-web", sessionId: sessionId || undefined, newSession: !sessionId }),
       });
       if (!response.ok) throw new Error("Service requires local authorization");
       if (!response.body) throw new Error("Streaming is unavailable");
@@ -144,8 +162,8 @@ export function App() {
     setActiveNav("Home");
   };
   const groupedModelOptions = useMemo(() => {
-    const labels = { auto: "Routing", openai: "OpenAI", anthropic: "Anthropic", google: "Google", ollama: "Local · Ollama", "ollama-cloud": "Ollama Cloud", openrouter: "OpenRouter", huggingface: "Hugging Face" };
-    const order = ["auto", "openai", "anthropic", "google", "ollama", "ollama-cloud", "openrouter", "huggingface"];
+    const labels = { auto: "Routing", openai: "OpenAI", anthropic: "Anthropic", google: "Google", ollama: "Local · Ollama", "ollama-cloud": "Ollama Cloud", openrouter: "OpenRouter", huggingface: "Hugging Face", "apple-fm": "Apple Intelligence" };
+    const order = ["auto", "openai", "anthropic", "google", "ollama", "ollama-cloud", "openrouter", "huggingface", "apple-fm"];
     const grouped = new Map();
     for (const option of modelOptions) {
       const key = option.id === "auto" ? "auto" : option.provider;
@@ -195,7 +213,7 @@ export function App() {
           <button className="mobile-menu" onClick={() => setMobileNav(true)} aria-label="Open navigation"><SidebarSimple size={22} /></button>
           <div className="workspace-title">
             <div className="title-line"><span className="status-dot" />Switchbay</div>
-            <div className="workspace-meta"><GitBranch size={13} /> main <span>•</span> /Users/cass/Documents/GitHub/Switchbay</div>
+            <div className="workspace-meta"><GitBranch size={13} /> main <span>•</span> {workspace || "…"}</div>
           </div>
           <div className="top-actions">
             <button className="new-chat-button" onClick={startNewSession}><Plus size={16} weight="bold" /> New chat</button>
@@ -238,13 +256,12 @@ export function App() {
           </div>
 
           {railOpen && <DetailsRail steps={steps} job={job} running={running} connected={connected} onClose={() => setRailOpen(false)} />}
-        </section> : <CatalogPage page={activeNav} connected={connected} />}
+        </section> : <CatalogPage page={activeNav} connected={connected} workspace={workspace} />}
       </main>
     </div>
   );
 }
 
-const workspacePath = "/Users/cass/Documents/GitHub/Switchbay";
 const pageMeta = {
   Workspaces: ["Workspace map", "Move between the projects Switchbay is allowed to enter."],
   Sessions: ["Session history", "Resume durable conversations without losing their workspace boundary."],
@@ -258,7 +275,7 @@ const pageMeta = {
   Usage: ["Usage & spend", "Estimated tokens, model spend, tool calls, and activity over time."],
 };
 
-function CatalogPage({ page, connected }) {
+function CatalogPage({ page, connected, workspace }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -271,8 +288,8 @@ function CatalogPage({ page, connected }) {
     setLoading(true); setError("");
     try {
       const url = page === "Sessions"
-        ? `/switchbay-api/v1/sessions?workspace=${encodeURIComponent(workspacePath)}`
-        : `/switchbay-api/v1/${endpoint}${page === "Trace" ? "/record" : ""}?workspace=${encodeURIComponent(workspacePath)}`;
+        ? `/switchbay-api/v1/sessions?workspace=${encodeURIComponent(workspace)}`
+        : `/switchbay-api/v1/${endpoint}${page === "Trace" ? "/record" : ""}?workspace=${encodeURIComponent(workspace)}`;
       const response = await fetch(url);
       if (!response.ok) throw new Error(`${page} returned ${response.status}`);
       setData(await response.json());
@@ -296,12 +313,12 @@ function CatalogPage({ page, connected }) {
     <div className="catalog-body">
       {loading ? <LoadingState label={`Loading ${page.toLowerCase()}`} /> : error ? <ErrorState message={error} onRetry={load} /> : <PageContent page={page} data={data} query={query} />}
     </div>
-    {builderOpen && <ResourceBuilder initialKind={page.slice(0, -1).toLowerCase()} onClose={() => setBuilderOpen(false)} onCreated={() => { setBuilderOpen(false); load(); }} />}
-    {bridgeOpen && <SkillBridge onClose={() => setBridgeOpen(false)} onImported={() => { setBridgeOpen(false); load(); }} />}
+    {builderOpen && <ResourceBuilder initialKind={page.slice(0, -1).toLowerCase()} workspace={workspace} onClose={() => setBuilderOpen(false)} onCreated={() => { setBuilderOpen(false); load(); }} />}
+    {bridgeOpen && <SkillBridge workspace={workspace} onClose={() => setBridgeOpen(false)} onImported={() => { setBridgeOpen(false); load(); }} />}
   </section>;
 }
 
-function SkillBridge({ onClose, onImported }) {
+function SkillBridge({ workspace, onClose, onImported }) {
   const [content, setContent] = useState("");
   const [filename, setFilename] = useState("imported-skill.md");
   const [provider, setProvider] = useState("auto");
@@ -313,7 +330,7 @@ function SkillBridge({ onClose, onImported }) {
   const request = async (action) => {
     setWorking(true); setError("");
     try {
-      const response = await fetch(`/switchbay-api/v1/skills/bridge/${action}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ workspace: workspacePath, content, filename, provider, mode, name: preview?.name, description: preview?.description }) });
+      const response = await fetch(`/switchbay-api/v1/skills/bridge/${action}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ workspace, content, filename, provider, mode, name: preview?.name, description: preview?.description }) });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload?.error?.message || `${action} failed with ${response.status}`);
       if (action === "preview") setPreview(payload.skill); else onImported(payload.skill);
@@ -346,7 +363,7 @@ const builderKinds = [
   ["plugin", "Plugin", Plug, "A tracked capability bundle ready to receive assets."],
 ];
 
-function ResourceBuilder({ initialKind, onClose, onCreated }) {
+function ResourceBuilder({ initialKind, workspace, onClose, onCreated }) {
   const [kind, setKind] = useState(initialKind);
   const [form, setForm] = useState({ name: "", description: "", triggers: "", instructions: "", guardrails: "", guideKind: "quickstart", version: "0.1.0" });
   const [saving, setSaving] = useState(false);
@@ -358,7 +375,7 @@ function ResourceBuilder({ initialKind, onClose, onCreated }) {
   const save = async (event) => {
     event.preventDefault(); setSaving(true); setError("");
     try {
-      const response = await fetch("/switchbay-api/v1/resources", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ workspace: workspacePath, kind, ...form }) });
+      const response = await fetch("/switchbay-api/v1/resources", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ workspace, kind, ...form }) });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload?.error?.message || `Create failed with ${response.status}`);
       onCreated(payload.resource);

@@ -11,6 +11,7 @@ export type TurnRequest = {
   sessionId?: string;
   newSession?: boolean;
   clientId?: string;
+  extraSystemContext?: string;
 };
 
 export type TurnResponse = {

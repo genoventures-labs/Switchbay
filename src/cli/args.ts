@@ -48,6 +48,7 @@ export type CliOptions = {
   modelQuantization?: string | null;
   modelLabel?: string | null;
   yes?: boolean;
+  deepResearch?: boolean;
 };
 
 export function parseCliArgs(argv: string[]): CliOptions {
@@ -62,6 +63,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
   let purge: string | null = null;
   let visionPath: string | null = null;
   let yes = false;
+  let deepResearch = false;
   const positional: string[] = [];
 
   for (let i = 0; i < args.length; i++) {
@@ -92,6 +94,8 @@ export function parseCliArgs(argv: string[]): CliOptions {
       newSession = true;
     } else if (arg === "--yes" || arg === "-y") {
       yes = true;
+    } else if (arg === "--deep-research" || arg === "-dr") {
+      deepResearch = true;
     } else if (arg === "--purge") {
       purge = args[++i] ?? null;
     } else if (arg === "--add-model") {
@@ -653,6 +657,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
     newSession,
     purge,
     visionPath,
+    deepResearch,
     subcommand: "run",
     engineAction: "status",
     toolboxAction: "status",

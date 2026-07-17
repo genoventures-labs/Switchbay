@@ -12,6 +12,7 @@ import {
   renderEngineToolCommand,
   shellQuote,
 } from "../engines/registry";
+import { findEngineForTool } from "../engines/tool-bridge";
 import { describeToolbox, readToolboxSkill } from "../toolbox/hub";
 import { addMemoryNote, describeMemory, refreshMemory, readMemoryFacts } from "../memory/store";
 import { formatKnowledgeSearchResults, searchKnowledgeIndex } from "../knowledge/store";
@@ -1838,13 +1839,30 @@ export async function executeToolCall(
         return executeGumOpsTool(name, ["refund_sale", "gum_refund_sale"], { sale_id: saleId, amount }, cwd);
       }
 
-      default:
+      default: {
+        // Engine tool bridge: any tool exposed by a registered engine can be
+        // called directly (without going through run_engine_tool). The registry
+        // is loaded once per turn by executeTurn and the tool definitions are
+        // already in filteredTools, so by the time we reach here the model has
+        // confirmed the tool exists.
+        const bridgeRegistry = await loadEngineRegistry(cwd);
+        const bridgeMatch = findEngineForTool(name, bridgeRegistry);
+        if (bridgeMatch) {
+          const { engine, tool } = bridgeMatch;
+          const cleanArgs: Record<string, unknown> = {};
+          for (const [k, v] of Object.entries(args ?? {})) {
+            if (v !== undefined && v !== null && v !== "") cleanArgs[k] = v;
+          }
+          return executeEngineTool(name, engine.id, tool.name, cleanArgs, cwd);
+        }
+
         return {
           tool: name,
           ok: false,
           summary: `Unknown tool: ${name}`,
           body: `Tool ${name} is not implemented in this surface.`,
         };
+      }
     }
   } catch (err: any) {
     const reason = err instanceof Error ? err.message : String(err);

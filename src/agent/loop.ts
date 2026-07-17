@@ -1,4 +1,5 @@
 import { readFileSync, readdirSync, existsSync } from "node:fs";
+import { isOfflineMode, NETWORK_TOOL_NAMES } from "../config/local-mode";
 import { readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { DEFAULTS } from "../config/defaults";
@@ -815,6 +816,9 @@ export async function executeTurn(input: {
   const nativeEnvironment = nativeEnvironmentAvailability();
   if (!nativeToolsConfig.enabled || !nativeEnvironment.available) {
     filteredTools = filteredTools.filter((tool) => !["native_env_status", "native_exec", "native_editor"].includes(tool.function.name));
+  }
+  if (isOfflineMode()) {
+    filteredTools = filteredTools.filter((tool) => !NETWORK_TOOL_NAMES.has(tool.function.name));
   }
   if (!hasGumOps || !hasThinkapse) {
     filteredTools = filteredTools.filter((t) => {

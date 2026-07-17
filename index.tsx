@@ -6,6 +6,7 @@ import { getToolMode, normalizeRuntimeLane } from "./src/config/env";
 import { DEFAULTS } from "./src/config/defaults";
 import { SwitchbayApp } from "./src/tui/app";
 import { clearSelectedRuntimeModel, getSelectedRuntimeModel, loadSwitchbayConfig, setSelectedRuntimeModel } from "./src/config/switchbay-config";
+import { getLocalMode, setLocalMode, type LocalMode } from "./src/config/local-mode";
 import { fuzzyMatchLocations, travelTo } from "./src/tools/travel";
 import { listSessions, purgeSessions, loadPersistedSession, savePersistedSession } from "./src/session/persistence";
 import { buildTurn, executeTurn, extractAssistantText, refreshWorkspace, synthesizeAssistantFallback } from "./src/agent/loop";
@@ -239,6 +240,11 @@ async function boot() {
     return;
   }
 
+  if (options.subcommand === "local-mode") {
+    runLocalModeCommand(options.localModeAction ?? "status", options.localModeValue ?? null);
+    return;
+  }
+
   if (options.subcommand === "local-provider") {
     await runLocalProviderCommand(options.localProviderAction ?? "status", options.localProviderTarget ?? null);
     return;
@@ -307,9 +313,17 @@ async function boot() {
   const localProvider = normalizeLocalProvider(options.lane);
   const cloudProvider = normalizeCloudProvider(options.lane);
   const selected = getSelectedRuntimeModel(lane);
+  const localMode = getLocalMode();
+  const onAppleEscalationConfirm = localMode !== "off"
+    ? async (targetVariant: import("./src/runtime/apple-fm-client").AppleVariant) => {
+        const label = targetVariant === "cloud-pro" ? "AFM 3 Cloud Pro (PCC · reasoning)" : "AFM 3 Cloud (PCC · fast)";
+        const privacy = "Apple Private Cloud Compute — Apple cannot access your data.";
+        return confirm(`  Local-mode routing suggests ${label}\n  ${privacy}\n  Switch to cloud for this task?`);
+      }
+    : undefined;
   const client = createRuntimeClient(lane, selected
-    ? { model: selected.id, provider: normalizeClientProvider(selected.provider) ?? normalizeClientCloudProvider(cloudProvider), localProvider }
-    : { localProvider, provider: normalizeClientCloudProvider(cloudProvider) });
+    ? { model: selected.id, provider: normalizeClientProvider(selected.provider) ?? normalizeClientCloudProvider(cloudProvider), localProvider, onAppleEscalationConfirm }
+    : { localProvider, provider: normalizeClientCloudProvider(cloudProvider), onAppleEscalationConfirm });
   render(
     <SwitchbayApp
       client={client}
@@ -921,6 +935,40 @@ async function runUpdateCommand() {
   }
 
   console.log(`\n${CLR.accent}⏺${CLR.reset} ${CLR.bold}Update completed!${CLR.reset}`);
+}
+
+function runLocalModeCommand(action: "status" | "set", target: string | null) {
+  if (action === "set") {
+    const normalized = target?.trim().toLowerCase();
+    if (normalized !== "off" && normalized !== "local" && normalized !== "offline") {
+      console.error(`switchbay local-mode: choose off, local, or offline.`);
+      console.error(`  switchbay local-mode set local     # local inference, web tools on`);
+      console.error(`  switchbay local-mode set offline   # local inference, no network tools`);
+      console.error(`  switchbay local-mode set off       # restore default routing`);
+      process.exit(1);
+    }
+    setLocalMode(normalized as LocalMode);
+    const label = normalized === "off" ? "Default routing restored" : normalized === "offline" ? "Offline mode — local inference + no network tools" : "Local mode — local inference, web tools enabled";
+    console.log(cliReceipt("Local Mode", label, [["Config", "~/.switchbay/config.json"], ["Override", "SWITCHBAY_LOCAL_MODE=<mode>"]], "switchbay local-mode"));
+    return;
+  }
+  const current = getLocalMode();
+  const stateLabel = current === "off" ? "off (default routing)" : current === "offline" ? "offline (local inference · no network tools)" : "local (local inference · web tools on)";
+  console.log(cliPage({
+    title: "Local Mode",
+    state: stateLabel,
+    summary: current === "off"
+      ? "All lanes available. Set to local or offline to restrict routing."
+      : current === "offline"
+        ? "Air-gap mode. Inference stays on-device. Web tools are disabled."
+        : "Local-first mode. Cloud escalation requires confirmation per task.",
+    rows: [
+      ["off", "Default — all lanes, no restrictions"],
+      ["local", "Local inference · web tools enabled · cloud needs confirm"],
+      ["offline", "Local inference · web tools disabled · cloud blocked"],
+    ],
+    next: "switchbay local-mode set <off|local|offline>",
+  }));
 }
 
 async function runLocalProviderCommand(action: "status" | "set", target: string | null) {

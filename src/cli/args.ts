@@ -13,7 +13,7 @@ export type CliOptions = {
   purge: string | null;
   visionPath?: string | null;
   detach?: boolean;
-  subcommand: "run" | "open" | "web-serve" | "serve" | "service" | "update" | "version" | "help" | "engines" | "skills" | "toolbox" | "plugins" | "agents" | "memory" | "knowledge" | "trace" | "usage" | "graph" | "radar" | "handoff" | "mcp" | "models" | "model" | "local-provider" | "cloud-provider" | "agenda" | "task";
+  subcommand: "run" | "open" | "web-serve" | "serve" | "service" | "update" | "version" | "help" | "engines" | "skills" | "toolbox" | "plugins" | "agents" | "memory" | "knowledge" | "trace" | "usage" | "graph" | "radar" | "handoff" | "mcp" | "models" | "model" | "local-provider" | "cloud-provider" | "local-mode" | "agenda" | "task";
   graphAction?: "trace";
   serviceAction?: "install" | "status" | "restart" | "uninstall";
   engineAction: "status" | "sync" | "list" | "templates";
@@ -44,6 +44,8 @@ export type CliOptions = {
   modelsAction?: "list" | "clear";
   modelsAll?: boolean;
   helpContext?: string;
+  localModeAction?: "status" | "set";
+  localModeValue?: string | null;
   modelAction?: "show" | "set" | "pull" | "add" | "remove" | "verify";
   modelTarget: string | null;
   modelLane: string | null;
@@ -506,6 +508,20 @@ export function parseCliArgs(argv: string[]): CliOptions {
         mcpAction,
         modelTarget: null,
         modelLane: null,
+      };
+    } else if (arg === "local-mode" || arg === "offline" || arg === "local-first") {
+      if (args.slice(i + 1).includes("--help") || args.slice(i + 1).includes("-h")) {
+        return { surface, profile, mode, lane, initialQuery: "", hop, resume, newSession, purge, subcommand: "help", helpContext: "local-mode", engineAction: "status", toolboxAction: "status", toolboxSkill: null, memoryAction: "status", memoryNote: null, knowledgeAction: "status", knowledgeQuery: null, traceAction: "last", mcpAction: "status", modelTarget: null, modelLane: null };
+      }
+      const action = args[i + 1];
+      const localModeAction = action === "set" ? "set" : "status";
+      const localModeValue = localModeAction === "set" ? args[i + 2] ?? null : null;
+      return {
+        surface, profile, mode, lane, initialQuery: "", hop, resume, newSession, purge,
+        subcommand: "local-mode", localModeAction, localModeValue,
+        engineAction: "status", toolboxAction: "status", toolboxSkill: null,
+        memoryAction: "status", memoryNote: null, knowledgeAction: "status", knowledgeQuery: null,
+        traceAction: "last", mcpAction: "status", modelTarget: null, modelLane: null,
       };
     } else if (arg === "local-provider" || arg === "local-providers" || arg === "provider") {
       const action = args[i + 1];

@@ -1,6 +1,7 @@
 import { getRuntimeLane, type RuntimeLane } from "../config/env";
 import { AnthropicClient } from "./anthropic-client";
 import { AppleFmClient } from "./apple-fm-client";
+import type { AppleVariant } from "./apple-fm-client";
 import { CloudRouterClient } from "./cloud-router-client";
 import { getCloudProviderConfig, type CloudProviderId } from "./cloud-providers";
 import { getActiveLocalProvider, getLocalProviderConfig, type LocalProviderId } from "./local-providers";
@@ -11,6 +12,7 @@ import { GeminiClient } from "./gemini-client";
 import type { ChatCompletionRequest, ChatCompletionResponse, WorkspaceFocus } from "./types";
 import { readConfiguredSecret } from "../config/secrets";
 import { getNativeToolsConfig } from "../config/switchbay-config";
+import { getLocalMode } from "../config/local-mode";
 
 export type ChatRuntimeClient = {
   createChatCompletion(
@@ -30,6 +32,8 @@ export type RuntimeClientOptions = {
   model?: string | null;
   provider?: CloudProviderId | null;
   localProvider?: LocalProviderId | null;
+  /** Called when Apple FM auto-routing would escalate to a cloud variant in local mode. */
+  onAppleEscalationConfirm?: (targetVariant: AppleVariant) => Promise<boolean>;
 };
 
 export function createRuntimeClient(
@@ -43,9 +47,10 @@ export function createRuntimeClient(
   let routerIntent: string | null = null;
   let routerReason: string | null = null;
   let routerMode: string | null = null;
+  const localMode = getLocalMode();
   if (lane === "apple") {
     const appleModel = model ?? Bun.env.SWITCHBAY_APPLE_FM_MODEL?.trim() ?? "default";
-    client = new AppleFmClient({ model: appleModel });
+    client = new AppleFmClient({ model: appleModel, localMode, onEscalationConfirm: options.onAppleEscalationConfirm });
     using = `local/apple-fm/${appleModel}`;
     routerIntent = "local_provider";
     routerReason = "Apple Intelligence (on-device) selected.";
@@ -63,7 +68,7 @@ export function createRuntimeClient(
     if (localProvider === "ollama-cloud" && !readConfiguredSecret("OLLAMA_API_KEY")) throw new Error("Missing OLLAMA_API_KEY");
     if (localProvider === "apple-fm") {
       const appleModel = model ?? getLocalProviderConfig("apple-fm").model ?? "default";
-      client = new AppleFmClient({ model: appleModel });
+      client = new AppleFmClient({ model: appleModel, localMode, onEscalationConfirm: options.onAppleEscalationConfirm });
       using = `local/apple-fm/${appleModel}`;
       routerIntent = "local_provider";
       routerReason = "Apple Intelligence (on-device) selected via local lane.";

@@ -21,6 +21,13 @@ export type SwitchbayConfig = {
   operator: OperatorConfig;
   /** Provider-native interfaces and Switchbay's isolated execution environment. */
   nativeTools: NativeToolsConfig;
+  /**
+   * Local-first routing mode.
+   * "off"     — default, all lanes available.
+   * "local"   — inference stays on-device; network tools (web search etc.) still work.
+   * "offline" — inference on-device AND network tools disabled.
+   */
+  localMode?: "off" | "local" | "offline";
 };
 
 export type NativeToolsConfig = {
@@ -78,6 +85,7 @@ export function loadSwitchbayConfig(): SwitchbayConfig {
     if (fs.existsSync(target)) {
       const raw = fs.readFileSync(target, "utf-8");
       const parsed = JSON.parse(raw) as Partial<SwitchbayConfig>;
+      const rawLocalMode = parsed.localMode;
       _cached = {
         locations: Array.isArray(parsed.locations)
           ? parsed.locations.map((l) => resolveLocationInput(String(l)))
@@ -89,6 +97,7 @@ export function loadSwitchbayConfig(): SwitchbayConfig {
         selected_models: normalizeSelectedModels(parsed.selected_models),
         operator: normalizeOperatorConfig(parsed.operator),
         nativeTools: normalizeNativeToolsConfig(parsed.nativeTools),
+        localMode: rawLocalMode === "local" || rawLocalMode === "offline" || rawLocalMode === "off" ? rawLocalMode : undefined,
       };
     } else {
       _cached = { ...DEFAULTS };

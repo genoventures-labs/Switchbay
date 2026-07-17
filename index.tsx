@@ -33,8 +33,8 @@ import type { CloudProviderId } from "./src/runtime/cloud-providers";
 import { findAgent, loadAllAgents, saveAgentDefinition, type AgentScope } from "./src/agent/agents";
 import { loadEngineRegistry } from "./src/engines/registry";
 import { renderCliList } from "./src/cli/list-output";
-import { cliFailure, cliPage, cliReceipt, cleanTerminalText } from "./src/cli/presentation";
-import { renderCliHelp } from "./src/cli/help";
+import { cliColorEnabled, cliFailure, cliPage, cliReceipt, cleanTerminalText } from "./src/cli/presentation";
+import { renderCliHelp, renderSubcommandHelp } from "./src/cli/help";
 import { confirm } from "./src/cli/confirm";
 
 // Ensure config is initialized on first boot
@@ -51,7 +51,7 @@ try {
 
 async function boot() {
   if (options.subcommand === "help") {
-    console.log(renderCliHelp());
+    console.log(options.helpContext ? renderSubcommandHelp(options.helpContext) : renderCliHelp());
     return;
   }
 
@@ -230,7 +230,7 @@ async function boot() {
   }
 
   if (options.subcommand === "models") {
-    await runModelsCommand(options.lane, options.modelsAction ?? "list");
+    await runModelsCommand(options.lane, options.modelsAction ?? "list", options.modelsAll ?? false);
     return;
   }
 
@@ -954,7 +954,77 @@ async function runCloudProviderCommand(action: "status" | "set", target: string 
   console.log(cliPage({ title: "Cloud Runtime", state: getActiveCloudProvider(), summary: `Trusted pool: ${pool.length} verified model(s)`, rows: pool.length ? pool.map((entry) => [entry.lane, `${entry.status === "ready" ? "● ready" : `○ ${entry.status}`} · ${entry.model}`]) : [["pool", "Empty — add and verify models with: switchbay model add <id>"]], next: "switchbay models --lane cloud" }));
 }
 
-async function runModelsCommand(rawLane: string | null, action: "list" | "clear" = "list") {
+async function runModelsAllCommand() {
+  const LANES: Array<{ rawLane: string; label: string }> = [
+    { rawLane: "cloud", label: "Cloud (Auto Pool)" },
+    { rawLane: "openai", label: "Cloud · OpenAI" },
+    { rawLane: "anthropic", label: "Cloud · Anthropic" },
+    { rawLane: "google", label: "Cloud · Google" },
+    { rawLane: "apple", label: "Apple Intelligence" },
+    { rawLane: "local", label: "Local (Ollama)" },
+    { rawLane: "openrouter", label: "OpenRouter" },
+    { rawLane: "huggingface", label: "Hugging Face" },
+  ];
+
+  const { normalizeRuntimeLane } = await import("./src/config/env");
+  const { normalizeLocalProvider, getActiveLocalProvider } = await import("./src/runtime/local-providers");
+  const { normalizeCloudProvider, listAutoModelPool } = await import("./src/runtime/cloud-providers");
+  const { cliHeader } = await import("./src/cli/presentation");
+
+  console.log(cliHeader("All Model Lanes", "switchbay models list --all", cliColorEnabled()));
+  console.log("");
+
+  for (const { rawLane, label } of LANES) {
+    let models: RuntimeModelOption[] = [];
+    let notice: string | undefined;
+    try {
+      if (rawLane === "cloud") {
+        const pool = listAutoModelPool();
+        console.log(`  ── ${label} ${"─".repeat(Math.max(0, 50 - label.length - 4))}`);
+        if (pool.length === 0) {
+          console.log("     (empty — add verified models with: switchbay model add <id>)");
+        } else {
+          for (const entry of pool.slice(0, 6)) {
+            console.log(`     ${entry.status === "ready" ? "●" : "○"} ${entry.model.padEnd(36)} ${entry.lane}`);
+          }
+          if (pool.length > 6) console.log(`     … and ${pool.length - 6} more`);
+        }
+        console.log("");
+        continue;
+      }
+      const lane = normalizeRuntimeLane(rawLane);
+      const localProvider = normalizeLocalProvider(rawLane) ?? getActiveLocalProvider();
+      const cloudProvider = normalizeCloudProvider(rawLane);
+      const result = await listRuntimeModels(lane, localProvider ?? undefined);
+      models = cloudProvider && cloudProvider !== "auto"
+        ? result.models.filter((m) => m.provider === cloudProvider)
+        : result.models.filter((m) => m.id !== "auto");
+      notice = result.notice;
+    } catch {
+      notice = "Could not reach this lane.";
+    }
+
+    console.log(`  ── ${label} ${"─".repeat(Math.max(0, 50 - label.length - 4))}`);
+    if (models.length === 0) {
+      console.log(`     ${notice ?? "(no models)"}`);
+    } else {
+      for (const m of models.slice(0, 6)) {
+        console.log(`     ${m.id.padEnd(36)} ${m.provider}`);
+      }
+      if (models.length > 6) console.log(`     … and ${models.length - 6} more`);
+    }
+    console.log("");
+  }
+
+  console.log("  Drill in: switchbay models --lane <lane>");
+  console.log("");
+}
+
+async function runModelsCommand(rawLane: string | null, action: "list" | "clear" = "list", all = false) {
+  if (action === "list" && all) {
+    await runModelsAllCommand();
+    return;
+  }
   if (action === "clear") {
     const lane = normalizeRuntimeLane(rawLane);
     if (lane !== "cloud" && lane !== "cloud-mcp") {

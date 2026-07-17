@@ -42,6 +42,8 @@ export type CliOptions = {
   taskText?: string | null;
   taskId?: number | null;
   modelsAction?: "list" | "clear";
+  modelsAll?: boolean;
+  helpContext?: string;
   modelAction?: "show" | "set" | "pull" | "add" | "remove" | "verify";
   modelTarget: string | null;
   modelLane: string | null;
@@ -150,6 +152,9 @@ export function parseCliArgs(argv: string[]): CliOptions {
         knowledgeAction: "status", knowledgeQuery: null, traceAction: "last", mcpAction: "status", modelTarget: null, modelLane: null,
       };
     } else if (arg === "engines" || arg === "engine-bay") {
+      if (args.slice(i + 1).includes("--help") || args.slice(i + 1).includes("-h")) {
+        return { surface, profile, mode, lane, initialQuery: "", hop, resume, newSession, purge, subcommand: "help", helpContext: "engines", engineAction: "status", toolboxAction: "status", toolboxSkill: null, memoryAction: "status", memoryNote: null, knowledgeAction: "status", knowledgeQuery: null, traceAction: "last", mcpAction: "status", modelTarget: null, modelLane: null };
+      }
       const action = args[i + 1];
       assertCliAction("engines", action, ["sync", "list", "templates", "status"]);
       const engineAction = action === "sync" || action === "list" || action === "templates" || action === "status"
@@ -179,6 +184,9 @@ export function parseCliArgs(argv: string[]): CliOptions {
         modelLane: null,
       };
     } else if (arg === "skills" || arg === "toolbox") {
+      if (args.slice(i + 1).includes("--help") || args.slice(i + 1).includes("-h")) {
+        return { surface, profile, mode, lane, initialQuery: "", hop, resume, newSession, purge, subcommand: "help", helpContext: "skills", engineAction: "status", toolboxAction: "status", toolboxSkill: null, memoryAction: "status", memoryNote: null, knowledgeAction: "status", knowledgeQuery: null, traceAction: "last", mcpAction: "status", modelTarget: null, modelLane: null };
+      }
       const action = args[i + 1];
       assertCliAction(arg, action, ["sync", "list", "templates", "read", "status"]);
       const toolboxAction = action === "sync" || action === "list" || action === "templates" || action === "read" || action === "status"
@@ -557,7 +565,12 @@ export function parseCliArgs(argv: string[]): CliOptions {
       };
     } else if (arg === "models") {
       const rest = args.slice(i + 1);
+      if (rest.includes("--help") || rest.includes("-h")) {
+        const sub = rest[0] === "list" || rest[0] === "clear" ? `models ${rest[0]}` : "models";
+        return { surface, profile, mode, lane, initialQuery: "", hop, resume, newSession, purge, subcommand: "help", helpContext: sub, engineAction: "status", toolboxAction: "status", toolboxSkill: null, memoryAction: "status", memoryNote: null, knowledgeAction: "status", knowledgeQuery: null, traceAction: "last", mcpAction: "status", modelTarget: null, modelLane: null };
+      }
       const modelsAction: "list" | "clear" = rest[0] === "clear" ? "clear" : "list";
+      const modelsAll = rest.includes("--all");
       const commandLane = readLaneFlag(modelsAction === "clear" ? rest.slice(1) : rest);
       return {
         surface,
@@ -571,6 +584,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
         purge,
         subcommand: "models",
         modelsAction,
+        modelsAll,
         engineAction: "status",
         toolboxAction: "status",
         toolboxSkill: null,
@@ -584,6 +598,9 @@ export function parseCliArgs(argv: string[]): CliOptions {
         modelLane: null,
       };
     } else if (arg === "model") {
+      if (args.slice(i + 1).includes("--help") || args.slice(i + 1).includes("-h")) {
+        return { surface, profile, mode, lane, initialQuery: "", hop, resume, newSession, purge, subcommand: "help", helpContext: "model", engineAction: "status", toolboxAction: "status", toolboxSkill: null, memoryAction: "status", memoryNote: null, knowledgeAction: "status", knowledgeQuery: null, traceAction: "last", mcpAction: "status", modelTarget: null, modelLane: null };
+      }
       const parsedModel = parseModelCommand(args.slice(i + 1));
       return {
         surface,

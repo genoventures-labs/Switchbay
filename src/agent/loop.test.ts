@@ -402,9 +402,9 @@ test("buildTurn injects Workspace Knowledge hits into system context", async () 
   });
 
   const system = turn.request.messages.find((message) => message.role === "system")?.content ?? "";
-  expect(system).toContain("WORKSPACE KNOWLEDGE MAP");
-  expect(system).toContain("architecture.md:1-");
-  expect(system).toContain("Approval gates live");
+  // Knowledge is on-demand via the memory-helper engine, not pre-loaded into the system prompt.
+  expect(system).not.toContain("WORKSPACE KNOWLEDGE MAP");
+  expect(turn.contextReceipt?.some((r) => r.startsWith("memory:on-demand"))).toBe(true);
 });
 
 test("buildTurn injects Switchbay MCP guidance for cloud-mcp lane", async () => {
@@ -539,8 +539,9 @@ test("operational memory commands save, refresh, and inject context", async () =
     },
   });
   const system = turn.request.messages.find((message) => message.role === "system")?.content ?? "";
-  expect(system).toContain("OPERATIONAL MEMORY");
-  expect(system).toContain("use Bun for tests");
+  // Memory is on-demand via the memory-helper engine, not pre-loaded into the system prompt.
+  expect(system).not.toContain("OPERATIONAL MEMORY");
+  expect(turn.contextReceipt?.some((r) => r.startsWith("memory:on-demand"))).toBe(true);
 });
 
 test("executeTurn feeds native tool results back into the next model call", async () => {

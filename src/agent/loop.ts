@@ -33,8 +33,6 @@ import {
 } from "./agents";
 import { buildToolboxPromptBlock, loadToolboxInventory } from "../toolbox/hub";
 import { loadEngineRegistry } from "../engines/registry";
-import { buildMemoryPromptBlock } from "../memory/store";
-import { buildKnowledgePromptBlock } from "../knowledge/store";
 import { buildGuidesPromptBlock, generateRuleDraft, type RuleDraftAnswers, type PendingRuleDraft } from "../context/guides";
 import type { RuntimeLane, ToolMode } from "../config/env";
 import { buildSwitchbayMcpPromptBlock, formatIntegrationLabel, loadSwitchbayMcpConfig } from "../runtime/mcp-config";
@@ -538,10 +536,8 @@ export async function buildTurn(input: {
     } catch { /* ignore */ }
   }
 
-  const [userContext, memoryBlock, knowledgeBlock, workspaceProfileBlock, activePlanBlock, workflowsBlock] = await Promise.all([
+  const [userContext, workspaceProfileBlock, activePlanBlock, workflowsBlock] = await Promise.all([
     loadUserContext(),
-    buildMemoryPromptBlock(cwd),
-    buildKnowledgePromptBlock(input.input, cwd),
     buildWorkspaceProfilePromptBlock(cwd),
     buildActivePlanPromptBlock(cwd),
     buildWorkflowsPromptBlock(cwd),
@@ -595,7 +591,7 @@ Current Workspace: ${cwd}
 Current Local Date: ${currentDate}
 Runtime Lane: ${input.runtimeLane ?? "cloud"}
 Tool Mode: ${effectiveToolMode}
-Identity: Speak as the model you actually are. Switchbay owns the workspace, tools, memory, safety gates, and working standards; it is not a fictional assistant identity.${userContextBlock}${oriMdBlock}${workspaceProfileBlock}${memoryBlock}${knowledgeBlock}${pinsBlock}${activePlanBlock}${workflowsBlock}${agentBlock}${capabilityDirectoryBlock}${toolboxBlock}${guidesBlock}${switchbayMcpBlock}${extraContextBlock}
+Identity: Speak as the model you actually are. Switchbay owns the workspace, tools, memory, safety gates, and working standards; it is not a fictional assistant identity.${userContextBlock}${oriMdBlock}${workspaceProfileBlock}${pinsBlock}${activePlanBlock}${workflowsBlock}${agentBlock}${capabilityDirectoryBlock}${toolboxBlock}${guidesBlock}${switchbayMcpBlock}${extraContextBlock}
 
 SHARED AUTHORING REPOSITORIES:
 ${describeSharedAssetRoots(cwd)}
@@ -694,8 +690,7 @@ You have access to tools that execute on the user's local machine via this app's
       userContextBlock ? `user-context:${userContext.files.length}-files` : "",
       `workspace-profile:${workspaceProfilePath(cwd)}`,
       oriMdBlock ? `project-context:${contextPath}` : "",
-      memoryBlock ? "memory:loaded" : "",
-      knowledgeBlock ? `knowledge:${(knowledgeBlock.match(/^Source \d+:/gm) ?? []).length}-sources` : "",
+      "memory:on-demand(memory-helper-engine)",
       pinsBlock ? "pins:loaded" : "",
       activePlanBlock ? `active-plan:${activePlanPath(cwd)}` : "",
       workflowsBlock ? `workflows:${(await listWorkflows(cwd)).length}` : "",

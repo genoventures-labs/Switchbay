@@ -31,33 +31,33 @@ export function MentionPicker({ candidates, selectedIndex, visible }: MentionPic
     >
       <Box marginBottom={1}>
         <Text color={brandColor} bold>Files</Text>
-        <Text color={grayColor}> · Use arrow keys to select</Text>
+        <Text color={grayColor} wrap="truncate"> · Use arrow keys to select</Text>
       </Box>
 
       {visibleCandidates.map((candidate, i) => {
         const absoluteIndex = startIndex + i;
         const isSelected = absoluteIndex === selectedIndex;
         return (
-          <Box 
-            key={candidate.value} 
-            gap={1} 
+          <Box
+            key={candidate.value}
+            gap={1}
             paddingX={1}
             backgroundColor={isSelected ? TUI_COLORS.surfaceRaised : undefined}
           >
             <Text color={isSelected ? greenColor : grayColor} bold={isSelected}>
               {isSelected ? "❯" : " "}
             </Text>
-            <Text color={TUI_COLORS.text} bold={isSelected}>
+            <Text color={TUI_COLORS.text} bold={isSelected} wrap="truncate">
               {candidate.label}{candidate.isDir ? "/" : ""}
             </Text>
-            {isSelected && <Text color={grayColor}>  - insert path</Text>}
+            {isSelected && <Text color={grayColor} wrap="truncate">  - insert path</Text>}
           </Box>
         );
       })}
-      
+
       {candidates.length > visible_count && (
         <Box marginTop={1} paddingX={1}>
-          <Text color={grayColor}>  ... {candidates.length - visible_count} more files</Text>
+          <Text color={grayColor} wrap="truncate">  ... {candidates.length - visible_count} more files</Text>
         </Box>
       )}
     </Box>

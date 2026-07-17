@@ -37,7 +37,7 @@ export function CommandDrawer({
     >
       <Box marginBottom={1}>
         <Text color={brandColor} bold>Commands</Text>
-        <Text color={grayColor}> · {commands.length} matches · arrows browse · tab inserts · enter runs</Text>
+        <Text color={grayColor} wrap="truncate"> · {commands.length} matches · arrows browse · tab inserts · enter runs</Text>
       </Box>
 
       {commands.length > 0 ? (
@@ -59,16 +59,16 @@ export function CommandDrawer({
                 <Text color={selected ? greenColor : grayColor} bold={selected}>
                   {selected ? "❯" : " "}
                 </Text>
-                <Text color={TUI_COLORS.text} bold={selected}>
+                <Text color={TUI_COLORS.text} bold={selected} wrap="truncate">
                   {item.command}
                 </Text>
-                <Text color={grayColor}>[{item.category}]</Text>
+                <Text color={grayColor} wrap="truncate">[{item.category}]</Text>
               </Box>
-              
+
               {selected && (
                 <Box flexDirection="column" marginLeft={2} marginTop={0}>
-                  <Text color={TUI_COLORS.text}>{item.description}</Text>
-                  <Text color={grayColor}>{item.example}</Text>
+                  <Text color={TUI_COLORS.text} wrap="truncate">{item.description}</Text>
+                  <Text color={grayColor} wrap="truncate">{item.example}</Text>
                 </Box>
               )}
             </Box>
@@ -79,7 +79,7 @@ export function CommandDrawer({
       )}
       {commands.length > visibleCount && (
         <Box paddingX={1}>
-          <Text color={grayColor}>... {commands.length - visibleCount} more</Text>
+          <Text color={grayColor} wrap="truncate">... {commands.length - visibleCount} more</Text>
         </Box>
       )}
     </Box>

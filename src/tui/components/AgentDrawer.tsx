@@ -32,7 +32,7 @@ export function AgentDrawer({ agents, activeAgentId, selectedIndex, visible }: A
     >
       <Box marginBottom={1} gap={2}>
         <Text color={brandColor} bold>Agents</Text>
-        <Text color={grayColor}>↑↓ navigate · Enter activate · Esc close</Text>
+        <Text color={grayColor} wrap="truncate">↑↓ navigate · Enter activate · Esc close</Text>
       </Box>
 
       {visibleAgents.map((agent, offset) => {
@@ -53,7 +53,7 @@ export function AgentDrawer({ agents, activeAgentId, selectedIndex, visible }: A
                 {isSelected ? "❯" : " "}
               </Text>
               <Text>{agent.emoji}</Text>
-              <Text color={isActive ? greenColor : TUI_COLORS.text} bold={isSelected || isActive}>
+              <Text color={isActive ? greenColor : TUI_COLORS.text} bold={isSelected || isActive} wrap="truncate">
                 {agent.name}
               </Text>
               {isActive && <Text color={greenColor} bold>· active</Text>}
@@ -62,8 +62,8 @@ export function AgentDrawer({ agents, activeAgentId, selectedIndex, visible }: A
 
             {isSelected && (
               <Box flexDirection="column" marginLeft={3} marginTop={0}>
-                <Text color={grayColor}>{agent.description}</Text>
-                <Text color={grayColor} dimColor>
+                <Text color={grayColor} wrap="truncate">{agent.description}</Text>
+                <Text color={grayColor} dimColor wrap="truncate">
                   └ {isActive ? "Enter to deactivate" : "Enter to activate"}
                 </Text>
               </Box>
@@ -73,7 +73,7 @@ export function AgentDrawer({ agents, activeAgentId, selectedIndex, visible }: A
       })}
       {agents.length > visibleCount && (
         <Box paddingX={1}>
-          <Text color={grayColor}>... {agents.length - visibleCount} more agents</Text>
+          <Text color={grayColor} wrap="truncate">... {agents.length - visibleCount} more agents</Text>
         </Box>
       )}
     </Box>

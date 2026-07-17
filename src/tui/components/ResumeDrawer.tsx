@@ -42,7 +42,7 @@ export function ResumeDrawer({
     >
       <Box marginBottom={1}>
         <Text color={brandColor} bold>Resume Session</Text>
-        <Text color={grayColor}> · Use arrow keys to select</Text>
+        <Text color={grayColor} wrap="truncate"> · Use arrow keys to select</Text>
       </Box>
 
       {sessions.length > 0 ? (
@@ -65,15 +65,15 @@ export function ResumeDrawer({
                 <Text color={selected ? greenColor : grayColor} bold={selected}>
                   {selected ? "❯" : " "}
                 </Text>
-                <Text color={TUI_COLORS.text} bold={selected}>
+                <Text color={TUI_COLORS.text} bold={selected} wrap="truncate">
                   {session.title}
                 </Text>
               </Box>
-              
+
               {selected && (
                 <Box flexDirection="column" marginLeft={2} marginTop={0}>
-                  <Text color={grayColor}>└ Last updated: {date}</Text>
-                  <Text color={grayColor}>  ID: {session.id}</Text>
+                  <Text color={grayColor} wrap="truncate">└ Last updated: {date}</Text>
+                  <Text color={grayColor} wrap="truncate">  ID: {session.id}</Text>
                 </Box>
               )}
             </Box>
@@ -84,7 +84,7 @@ export function ResumeDrawer({
       )}
       {sessions.length > visibleCount && (
         <Box paddingX={1}>
-          <Text color={grayColor}>... {sessions.length - visibleCount} more sessions</Text>
+          <Text color={grayColor} wrap="truncate">... {sessions.length - visibleCount} more sessions</Text>
         </Box>
       )}
     </Box>

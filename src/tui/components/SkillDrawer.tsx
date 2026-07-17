@@ -28,12 +28,12 @@ export function SkillDrawer({ items, notice, selectedIndex, visible }: SkillDraw
     >
       <Box marginBottom={1} gap={2}>
         <Text color={TUI_COLORS.accentBright} bold>Skills</Text>
-        <Text color={TUI_COLORS.muted}>↑↓ browse · Enter insert · Esc close</Text>
+        <Text color={TUI_COLORS.muted} wrap="truncate">↑↓ browse · Enter insert · Esc close</Text>
       </Box>
 
       {notice ? (
         <Box marginBottom={1} paddingX={1}>
-          <Text color={TUI_COLORS.accentBright}>{notice}</Text>
+          <Text color={TUI_COLORS.accentBright} wrap="truncate">{notice}</Text>
         </Box>
       ) : null}
 
@@ -54,24 +54,24 @@ export function SkillDrawer({ items, notice, selectedIndex, visible }: SkillDraw
                 <Text color={selected ? TUI_COLORS.accent : TUI_COLORS.muted} bold={selected}>
                   {selected ? ">" : " "}
                 </Text>
-                <Text color={TUI_COLORS.accentBright} bold={selected}>
+                <Text color={TUI_COLORS.accentBright} bold={selected} wrap="truncate">
                   {skill.name}
                 </Text>
-                <Text color={TUI_COLORS.muted}>[{skill.id}]</Text>
-                <Text color={TUI_COLORS.muted}>{skill.source}</Text>
+                <Text color={TUI_COLORS.muted} wrap="truncate">[{skill.id}]</Text>
+                <Text color={TUI_COLORS.muted} wrap="truncate">{skill.source}</Text>
               </Box>
               <Box paddingLeft={2}>
-                <Text color={selected ? TUI_COLORS.text : TUI_COLORS.muted}>
+                <Text color={selected ? TUI_COLORS.text : TUI_COLORS.muted} wrap="truncate">
                   {skill.description || "No description."}
                 </Text>
               </Box>
               {selected ? (
                 <Box flexDirection="column" paddingLeft={2}>
-                  <Text color={TUI_COLORS.muted}>
+                  <Text color={TUI_COLORS.muted} wrap="truncate">
                     Agents: {skill.agents.join(", ") || "any"} · Languages: {skill.languages.join(", ") || "any"}
                   </Text>
                   {tags.length ? (
-                    <Text color={TUI_COLORS.muted}>Signals: {tags.join(", ")}</Text>
+                    <Text color={TUI_COLORS.muted} wrap="truncate">Signals: {tags.join(", ")}</Text>
                   ) : null}
                 </Box>
               ) : null}
@@ -84,7 +84,7 @@ export function SkillDrawer({ items, notice, selectedIndex, visible }: SkillDraw
 
       {items.length > visibleCount ? (
         <Box marginTop={1} paddingX={1}>
-          <Text color={TUI_COLORS.muted}>... {items.length - visibleCount} more skills</Text>
+          <Text color={TUI_COLORS.muted} wrap="truncate">... {items.length - visibleCount} more skills</Text>
         </Box>
       ) : null}
     </Box>

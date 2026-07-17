@@ -35,21 +35,21 @@ export function ModelDrawer({
     >
       <Box marginBottom={1} gap={2}>
         <Text color={TUI_COLORS.accentBright} bold>Models</Text>
-        <Text color={TUI_COLORS.muted}>↑↓ browse · Enter select · Esc close</Text>
+        <Text color={TUI_COLORS.muted} wrap="truncate">↑↓ browse · Enter select · Esc close</Text>
       </Box>
 
       {activeModel ? (
         <Box marginBottom={1} paddingX={1}>
           <Text color={TUI_COLORS.muted}>Active: </Text>
-          <Text color={TUI_COLORS.accent}>{activeModel.provider}</Text>
+          <Text color={TUI_COLORS.accent} wrap="truncate">{activeModel.provider}</Text>
           <Text color={TUI_COLORS.muted}> · </Text>
-          <Text color={TUI_COLORS.text}>{activeModel.id}</Text>
+          <Text color={TUI_COLORS.text} wrap="truncate">{activeModel.id}</Text>
         </Box>
       ) : null}
 
       {notice ? (
         <Box marginBottom={1} paddingX={1}>
-          <Text color={TUI_COLORS.accentBright}>{notice}</Text>
+          <Text color={TUI_COLORS.accentBright} wrap="truncate">{notice}</Text>
         </Box>
       ) : null}
 
@@ -70,15 +70,15 @@ export function ModelDrawer({
                 <Text color={selected ? TUI_COLORS.accent : TUI_COLORS.muted} bold={selected}>
                   {selected ? ">" : " "}
                 </Text>
-                <Text color={active ? TUI_COLORS.accentBright : TUI_COLORS.text} bold={selected || active}>
+                <Text color={active ? TUI_COLORS.accentBright : TUI_COLORS.text} bold={selected || active} wrap="truncate">
                   {item.label}
                 </Text>
-                <Text color={TUI_COLORS.muted}>[{item.provider}]</Text>
+                <Text color={TUI_COLORS.muted} wrap="truncate">[{item.provider}]</Text>
                 {active ? <Text color={TUI_COLORS.accent}>active</Text> : null}
               </Box>
               {selected ? (
                 <Box paddingLeft={2}>
-                  <Text color={TUI_COLORS.muted}>
+                  <Text color={TUI_COLORS.muted} wrap="truncate">
                     {item.provider === "huggingface"
                       ? "Hugging Face contained lane"
                       : item.provider === "openrouter"

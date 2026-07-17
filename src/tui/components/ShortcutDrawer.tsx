@@ -68,7 +68,7 @@ export function ShortcutDrawer({ visible }: ShortcutDrawerProps) {
     >
       <Box marginBottom={1}>
         <Text color={brandColor} bold>Switchbay Help</Text>
-        <Text color={grayColor}>  ? or /help to toggle · type / to search everything</Text>
+        <Text color={grayColor} wrap="truncate">  ? or /help to toggle · type / to search everything</Text>
       </Box>
 
       {HELP_SECTIONS.map((section) => (
@@ -76,9 +76,9 @@ export function ShortcutDrawer({ visible }: ShortcutDrawerProps) {
           <Text color={greenColor} bold>{section.title.toUpperCase()}</Text>
           {section.items.map((item) => (
             <Box key={item.key} gap={1} paddingLeft={1}>
-              <Box width={12}><Text color={brandColor} bold>{item.key}</Text></Box>
-              <Box width={16}><Text color={TUI_COLORS.text}>{item.label}</Text></Box>
-              <Text color={grayColor}>· {item.description}</Text>
+              <Box width={12}><Text color={brandColor} bold wrap="truncate">{item.key}</Text></Box>
+              <Box width={16}><Text color={TUI_COLORS.text} wrap="truncate">{item.label}</Text></Box>
+              <Text color={grayColor} wrap="truncate">· {item.description}</Text>
             </Box>
           ))}
         </Box>

@@ -38,7 +38,7 @@ export function EngineDrawer({ items, selectedIndex, visible }: EngineDrawerProp
     >
       <Box marginBottom={1} gap={2}>
         <Text color={TUI_COLORS.accentBright} bold>Engines</Text>
-        <Text color={TUI_COLORS.muted}>↑↓ browse · Enter insert tool prompt · Esc close</Text>
+        <Text color={TUI_COLORS.muted} wrap="truncate">↑↓ browse · Enter insert tool prompt · Esc close</Text>
       </Box>
 
       {visibleItems.length > 0 ? (
@@ -57,13 +57,13 @@ export function EngineDrawer({ items, selectedIndex, visible }: EngineDrawerProp
                   <Text color={selected ? TUI_COLORS.accent : TUI_COLORS.muted} bold={selected}>
                     {selected ? ">" : " "}
                   </Text>
-                  <Text color={TUI_COLORS.accentBright} bold>{item.engine.name}</Text>
-                  <Text color={TUI_COLORS.muted}>[{item.engine.id}]</Text>
-                  <Text color={TUI_COLORS.muted}>{item.engine.tools.length} tools</Text>
+                  <Text color={TUI_COLORS.accentBright} bold wrap="truncate">{item.engine.name}</Text>
+                  <Text color={TUI_COLORS.muted} wrap="truncate">[{item.engine.id}]</Text>
+                  <Text color={TUI_COLORS.muted} wrap="truncate">{item.engine.tools.length} tools</Text>
                 </Box>
                 {selected ? (
                   <Box paddingLeft={2}>
-                    <Text color={TUI_COLORS.muted}>{item.engine.description || "No description."}</Text>
+                    <Text color={TUI_COLORS.muted} wrap="truncate">{item.engine.description || "No description."}</Text>
                   </Box>
                 ) : null}
               </Box>
@@ -82,16 +82,16 @@ export function EngineDrawer({ items, selectedIndex, visible }: EngineDrawerProp
                   {selected ? ">" : " "}
                 </Text>
                 <Text color={TUI_COLORS.muted}>└</Text>
-                <Text color={selected ? TUI_COLORS.text : TUI_COLORS.muted} bold={selected}>
+                <Text color={selected ? TUI_COLORS.text : TUI_COLORS.muted} bold={selected} wrap="truncate">
                   {item.tool.name}
                 </Text>
                 {item.tool.required?.length ? (
-                  <Text color={TUI_COLORS.muted}>req: {item.tool.required.join(", ")}</Text>
+                  <Text color={TUI_COLORS.muted} wrap="truncate">req: {item.tool.required.join(", ")}</Text>
                 ) : null}
               </Box>
               {selected ? (
                 <Box paddingLeft={4}>
-                  <Text color={TUI_COLORS.muted}>{item.tool.description || "No description."}</Text>
+                  <Text color={TUI_COLORS.muted} wrap="truncate">{item.tool.description || "No description."}</Text>
                 </Box>
               ) : null}
             </Box>
@@ -103,7 +103,7 @@ export function EngineDrawer({ items, selectedIndex, visible }: EngineDrawerProp
 
       {items.length > visibleCount ? (
         <Box marginTop={1} paddingX={1}>
-          <Text color={TUI_COLORS.muted}>... {items.length - visibleCount} more engine entries</Text>
+          <Text color={TUI_COLORS.muted} wrap="truncate">... {items.length - visibleCount} more engine entries</Text>
         </Box>
       ) : null}
     </Box>

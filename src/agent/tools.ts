@@ -945,6 +945,23 @@ export const AGENT_TOOLS: ToolDefinition[] = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "spawn_agent",
+      description: "Spawn a focused subagent to handle a self-contained subtask in parallel to your own reasoning. The subagent runs a full agentic loop with access to all workspace tools, then returns its final text as the tool result. Use this to delegate research, analysis, or multi-step work that can run independently. The subagent cannot spawn further subagents.",
+      parameters: {
+        type: "object",
+        properties: {
+          prompt: { type: "string", description: "The complete task instruction for the subagent. Be specific — the subagent starts with a clean context and only knows what you write here." },
+          agent_id: { type: "string", description: "Optional agent persona to activate for this subagent (e.g. 'reviewer', 'debugger', 'architect'). Omit to use the default generalist." },
+          context: { type: "string", description: "Optional extra context to prepend to the subagent's system prompt — e.g. file contents you have already read, a code snippet, or a prior finding." },
+          label: { type: "string", description: "Short human-readable label shown in the step display while the subagent runs (e.g. 'audit security', 'review diff')." },
+        },
+        required: ["prompt"],
+      },
+    },
+  },
 ];
 
 export type AgentToolExecution = {
@@ -1998,6 +2015,7 @@ function modelToolMetadata(name: string): { category: string; policy: "read" | "
     return { category: inferToolCategory(name), policy: name.startsWith("web_") ? "external" : "read" };
   }
   if (/^(git_push|gumroad_refund_sale)$/.test(name)) return { category: inferToolCategory(name), policy: "approval" };
+  if (name === "spawn_agent") return { category: "agents", policy: "write" };
   if (/^(web_|gumroad_|gumops_)/.test(name)) return { category: inferToolCategory(name), policy: "external" };
   return { category: inferToolCategory(name), policy: "write" };
 }

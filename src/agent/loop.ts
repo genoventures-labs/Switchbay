@@ -414,6 +414,7 @@ export type BuiltTurn = {
   request: ChatCompletionRequest;
   resolvedProfile: string;
   toolMode?: ToolMode;
+  runtimeLane?: RuntimeLane;
   contextReceipt?: string[];
 };
 
@@ -515,6 +516,7 @@ export async function buildTurn(input: {
   activeAgentId?: string | null;
   runtimeLane?: RuntimeLane;
   toolMode?: ToolMode;
+  extraSystemContext?: string;
 }): Promise<BuiltTurn> {
   const mode = (input.mode as AgentMode) || "build";
   const objective = input.input.slice(0, 100);
@@ -585,6 +587,7 @@ export async function buildTurn(input: {
     ? buildSwitchbayMcpPromptBlock(await loadSwitchbayMcpConfig(cwd), input.runtimeLane ?? "cloud")
     : "";
 
+  const extraContextBlock = input.extraSystemContext ? `\n\nSUBTASK CONTEXT (provided by the parent agent):\n${input.extraSystemContext}` : "";
   let systemPrompt = `You are a local-first coding agent running inside a terminal switchbay.
 Current Mode: ${mode}
 Current Profile: ${input.profile}
@@ -592,7 +595,7 @@ Current Workspace: ${cwd}
 Current Local Date: ${currentDate}
 Runtime Lane: ${input.runtimeLane ?? "cloud"}
 Tool Mode: ${effectiveToolMode}
-Identity: Speak as the model you actually are. Switchbay owns the workspace, tools, memory, safety gates, and working standards; it is not a fictional assistant identity.${userContextBlock}${oriMdBlock}${workspaceProfileBlock}${memoryBlock}${knowledgeBlock}${pinsBlock}${activePlanBlock}${workflowsBlock}${agentBlock}${capabilityDirectoryBlock}${toolboxBlock}${guidesBlock}${switchbayMcpBlock}
+Identity: Speak as the model you actually are. Switchbay owns the workspace, tools, memory, safety gates, and working standards; it is not a fictional assistant identity.${userContextBlock}${oriMdBlock}${workspaceProfileBlock}${memoryBlock}${knowledgeBlock}${pinsBlock}${activePlanBlock}${workflowsBlock}${agentBlock}${capabilityDirectoryBlock}${toolboxBlock}${guidesBlock}${switchbayMcpBlock}${extraContextBlock}
 
 SHARED AUTHORING REPOSITORIES:
 ${describeSharedAssetRoots(cwd)}
@@ -686,6 +689,7 @@ You have access to tools that execute on the user's local machine via this app's
     },
     resolvedProfile: input.profile,
     toolMode: effectiveToolMode,
+    runtimeLane: input.runtimeLane,
     contextReceipt: [
       userContextBlock ? `user-context:${userContext.files.length}-files` : "",
       `workspace-profile:${workspaceProfilePath(cwd)}`,
@@ -971,19 +975,65 @@ export async function executeTurn(input: {
         else if (toolName === "native_exec" || toolName === "bash") label = `native: ${String(args.command || "").slice(0, 40)}`;
         else if (toolName === "native_editor" || toolName === "str_replace_based_edit_tool") label = `native edit: ${args.path}`;
         else if (toolName === "patch") label = `patching ${args.path}`;
+        else if (toolName === "spawn_agent") label = `spawning ${String(args.label || "subagent").slice(0, 30)}`;
         input.onStep(`${label}...`);
       }
 
-      const result: AgentToolExecution = parsedArguments.ok
-        ? (mcpRuntime?.owns(toolName)
-            ? { tool: toolName, ...await mcpRuntime.call(toolName, args, input.signal) }
-            : await executeToolCall(toolName, args, { cwd: currentCwd, sessionId: input.sessionId }))
-        : {
-            tool: toolName,
-            ok: false,
-            summary: `${toolName} rejected before execution`,
-            body: parsedArguments.error,
-          };
+      let result: AgentToolExecution;
+      if (!parsedArguments.ok) {
+        result = { tool: toolName, ok: false, summary: `${toolName} rejected before execution`, body: parsedArguments.error };
+      } else if (toolName === "spawn_agent") {
+        result = await (async () => {
+          const spawnPrompt = String(args.prompt || "").trim();
+          if (!spawnPrompt) return { tool: toolName, ok: false, summary: "spawn_agent: missing prompt", body: "prompt is required." };
+          const spawnLabel = String(args.label || "subagent").slice(0, 40);
+          const spawnAgentId = args.agent_id ? String(args.agent_id) : null;
+          const spawnContext = args.context ? String(args.context) : null;
+          if (input.onStep) input.onStep(`spawning ${spawnLabel}...`);
+          try {
+            const subWorkspace = input.workspace ?? null;
+            const subTurn = await buildTurn({
+              input: spawnPrompt,
+              mode: "build",
+              profile: "switchbay",
+              previousObjective: null,
+              transcript: [],
+              workspace: subWorkspace,
+              activeAgentId: spawnAgentId,
+              runtimeLane: input.turn.runtimeLane,
+              toolMode: input.turn.toolMode,
+              extraSystemContext: spawnContext ?? undefined,
+            });
+            // Exclude spawn_agent from the subagent to prevent recursion
+            const subTools = filteredTools.filter((t) => t.function.name !== "spawn_agent");
+            const subExecuted = await executeTurn({
+              client: input.client,
+              cwd: currentCwd,
+              sessionId: input.sessionId,
+              workspace: subWorkspace,
+              surface: input.surface,
+              turn: { ...subTurn, request: { ...subTurn.request, tools: subTools } },
+              onStep: input.onStep ? (step: string) => input.onStep!(`[${spawnLabel}] ${step}`) : undefined,
+              maxIterations: 12,
+              signal: input.signal,
+            });
+            const subText = extractAssistantText(subExecuted.response);
+            const subToolCount = subExecuted.toolExecutions.length;
+            return {
+              tool: toolName,
+              ok: true,
+              summary: `Subagent "${spawnLabel}" completed (${subToolCount} tool calls)`,
+              body: subText || "(subagent produced no output)",
+            };
+          } catch (err: any) {
+            return { tool: toolName, ok: false, summary: `Subagent "${spawnLabel}" failed`, body: err?.message ?? String(err) };
+          }
+        })();
+      } else {
+        result = mcpRuntime?.owns(toolName)
+          ? { tool: toolName, ...await mcpRuntime.call(toolName, args, input.signal) }
+          : await executeToolCall(toolName, args, { cwd: currentCwd, sessionId: input.sessionId });
+      }
       if (result.travel?.toPath) currentCwd = result.travel.toPath;
 
       toolExecutions.push({

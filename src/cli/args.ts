@@ -41,11 +41,13 @@ export type CliOptions = {
   taskAction?: "status" | "add" | "done" | "clear";
   taskText?: string | null;
   taskId?: number | null;
-  modelAction?: "show" | "set" | "pull" | "add";
+  modelsAction?: "list" | "clear";
+  modelAction?: "show" | "set" | "pull" | "add" | "remove" | "verify";
   modelTarget: string | null;
   modelLane: string | null;
   modelQuantization?: string | null;
   modelLabel?: string | null;
+  yes?: boolean;
 };
 
 export function parseCliArgs(argv: string[]): CliOptions {
@@ -59,6 +61,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
   let newSession = false;
   let purge: string | null = null;
   let visionPath: string | null = null;
+  let yes = false;
   const positional: string[] = [];
 
   for (let i = 0; i < args.length; i++) {
@@ -87,6 +90,8 @@ export function parseCliArgs(argv: string[]): CliOptions {
       }
     } else if (arg === "--new") {
       newSession = true;
+    } else if (arg === "--yes" || arg === "-y") {
+      yes = true;
     } else if (arg === "--purge") {
       purge = args[++i] ?? null;
     } else if (arg === "--add-model") {
@@ -114,6 +119,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
         modelTarget: args[++i] ?? null,
         modelLane: null,
         modelLabel: readLabelFlag(args.slice(i + 1)),
+        yes,
       };
     } else if (arg === "open" || arg === "web-serve") {
       return {
@@ -546,7 +552,9 @@ export function parseCliArgs(argv: string[]): CliOptions {
         modelLane: null,
       };
     } else if (arg === "models") {
-      const commandLane = readLaneFlag(args.slice(i + 1));
+      const rest = args.slice(i + 1);
+      const modelsAction: "list" | "clear" = rest[0] === "clear" ? "clear" : "list";
+      const commandLane = readLaneFlag(modelsAction === "clear" ? rest.slice(1) : rest);
       return {
         surface,
         profile,
@@ -558,6 +566,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
         newSession,
         purge,
         subcommand: "models",
+        modelsAction,
         engineAction: "status",
         toolboxAction: "status",
         toolboxSkill: null,
@@ -597,6 +606,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
         modelLane: parsedModel.commandLane,
         modelQuantization: parsedModel.quantization,
         modelLabel: parsedModel.label,
+        yes: yes || parsedModel.yes,
       };
     } else if (arg === "update") {
       return {
@@ -666,12 +676,13 @@ function assertCliAction(command: string, action: string | undefined, allowed: s
 }
 
 type ParsedModelCommand = {
-  action: "show" | "set" | "pull" | "add";
+  action: "show" | "set" | "pull" | "add" | "remove" | "verify";
   commandLane: string | null;
   flagLane: string | null;
   target: string | null;
   quantization: string | null;
   label: string | null;
+  yes: boolean;
 };
 
 type ParsedAgentCommand = {
@@ -754,6 +765,7 @@ function parseModelCommand(args: string[]): ParsedModelCommand {
   let flagLane: string | null = null;
   let quantization: string | null = null;
   let label: string | null = null;
+  let yes = false;
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--lane") {
       flagLane = args[++i] ?? null;
@@ -761,13 +773,15 @@ function parseModelCommand(args: string[]): ParsedModelCommand {
       quantization = args[++i] ?? null;
     } else if (args[i] === "--label" || args[i] === "--name") {
       label = args[++i] ?? null;
+    } else if (args[i] === "--yes" || args[i] === "-y") {
+      yes = true;
     } else {
       rest.push(args[i]!);
     }
   }
 
-  const action = rest[0] === "pull" ? "pull" : rest[0] === "add" ? "add" : rest.length ? "set" : "show";
-  const actionRest = action === "pull" || action === "add" ? rest.slice(1) : rest;
+  const action = rest[0] === "pull" ? "pull" : rest[0] === "add" ? "add" : rest[0] === "remove" ? "remove" : rest[0] === "verify" ? "verify" : rest.length ? "set" : "show";
+  const actionRest = action === "pull" || action === "add" || action === "remove" || action === "verify" ? rest.slice(1) : rest;
   const first = actionRest[0] ?? null;
   const second = actionRest[1] ?? null;
   const inferredLabel = action === "add" && !label && first && second && isLaneAlias(first)
@@ -783,6 +797,7 @@ function parseModelCommand(args: string[]): ParsedModelCommand {
     target: firstIsLane ? second : first,
     quantization,
     label: inferredLabel,
+    yes,
   };
 }
 

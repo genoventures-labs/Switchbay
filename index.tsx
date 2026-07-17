@@ -3,6 +3,7 @@ import { render } from "ink";
 import { parseCliArgs } from "./src/cli/args";
 import { createRuntimeClient, getRuntimeLaneLabel } from "./src/runtime/client";
 import { getToolMode, normalizeRuntimeLane } from "./src/config/env";
+import { DEFAULTS } from "./src/config/defaults";
 import { SwitchbayApp } from "./src/tui/app";
 import { clearSelectedRuntimeModel, getSelectedRuntimeModel, loadSwitchbayConfig, setSelectedRuntimeModel } from "./src/config/switchbay-config";
 import { fuzzyMatchLocations, travelTo } from "./src/tools/travel";
@@ -27,13 +28,14 @@ import { getActiveCloudProvider, listAutoModelPool, loadCloudProvidersConfig, no
 import { addDailyTask, clearDailyBoard, completeDailyTask, describeDailyBoard } from "./src/operator/daily-board";
 import { formatFrictionRadar, runFrictionRadar } from "./src/operator/radar";
 import { buildQuickHandoff } from "./src/operator/handoff";
-import { addCloudModel, inferCloudModelProvider } from "./src/runtime/cloud-model-catalog";
+import { addCloudModel, clearCloudModelCatalog, inferCloudModelProvider, loadCloudModelCatalog, removeCloudModel, reverifyCloudModel, verifyCloudModel } from "./src/runtime/cloud-model-catalog";
 import type { CloudProviderId } from "./src/runtime/cloud-providers";
 import { findAgent, loadAllAgents, saveAgentDefinition, type AgentScope } from "./src/agent/agents";
 import { loadEngineRegistry } from "./src/engines/registry";
 import { renderCliList } from "./src/cli/list-output";
 import { cliFailure, cliPage, cliReceipt, cleanTerminalText } from "./src/cli/presentation";
 import { renderCliHelp } from "./src/cli/help";
+import { confirm } from "./src/cli/confirm";
 
 // Ensure config is initialized on first boot
 loadSwitchbayConfig();
@@ -95,9 +97,9 @@ async function boot() {
     }
 
     if (options.detach) {
-      const bin = process.argv[0];
-      const script = process.argv[1];
-      const spawnArgs = [bin, script, "serve"];
+      const bin = process.argv[0]!;
+      const script = process.argv[1]!;
+      const spawnArgs: string[] = [bin, script, "serve"];
       if (options.surface !== DEFAULTS.surface) spawnArgs.push("--surface", options.surface);
       if (options.profile !== DEFAULTS.profile) spawnArgs.push("--profile", options.profile);
       if (options.mode !== DEFAULTS.mode) spawnArgs.push("--mode", options.mode);
@@ -228,12 +230,12 @@ async function boot() {
   }
 
   if (options.subcommand === "models") {
-    await runModelsCommand(options.lane);
+    await runModelsCommand(options.lane, options.modelsAction ?? "list");
     return;
   }
 
   if (options.subcommand === "model") {
-    await runModelCommand(options.lane, options.modelLane, options.modelTarget, options.modelAction ?? "show", options.modelQuantization ?? null, options.modelLabel ?? null);
+    await runModelCommand(options.lane, options.modelLane, options.modelTarget, options.modelAction ?? "show", options.modelQuantization ?? null, options.modelLabel ?? null, options.yes ?? false);
     return;
   }
 
@@ -815,7 +817,7 @@ async function runUpdateCommand() {
 
     if (branchName) {
       const upstreamResult = Bun.spawnSync(["git", "rev-parse", "--abbrev-ref", "@{u}"], { cwd: repoDir });
-      const hasUpstream = upstreamResult.status === 0;
+      const hasUpstream = upstreamResult.exitCode === 0;
 
       let hasUnpushed = false;
       if (hasUpstream) {
@@ -949,10 +951,26 @@ async function runCloudProviderCommand(action: "status" | "set", target: string 
   }
   const config = loadCloudProvidersConfig();
   const pool = listAutoModelPool();
-  console.log(cliPage({ title: "Cloud Runtime", state: getActiveCloudProvider(), summary: "Trusted automatic routing across configured cloud lanes.", rows: pool.map((provider) => [provider.lane, `${provider.status === "ready" ? "● ready" : `○ ${provider.status}`} · ${provider.model}`]), next: "switchbay models --lane cloud" }));
+  console.log(cliPage({ title: "Cloud Runtime", state: getActiveCloudProvider(), summary: `Trusted pool: ${pool.length} verified model(s)`, rows: pool.length ? pool.map((entry) => [entry.lane, `${entry.status === "ready" ? "● ready" : `○ ${entry.status}`} · ${entry.model}`]) : [["pool", "Empty — add and verify models with: switchbay model add <id>"]], next: "switchbay models --lane cloud" }));
 }
 
-async function runModelsCommand(rawLane: string | null) {
+async function runModelsCommand(rawLane: string | null, action: "list" | "clear" = "list") {
+  if (action === "clear") {
+    const lane = normalizeRuntimeLane(rawLane);
+    if (lane !== "cloud" && lane !== "cloud-mcp") {
+      console.error("switchbay models clear: only supported for the cloud lane.");
+      console.error("Usage: switchbay models clear --lane cloud");
+      process.exit(1);
+    }
+    const result = clearCloudModelCatalog();
+    console.log(cliReceipt(
+      "Cloud Model Catalog",
+      result.removed === 0 ? "Already empty" : `Cleared ${result.removed} custom model(s)`,
+      [["Presets", "Retained (built-in)"], ["Catalog", "~/.switchbay/cloud-models.json"]],
+      "switchbay models --lane cloud",
+    ));
+    return;
+  }
   const lane = normalizeRuntimeLane(rawLane);
   const localProvider = normalizeLocalProvider(rawLane) ?? undefined;
   try {
@@ -968,18 +986,23 @@ async function runModelsCommand(rawLane: string | null) {
       console.log(`${renderCliList({
         title: "Trusted Auto Pool",
         count: pool.length,
-        noun: "lane",
-        summary: `${pool.filter((entry) => entry.status === "ready").length}/${pool.length} ready`,
+        noun: "model",
+        summary: pool.length ? `${pool.filter((entry) => entry.status === "ready").length}/${pool.length} ready` : "Empty — add verified models to populate",
         columns: [
-          { key: "lane", label: "Lane", width: 12 },
-          { key: "model", label: "Default model", width: 34 },
-          { key: "status", label: "Status", width: 22 },
-          { key: "specialty", label: "Best for", width: 44 },
+          { key: "lane", label: "Provider", width: 12 },
+          { key: "model", label: "Model", width: 38 },
+          { key: "status", label: "Status", width: 14 },
+          { key: "verifiedAt", label: "Verified", width: 24 },
         ],
         rows: pool,
+        empty: "No verified models. Use: switchbay model add <id>",
         hint: "Trusted local: ollama · Explicit-only: openrouter, huggingface, ollama-cloud",
       })}\n`);
     }
+    const isCloudLane = lane === "cloud" || lane === "cloud-mcp";
+    const catalogIndex = isCloudLane
+      ? new Map(loadCloudModelCatalog().models.map((m) => [`${m.provider}:${m.id}`, m]))
+      : new Map();
     console.log(renderCliList({
       title: `${getRuntimeLaneLabel(lane)} Models`,
       count: visibleModels.length,
@@ -989,9 +1012,23 @@ async function runModelsCommand(rawLane: string | null) {
         { key: "active", label: "", width: 2 },
         { key: "id", label: "Model", width: 36 },
         { key: "provider", label: "Provider", width: 12 },
-        { key: "source", label: "Source", width: 12 },
+        { key: "source", label: "Source", width: 10 },
+        ...(isCloudLane ? [{ key: "status", label: "Status", width: 12 }] : []),
       ],
-      rows: visibleModels.map((model) => ({ active: selected?.id === model.id ? "●" : "", id: model.id, provider: model.provider, source: model.source })),
+      rows: visibleModels.map((model) => {
+        let status: string | undefined;
+        if (isCloudLane) {
+          if (model.source === "custom") {
+            const entry = catalogIndex.get(`${model.provider}:${model.id}`);
+            status = entry?.verifiedAt ? "Verified" : "Custom";
+          } else if (model.source === "preset") {
+            status = "Preset";
+          } else {
+            status = "—";
+          }
+        }
+        return { active: selected?.id === model.id ? "●" : "", id: model.id, provider: model.provider, source: model.source, ...(isCloudLane ? { status } : {}) };
+      }),
       empty: "No models found for this lane.",
       hint: `Switch: switchbay model ${lane} <model-id>`,
     }));
@@ -1010,18 +1047,29 @@ async function runModelCommand(
   rawLane: string | null,
   rawModelLane: string | null,
   target: string | null,
-  action: "show" | "set" | "pull" | "add",
+  action: "show" | "set" | "pull" | "add" | "remove" | "verify",
   quantization: string | null,
   label: string | null,
+  yes = false,
 ) {
   const lane = normalizeRuntimeLane(rawModelLane ?? rawLane);
   if (action === "pull") {
-    await runModelPullCommand(rawModelLane ?? rawLane, target, quantization);
+    await runModelPullCommand(rawModelLane ?? rawLane, target, quantization, yes);
     return;
   }
 
   if (action === "add") {
-    await runModelAddCommand(rawModelLane ?? rawLane, target, label);
+    await runModelAddCommand(rawModelLane ?? rawLane, target, label, yes);
+    return;
+  }
+
+  if (action === "remove") {
+    await runModelRemoveCommand(rawModelLane ?? rawLane, target);
+    return;
+  }
+
+  if (action === "verify") {
+    await runModelVerifyCommand(rawModelLane ?? rawLane, target);
     return;
   }
 
@@ -1062,7 +1110,7 @@ async function runModelCommand(
   }
 }
 
-async function runModelAddCommand(rawLane: string | null, target: string | null, label: string | null) {
+async function runModelAddCommand(rawLane: string | null, target: string | null, label: string | null, yes = false) {
   const provider = normalizeCloudModelProvider(rawLane, target);
   const modelId = isCloudProviderAlias(target) ? null : target;
   if (!modelId?.trim()) {
@@ -1073,22 +1121,145 @@ async function runModelAddCommand(rawLane: string | null, target: string | null,
   }
 
   try {
-    const result = await addCloudModel({
-      id: modelId,
-      label,
-      provider,
-    });
-    setSelectedRuntimeModel("cloud", {
-      id: result.model.id,
-      provider: result.model.provider,
-    });
-    console.log(`Added ${result.model.id} to cloud model catalog (${result.model.provider}).`);
-    console.log(`Catalog: ~/.switchbay/cloud-models.json`);
-    console.log(`Selected ${result.model.id} for Cloud.`);
-    console.log(result.verified ? "OpenAI validation: ok" : result.notice ?? "Added without live validation.");
+    // Verify first so we can gate on the result before saving
+    process.stdout.write(`Verifying ${provider}/${modelId}... `);
+    const verification = await verifyCloudModel(modelId, provider);
+
+    if (verification.ok) {
+      process.stdout.write("✓\n");
+    } else {
+      process.stdout.write("✗\n");
+      console.log(`\n  ${verification.notice ?? "Could not verify this model with the provider."}`);
+
+      // Only block when the provider API actively rejected it (we had a key and got a response)
+      // Timeouts and missing keys are config gaps — warn and proceed
+      const apiRejected = verification.notice && !verification.notice.includes("not set") && !verification.notice.includes("timed out");
+      if (apiRejected && !yes) {
+        console.log("");
+        const proceed = await confirm("  This model was not found on your account. Add it anyway?");
+        if (!proceed) {
+          console.log("Aborted.");
+          process.exit(0);
+        }
+        console.log("");
+      }
+    }
+
+    const result = await addCloudModel({ id: modelId, label, provider, verify: false });
+    // Stamp verifiedAt manually if we already confirmed it above
+    if (verification.ok) {
+      const { saveCloudModelCatalog, loadCloudModelCatalog: reloadCatalog } = await import("./src/runtime/cloud-model-catalog");
+      const catalog = reloadCatalog();
+      const now = new Date().toISOString();
+      const models = catalog.models.map((m) =>
+        m.id === modelId && m.provider === provider ? { ...m, verifiedAt: now } : m
+      );
+      saveCloudModelCatalog({ models });
+    }
+
+    setSelectedRuntimeModel("cloud", { id: result.model.id, provider: result.model.provider });
+    console.log(cliReceipt(
+      "Cloud Model Catalog",
+      `Added ${result.model.id}`,
+      [
+        ["Provider", result.model.provider],
+        ["Status", verification.ok ? "Verified" : "Unverified (custom)"],
+        ["Catalog", "~/.switchbay/cloud-models.json"],
+      ],
+      `switchbay models --lane cloud`,
+    ));
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`switchbay model add: ${msg}`);
+    process.exit(1);
+  }
+}
+
+async function runModelVerifyCommand(rawLane: string | null, target: string | null) {
+  const catalog = loadCloudModelCatalog();
+
+  // No target — re-verify every custom model in the catalog
+  if (!target?.trim()) {
+    if (!catalog.models.length) {
+      console.log("Cloud model catalog is empty. Add a model with: switchbay model add <model-id>");
+      return;
+    }
+    console.log(`Verifying ${catalog.models.length} model(s)...`);
+    let verified = 0;
+    let failed = 0;
+    for (const model of catalog.models) {
+      process.stdout.write(`  ${model.provider}/${model.id} ... `);
+      try {
+        const result = await reverifyCloudModel(model.id, model.provider);
+        if (result.verified) {
+          process.stdout.write("✓ verified\n");
+          verified++;
+        } else {
+          process.stdout.write(`✗ ${result.notice ?? "not verified"}\n`);
+          failed++;
+        }
+      } catch (err: any) {
+        process.stdout.write(`✗ ${err.message}\n`);
+        failed++;
+      }
+    }
+    console.log(`\nDone: ${verified} verified, ${failed} failed.`);
+    return;
+  }
+
+  // Target provided — verify a specific model
+  const provider = normalizeCloudModelProvider(rawLane, target);
+  const modelId = isCloudProviderAlias(target) ? null : target;
+  if (!modelId?.trim()) {
+    console.error("switchbay model verify: requires a cloud model id.");
+    console.error("Example: switchbay model verify gpt-5.5");
+    console.error("Example: switchbay model verify openai gpt-5.5");
+    process.exit(1);
+  }
+
+  const entry = catalog.models.find((m) => m.id === modelId && m.provider === provider);
+  if (!entry) {
+    console.error(`switchbay model verify: ${modelId} (${provider}) is not in the catalog.`);
+    console.error("Add it first: switchbay model add " + modelId);
+    process.exit(1);
+  }
+
+  console.log(`Verifying ${provider}/${modelId}...`);
+  try {
+    const result = await reverifyCloudModel(modelId, provider);
+    if (result.verified) {
+      console.log(`✓ ${modelId} verified with ${provider}.`);
+    } else {
+      console.log(`✗ ${result.notice ?? "Verification failed. Status updated in catalog."}`);
+    }
+  } catch (err: any) {
+    console.error(`switchbay model verify: ${err.message}`);
+    process.exit(1);
+  }
+}
+
+async function runModelRemoveCommand(rawLane: string | null, target: string | null) {
+  const provider = isCloudProviderAlias(target) ? null : normalizeCloudModelProvider(rawLane, target);
+  const modelId = isCloudProviderAlias(target) ? null : target;
+  if (!modelId?.trim()) {
+    console.error("switchbay model remove: requires a cloud model id.");
+    console.error("Example: switchbay model remove gpt-5.5");
+    console.error("Example: switchbay model remove openai gpt-5.5");
+    process.exit(1);
+  }
+
+  try {
+    const result = removeCloudModel(modelId, provider);
+    if (!result.removed) {
+      console.error(`switchbay model remove: model not found in catalog: ${modelId}`);
+      console.error("Use: switchbay models --lane cloud to see the current catalog.");
+      process.exit(1);
+    }
+    console.log(`Removed ${modelId} from cloud model catalog.`);
+    console.log(`Catalog: ~/.switchbay/cloud-models.json`);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`switchbay model remove: ${msg}`);
     process.exit(1);
   }
 }
@@ -1112,7 +1283,7 @@ function isCloudProviderAlias(value: string | null): boolean {
     normalized === "gemini";
 }
 
-async function runModelPullCommand(rawLane: string | null, target: string | null, quantization: string | null) {
+async function runModelPullCommand(rawLane: string | null, target: string | null, quantization: string | null, yes = false) {
   const lane = "local";
   if (!target?.trim()) {
     console.error("switchbay model pull: requires a model catalog id or Hugging Face URL.");
@@ -1124,6 +1295,26 @@ async function runModelPullCommand(rawLane: string | null, target: string | null
   try {
     const { normalizeOllamaHuggingFaceModel, pullOllamaModel } = await import("./src/runtime/models");
     const targetModel = normalizeOllamaHuggingFaceModel(target, quantization);
+
+    // HuggingFace models are arbitrary weights — show a caution before pulling
+    if (targetModel.startsWith("hf.co/") && !yes) {
+      console.log(`\n  ⚠  Caution: HuggingFace model`);
+      console.log(`  ─────────────────────────────────────────────────────────`);
+      console.log(`  Model : ${targetModel}`);
+      console.log(`  Source: HuggingFace (hf.co) — community-uploaded weights`);
+      console.log(`  `);
+      console.log(`  Unlike the Ollama library, HuggingFace models are not`);
+      console.log(`  curated or audited. Anyone can upload weights under any`);
+      console.log(`  name. Only pull from authors you trust.`);
+      console.log(`  ─────────────────────────────────────────────────────────\n`);
+      const proceed = await confirm("  Pull this model anyway?");
+      if (!proceed) {
+        console.log("Aborted.");
+        process.exit(0);
+      }
+      console.log("");
+    }
+
     console.log(`Pulling ${targetModel} through Ollama...`);
     try {
       let lastPercent = -1;

@@ -34,7 +34,7 @@ export function modelOptionForAddress(address: ModelAddress): RuntimeModelOption
   }
   if (address.provider) {
     const config = getCloudProviderConfig(address.provider);
-    return { id: config.model, label: config.label, lane: "cloud", provider: address.provider, source: "env" };
+    return { id: config.model, label: config.label, lane: "cloud", provider: address.provider, source: "preset" };
   }
   if (address.lane === "openrouter") {
     const id = Bun.env.SWITCHBAY_OPENROUTER_MODEL?.trim() || "openai/gpt-5.2";
@@ -46,7 +46,7 @@ export function modelOptionForAddress(address: ModelAddress): RuntimeModelOption
   }
   const provider = address.localProvider ?? "ollama";
   const config = getLocalProviderConfig(provider);
-  return { id: config.model, label: config.label, lane: "local", provider, source: provider };
+  return { id: config.model ?? "", label: config.label, lane: "local", provider, source: provider };
 }
 
 export function modelSpeakerLabel(meta?: ChatCompletionResponse["meta"] | null): string {

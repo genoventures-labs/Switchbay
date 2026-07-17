@@ -15,7 +15,7 @@ export async function checkForUpdate(): Promise<string | null> {
       signal: AbortSignal.timeout(3000),
     });
     if (!res.ok) return null;
-    const data = await res.json();
+    const data = await res.json() as Record<string, unknown>;
     // tag_name is like "v1.6.9" — strip the leading 'v'
     const latest = typeof data.tag_name === "string" ? data.tag_name.replace(/^v/, "") : null;
     if (latest && latest !== current && !data.draft && !data.prerelease) {
@@ -40,8 +40,8 @@ export async function checkForToolboxUpdate(cwd = process.cwd()): Promise<boolea
       signal: AbortSignal.timeout(2000),
     });
     if (!res.ok) return false;
-    const data = await res.json();
-    const remoteSha = data.sha;
+    const data = await res.json() as Record<string, unknown>;
+    const remoteSha = typeof data.sha === "string" ? data.sha : null;
     if (!remoteSha) return false;
 
     if (!inventory.exists || !inventory.head) {

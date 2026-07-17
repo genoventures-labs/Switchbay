@@ -113,7 +113,7 @@ export function createApiHandler(options: { token?: string; runTurn?: typeof run
         const candidates = lane === "local" ? (await listRuntimeModels("local")).models : getCloudModelPresets().map(model => ({ ...model, lane }));
         const selected = candidates.find(model => model.id === id && (!body.provider || model.provider === body.provider));
         if (!selected) return fail(`Unknown ${lane} model: ${id}`, 400, "bad_request");
-        setSelectedRuntimeModel(lane, { id: selected.id, provider: selected.provider });
+        if (selected.provider !== "auto") setSelectedRuntimeModel(lane, { id: selected.id, provider: selected.provider });
         if (selected.provider === "openai" || selected.provider === "anthropic" || selected.provider === "google") setActiveCloudProvider(selected.provider);
         return json({ selected: { id: selected.id, provider: selected.provider }, mode: "explicit", lane });
       }

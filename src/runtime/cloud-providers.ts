@@ -3,6 +3,7 @@ import path from "node:path";
 import { DEFAULTS } from "../config/defaults";
 import { userConfigPath } from "../config/paths";
 import { readConfiguredSecret } from "../config/secrets";
+import { loadCloudModelCatalog } from "./cloud-model-catalog";
 
 export type CloudProviderId = "openai" | "anthropic" | "google";
 export type CloudProviderMode = "auto" | CloudProviderId;
@@ -136,9 +137,10 @@ export function describeCloudProviders(): string {
 }
 
 export function describeAutoModelPool(): string {
-  const rows = listAutoModelPool().map((entry) =>
-    `  ${entry.lane.padEnd(9)} ${entry.model} · ${entry.status}\n             ${entry.specialty}`
-  );
+  const pool = listAutoModelPool();
+  const rows = pool.length
+    ? pool.map((entry) => `  ${entry.lane.padEnd(9)} ${entry.model} · ${entry.status}`)
+    : ["  (empty — add and verify models with: switchbay model add <id>)"];
   return [
     "Trusted cloud auto pool",
     ...rows,
@@ -148,28 +150,24 @@ export function describeAutoModelPool(): string {
   ].join("\n");
 }
 
-export function listAutoModelPool(): Array<{
+export type AutoPoolEntry = {
   provider: CloudProviderId;
   lane: string;
   model: string;
   status: string;
-  specialty: string;
-}> {
-  const specialties: Record<CloudProviderId, string> = {
-    openai: "structured output · summaries · vision",
-    anthropic: "code · tools · workspace implementation",
-    google: "research · comparison · long-context synthesis",
-  };
-  return (["openai", "anthropic", "google"] as CloudProviderId[]).map((id) => {
-    const provider = getCloudProviderConfig(id);
-    return {
-      provider: id,
-      lane: id === "google" ? "gemini" : id,
-      model: provider.model,
-      status: hasCloudProviderKey(id) ? "ready" : `missing ${provider.apiKeyEnv}`,
-      specialty: specialties[id],
-    };
-  });
+  verifiedAt: string;
+};
+
+export function listAutoModelPool(): AutoPoolEntry[] {
+  const catalog = loadCloudModelCatalog();
+  const verified = catalog.models.filter((m) => m.verifiedAt);
+  return verified.map((m) => ({
+    provider: m.provider,
+    lane: m.provider === "google" ? "gemini" : m.provider,
+    model: m.id,
+    status: hasCloudProviderKey(m.provider) ? "ready" : `missing ${getCloudProviderConfig(m.provider).apiKeyEnv}`,
+    verifiedAt: m.verifiedAt!,
+  }));
 }
 
 export function invalidateCloudProvidersConfig(): void {

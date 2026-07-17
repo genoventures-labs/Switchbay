@@ -3,6 +3,8 @@ import fs from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { engineBayManifestPaths } from "./hub";
 import { pluginAssetPaths } from "../plugins/registry";
+import { scanEngineManifest, formatScanFindings } from "../security/scanner";
+import { loadSwitchbayConfig } from "../config/switchbay-config";
 
 export type EngineToolParam = {
   type: string;
@@ -48,12 +50,39 @@ export async function loadEngineRegistry(cwd = process.cwd()): Promise<EngineReg
   const warnings: string[] = [];
   const engines = new Map<string, EngineManifest>();
 
-  for (const manifestPath of await discoverEngineManifestPaths(cwd)) {
+  // Trusted sources: workspace .switchbay dirs, whitelisted workspace locations,
+  // and Engine Bay (user's own synced GitHub repo). Load without blocking scan.
+  const trustedPaths = await discoverTrustedEngineManifestPaths(cwd);
+  // Untrusted sources: plugin-installed engines. Apply blocking security scan.
+  const pluginPaths = await pluginAssetPaths("engines", cwd);
+  const untrustedPaths = pluginPaths.filter((p) => !trustedPaths.includes(p));
+
+  for (const manifestPath of [...new Set(trustedPaths)]) {
     try {
       const raw = await fs.readFile(manifestPath, "utf-8");
       const manifest = normalizeManifest(JSON.parse(raw), path.dirname(manifestPath));
       // Discovery is ordered from most local/explicit to shared fallbacks.
       // Do not let a synced Engine Bay manifest replace a workspace engine.
+      if (!engines.has(manifest.id)) {
+        engines.set(manifest.id, manifest);
+      }
+    } catch (err) {
+      warnings.push(`${manifestPath}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  for (const manifestPath of [...new Set(untrustedPaths)]) {
+    try {
+      const raw = await fs.readFile(manifestPath, "utf-8");
+      const manifest = normalizeManifest(JSON.parse(raw), path.dirname(manifestPath));
+      const scanResult = scanEngineManifest(manifest);
+      if (!scanResult.safe) {
+        warnings.push(`${manifestPath}: plugin engine blocked by security scanner\n${formatScanFindings(scanResult.findings)}`);
+        continue;
+      }
+      if (scanResult.findings.length > 0) {
+        warnings.push(`${manifestPath}: security warnings\n${formatScanFindings(scanResult.findings)}`);
+      }
       if (!engines.has(manifest.id)) {
         engines.set(manifest.id, manifest);
       }
@@ -204,15 +233,68 @@ function normalizeTool(raw: unknown): EngineTool {
   };
 }
 
-async function discoverEngineManifestPaths(cwd: string): Promise<string[]> {
-  const dirsOrFiles = [
+async function walkEngineDir(dir: string, out: string[]): Promise<void> {
+  let entries: Awaited<ReturnType<typeof fs.readdir>>;
+  try { entries = await fs.readdir(dir, { withFileTypes: true }); }
+  catch { return; }
+  for (const entry of entries) {
+    if (entry.name.startsWith(".") || entry.name === "node_modules" || entry.name === "__pycache__") continue;
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      await walkEngineDir(fullPath, out);
+    } else if (entry.isFile() && (entry.name.endsWith(".engine.json") || entry.name.endsWith(".json"))) {
+      out.push(fullPath);
+    }
+  }
+}
+
+async function discoverTrustedEngineManifestPaths(cwd: string): Promise<string[]> {
+  const home = Bun.env.HOME ?? process.env.HOME ?? cwd;
+
+  // Seed with highest-priority locations: active workspace and global home dir.
+  const dirsOrFiles: string[] = [
     path.join(cwd, ".switchbay", "engines"),
-    path.join(Bun.env.HOME ?? process.env.HOME ?? cwd, ".switchbay", "engines"),
-    ...String(Bun.env.SWITCHBAY_ENGINE_PATHS ?? "")
-      .split(path.delimiter)
-      .map((entry) => entry.trim())
-      .filter(Boolean),
+    path.join(home, ".switchbay", "engines"),
   ];
+
+  // All whitelisted workspace locations — covers GitHub repos added via /workspace add.
+  try {
+    const config = loadSwitchbayConfig();
+    for (const loc of config.locations) {
+      const engineDir = path.join(loc, ".switchbay", "engines");
+      if (!dirsOrFiles.includes(engineDir)) dirsOrFiles.push(engineDir);
+    }
+  } catch {
+    // Config not readable is non-fatal.
+  }
+
+  // Any GitHub-style cloned repos sitting directly inside ~/.switchbay/github/
+  // or ~/.switchbay/repos/ (common convention for users who keep engine repos there).
+  for (const githubDir of [
+    path.join(home, ".switchbay", "github"),
+    path.join(home, ".switchbay", "repos"),
+  ]) {
+    if (existsSync(githubDir)) {
+      try {
+        const entries = await fs.readdir(githubDir, { withFileTypes: true });
+        for (const entry of entries) {
+          if (!entry.isDirectory()) continue;
+          const repoEnginesDir = path.join(githubDir, entry.name, ".switchbay", "engines");
+          if (!dirsOrFiles.includes(repoEnginesDir)) dirsOrFiles.push(repoEnginesDir);
+          // Also pick up engines at repo root (no .switchbay nesting)
+          const repoRootEnginesDir = path.join(githubDir, entry.name, "engines");
+          if (!dirsOrFiles.includes(repoRootEnginesDir)) dirsOrFiles.push(repoRootEnginesDir);
+        }
+      } catch {
+        // Unreadable dir is non-fatal.
+      }
+    }
+  }
+
+  // Explicit extra paths via env var (colon-separated).
+  for (const entry of String(Bun.env.SWITCHBAY_ENGINE_PATHS ?? "").split(path.delimiter).map((e) => e.trim()).filter(Boolean)) {
+    if (!dirsOrFiles.includes(entry)) dirsOrFiles.push(entry);
+  }
 
   const paths: string[] = [];
   for (const entry of dirsOrFiles) {
@@ -222,19 +304,13 @@ async function discoverEngineManifestPaths(cwd: string): Promise<string[]> {
       if (stat.isFile()) {
         paths.push(resolved);
       } else if (stat.isDirectory()) {
-        const children = await fs.readdir(resolved);
-        paths.push(
-          ...children
-            .filter((child) => child.endsWith(".json") || child.endsWith(".engine.json"))
-            .map((child) => path.join(resolved, child)),
-        );
+        await walkEngineDir(resolved, paths);
       }
     } catch {
       // Missing engine locations are normal.
     }
   }
   paths.push(...await engineBayManifestPaths());
-  paths.push(...await pluginAssetPaths("engines", cwd));
   return [...new Set(paths)];
 }
 

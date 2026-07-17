@@ -36,7 +36,7 @@ export async function runSwitchbayTurn(input: TurnRequest, options: { requestId?
     clearSelectedRuntimeModel("cloud-mcp");
     setActiveCloudProvider("auto");
   } else if (addressed && addressedModel) {
-    setSelectedRuntimeModel(addressedModel.lane, { id: addressedModel.id, provider: addressedModel.provider });
+    if (addressedModel.provider !== "auto") setSelectedRuntimeModel(addressedModel.lane, { id: addressedModel.id, provider: addressedModel.provider });
     if (addressed.provider) setActiveCloudProvider(addressed.provider);
     if (addressed.localProvider) setActiveLocalProvider(addressed.localProvider);
   }

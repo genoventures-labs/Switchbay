@@ -27,7 +27,7 @@ test("hosted Hugging Face lane stays explicit and uses HF_TOKEN", async () => {
   const client = createRuntimeClient("huggingface", { model: "Qwen/example:hf-inference" });
   const response = await client.createChatCompletion("dev", { messages: [{ role: "user", content: "hello" }] });
 
-  expect(request).toEqual({ url: "https://router.huggingface.co/v1/chat/completions", authorization: "Bearer hf_test", model: "Qwen/example:hf-inference" });
+  expect(request!).toEqual({ url: "https://router.huggingface.co/v1/chat/completions", authorization: "Bearer hf_test", model: "Qwen/example:hf-inference" });
   expect(response.meta?.provider).toBe("huggingface");
   expect(response.meta?.router_mode).toBe("explicit");
 });
@@ -47,7 +47,7 @@ test("OpenRouter lane is explicit and reports its selected model", async () => {
   const client = createRuntimeClient("openrouter", { model: "anthropic/claude-test" });
   const response = await client.createChatCompletion("dev", { messages: [{ role: "user", content: "hello" }] });
 
-  expect(request).toEqual({
+  expect(request!).toEqual({
     url: "https://openrouter.ai/api/v1/chat/completions",
     authorization: "Bearer test-openrouter",
     model: "anthropic/claude-test",

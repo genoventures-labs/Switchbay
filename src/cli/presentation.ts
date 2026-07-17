@@ -26,11 +26,11 @@ export function cliHeader(title: string, state?: string, color = cliColorEnabled
 }
 
 export function cliStatus(tone: CliTone, title: string, detail?: string, color = cliColorEnabled()): string {
-  const meta = {
+  const meta = ({
     active: ["●", ANSI.cyan], success: ["✓", ANSI.green], warning: ["!", ANSI.yellow],
     error: ["×", ANSI.red], idle: ["○", ANSI.muted],
-  }[tone];
-  return `${paint(meta[0], meta[1], color)} ${paint(title, ANSI.bold, color)}${detail ? ` ${paint(`· ${detail}`, ANSI.muted, color)}` : ""}`;
+  } as Record<string, string[]>)[tone] ?? ["●", ANSI.muted];
+  return `${paint(meta[0]!, meta[1]!, color)} ${paint(title, ANSI.bold, color)}${detail ? ` ${paint(`· ${detail}`, ANSI.muted, color)}` : ""}`;
 }
 
 export function cliRows(rows: CliRow[], color = cliColorEnabled()): string {

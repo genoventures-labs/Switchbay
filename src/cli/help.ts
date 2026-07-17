@@ -16,7 +16,8 @@ const GROUPS: Array<[string, Entry[]]> = [
   ["RUNTIME", [
     ["switchbay models [--lane <lane>]", "Browse the model runtime"],
     ["switchbay model [lane] [model|auto]", "Inspect or pin routing"],
-    ["switchbay model pull <model>", "Install a local model"],
+    ["switchbay model pull <model> [-y]", "Install a local model (--yes skips HF caution)"],
+    ["switchbay model add <id> [-y]", "Add cloud model (--yes skips unverified warning)"],
     ["switchbay cloud-provider [set <id>]", "Configure trusted cloud routing"],
     ["switchbay local-provider [set <id>]", "Configure the local runtime"],
     ["switchbay mcp <status|init|catalog>", "Manage external tool bridges"],

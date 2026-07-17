@@ -3,6 +3,7 @@ import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import os from "node:os";
 import { userConfigPath } from "../config/paths";
+import { scanMcpConfig } from "../security/scanner";
 
 export const SWITCHBAY_MCP_CONFIG_FILE = "mcp.json";
 export type McpServerConfig = {
@@ -66,16 +67,25 @@ export async function loadSwitchbayMcpConfig(cwd = process.cwd()): Promise<Switc
 }
 
 export function resolveMcpServerConfigs(config: SwitchbayMcpConfig): Record<string, McpServerConfig> {
-  const servers: Record<string, McpServerConfig> = { ...(config.mcpServers ?? {}) };
+  const raw: Record<string, McpServerConfig> = { ...(config.mcpServers ?? {}) };
   for (const integration of config.integrations ?? []) {
     if (typeof integration === "object" && integration.type === "ephemeral_mcp") {
-      servers[integration.server_label] = {
+      raw[integration.server_label] = {
         url: integration.server_url,
         headers: integration.headers,
         allowed_tools: integration.allowed_tools,
         approval: "always",
       };
     }
+  }
+  const servers: Record<string, McpServerConfig> = {};
+  for (const [name, server] of Object.entries(raw)) {
+    const scan = scanMcpConfig(server);
+    if (!scan.safe) {
+      // Block unsafe MCP server configs from being loaded
+      continue;
+    }
+    servers[name] = server;
   }
   return servers;
 }

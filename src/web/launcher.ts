@@ -29,7 +29,7 @@ async function ensureApi() {
 function relaunchCommand(subcommand: string): string[] {
   const entry = process.argv[1] ?? "";
   const scriptLaunch = entry.includes("/") || /\.(?:[cm]?[jt]sx?)$/.test(entry);
-  return scriptLaunch ? [process.argv[0], entry, subcommand] : [process.argv[0], subcommand];
+  return scriptLaunch ? [process.argv[0]!, entry, subcommand] : [process.argv[0]!, subcommand];
 }
 
 function openBrowser(url: string) {

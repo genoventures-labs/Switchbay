@@ -201,7 +201,7 @@ export function SwitchbayApp({
   const skillDrawerVisible = composerMode === "skill_picker";
   const engineDrawerItems = useMemo(() => flattenEngineDrawerItems(availableEngines), [availableEngines]);
   const runtimeBaseLabel = getRuntimeLaneLabel(runtimeLane);
-  const runtimeToolSuffix = toolMode === "switchbay-mcp" && runtimeLane !== "cloud-mcp" && runtimeLane !== "local-mcp"
+  const runtimeToolSuffix = toolMode === "switchbay-mcp" && runtimeLane !== "cloud-mcp"
     ? " + MCP Bridge"
     : "";
   const runtimeBadge = activeRuntimeModel
@@ -294,7 +294,6 @@ export function SwitchbayApp({
     }
     setRuntimeLane(resolved);
     if (resolved === "cloud-mcp") setToolMode("switchbay-mcp");
-    if (resolved === "local-mcp") setToolMode("standard");
     setActiveRuntimeModel(null);
     setRuntimeClient(createRuntimeClient(resolved, {
       localProvider: resolvedLocalProvider,
@@ -323,7 +322,7 @@ export function SwitchbayApp({
     setComposerMode("model_picker");
     setSelectedModelIndex(0);
     setAvailableModels([]);
-    setModelDrawerNotice(targetLane === "local" || targetLane === "local-mcp" ? "Checking local models..." : null);
+    setModelDrawerNotice(targetLane === "local" ? "Checking local models..." : null);
     try {
       const result = await listRuntimeModels(targetLane, providerOverride);
       setAvailableModels(result.models);
@@ -364,7 +363,6 @@ export function SwitchbayApp({
       setCloudProvider(model.provider);
     }
     if (model.lane === "cloud-mcp") setToolMode("switchbay-mcp");
-    if (model.lane === "local-mcp") setToolMode("standard");
     setActiveRuntimeModel(model);
     setSelectedRuntimeModel(model.lane, { id: model.id, provider: model.provider });
     setRuntimeClient(createRuntimeClient(model.lane, { model: model.id, provider, localProvider: model.provider === "ollama" || model.provider === "ollama-cloud" ? model.provider : localProvider }));
@@ -1633,9 +1631,19 @@ export function SwitchbayApp({
         dispatch({ type: "turn/tokens", count });
     };
     let didStream = false;
+    // Buffer tokens and flush on an interval to avoid a re-render + full
+    // MarkdownText re-parse on every single token. At 50 ms cadence this
+    // collapses hundreds of React reconciliations per second into ~20.
+    const tokenBuffer = { pending: "" };
+    const flushTokens = () => {
+      if (!tokenBuffer.pending) return;
+      dispatch({ type: "turn/token", token: tokenBuffer.pending });
+      tokenBuffer.pending = "";
+    };
+    const tokenFlushInterval = setInterval(flushTokens, 50);
     const onToken = (token: string) => {
       didStream = true;
-      dispatch({ type: "turn/token", token });
+      tokenBuffer.pending += token;
     };
     const onStreamReset = (draft: string) => {
       didStream = false;
@@ -1907,7 +1915,7 @@ export function SwitchbayApp({
       setActiveRuntimeModel(null);
       setRuntimeClient(turnClient);
     } else if (modelAddress && addressedModel) {
-      setSelectedRuntimeModel(addressedModel.lane, { id: addressedModel.id, provider: addressedModel.provider });
+      if (addressedModel.provider !== "auto") setSelectedRuntimeModel(addressedModel.lane, { id: addressedModel.id, provider: addressedModel.provider });
       setRuntimeLane(addressedModel.lane);
       setActiveRuntimeModel(addressedModel);
       if (modelAddress.provider) {
@@ -2094,6 +2102,10 @@ export function SwitchbayApp({
         });
       }
 
+      // Flush any buffered tokens and stop the batch interval before completing.
+      clearInterval(tokenFlushInterval);
+      flushTokens();
+
       // When streaming fired, streamingText already has the content — pass undefined
       // so turn/completed falls back to state.streamingText in the reducer.
       dispatch({ type: "turn/completed", content: didStream ? undefined : assistantContent });
@@ -2131,6 +2143,8 @@ export function SwitchbayApp({
         dispatch({ type: "workspace/updated", workspace: ws });
       }).catch(() => {});
     } catch (err: unknown) {
+      clearInterval(tokenFlushInterval);
+      flushTokens();
       const msg = err instanceof Error ? err.message : String(err);
       dispatch({
         type: "turn/failed",
@@ -2536,16 +2550,18 @@ function estimateTranscriptRows(
   entry: ReturnType<typeof createTranscriptEntry>,
   terminalWidth: number,
 ) {
-  // Markdown has indentation, a model label, and ANSI/unicode display width that
-  // a raw string length cannot fully capture. Biasing a little narrower avoids
-  // rendering a partial lower line in Ink's fixed-height viewport.
-  const contentWidth = Math.max(30, terminalWidth - 12);
+  // Raw character length underestimates real rendered height: ANSI sequences,
+  // Ink box padding, markdown indentation, and code blocks all add vertical
+  // space that plain length cannot see. Apply a 1.4× headroom multiplier and
+  // use a narrower content width assumption to stay conservative.
+  const contentWidth = Math.max(20, terminalWidth - 16);
   const rawLines = String(entry.body || entry.title || "").split("\n");
   const wrappedLines = rawLines.reduce((sum, line) => (
     sum + Math.max(1, Math.ceil(line.length / contentWidth))
   ), 0);
+  const withHeadroom = Math.ceil(wrappedLines * 1.4);
 
-  if (entry.kind === "assistant") return Math.max(2, wrappedLines + 1);
-  if (entry.kind === "user") return Math.max(1, wrappedLines + 1);
-  return Math.max(1, wrappedLines);
+  if (entry.kind === "assistant") return Math.max(3, withHeadroom + 2);
+  if (entry.kind === "user") return Math.max(2, withHeadroom + 1);
+  return Math.max(1, withHeadroom);
 }

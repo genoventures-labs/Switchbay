@@ -30,7 +30,7 @@ test("Ollama Cloud client uses the hosted API with bearer authentication", async
   });
 
   const response = await client.createChatCompletion("dev", { messages: [{ role: "user", content: "hello" }] });
-  expect(request).toEqual({ url: "https://ollama.com/api/chat", authorization: "Bearer test-cloud-key" });
+  expect(request!).toEqual({ url: "https://ollama.com/api/chat", authorization: "Bearer test-cloud-key" });
   expect(response.meta?.provider).toBe("ollama-cloud");
   expect(response.meta?.model).toBe("gpt-oss:120b");
 });

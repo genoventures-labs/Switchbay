@@ -12,6 +12,7 @@ import {
   loadCloudProvidersConfig,
   setActiveCloudProvider,
 } from "./cloud-providers";
+import { invalidateCloudModelCatalog } from "./cloud-model-catalog";
 
 const savedEnv = {
   SWITCHBAY_CONFIG_DIR: Bun.env.SWITCHBAY_CONFIG_DIR,
@@ -29,10 +30,12 @@ beforeEach(() => {
   delete Bun.env.SWITCHBAY_OPENAI_MODEL;
   delete Bun.env.SWITCHBAY_GOOGLE_MODEL;
   invalidateCloudProvidersConfig();
+  invalidateCloudModelCatalog();
 });
 
 afterEach(() => {
   invalidateCloudProvidersConfig();
+  invalidateCloudModelCatalog();
   fs.rmSync(tempDir, { recursive: true, force: true });
   for (const [key, value] of Object.entries(savedEnv)) {
     if (value === undefined) {
@@ -72,14 +75,27 @@ test("lets env override configured defaults", () => {
 test("auto model pool explains trusted routing and contained lanes", () => {
   const description = describeAutoModelPool();
   expect(description).toContain("Trusted cloud auto pool");
-  expect(description).toContain("structured output · summaries · vision");
-  expect(description).toContain("code · tools · workspace implementation");
-  expect(description).toContain("research · comparison · long-context synthesis");
   expect(description).toContain("Explicit-only contained lanes: huggingface · openrouter · ollama-cloud");
 });
 
-test("auto model pool exposes structured rows for CLI rendering", () => {
+test("auto model pool is empty when no verified models are in the catalog", () => {
   const rows = listAutoModelPool();
-  expect(rows.map((row) => row.lane)).toEqual(["openai", "anthropic", "gemini"]);
-  expect(rows.every((row) => row.model && row.status && row.specialty)).toBe(true);
+  expect(rows).toEqual([]);
+});
+
+test("auto model pool reflects verified catalog models", () => {
+  const { invalidateCloudModelCatalog, saveCloudModelCatalog } = require("./cloud-model-catalog");
+  saveCloudModelCatalog({
+    models: [
+      { id: "gpt-test", provider: "openai", addedAt: "2026-01-01T00:00:00.000Z", verifiedAt: "2026-01-01T00:00:00.000Z" },
+      { id: "claude-test", provider: "anthropic", addedAt: "2026-01-01T00:00:00.000Z" },
+    ],
+  });
+  invalidateCloudModelCatalog();
+  const rows = listAutoModelPool();
+  expect(rows.length).toBe(1);
+  expect(rows[0]!.model).toBe("gpt-test");
+  expect(rows[0]!.provider).toBe("openai");
+  expect(rows[0]!.verifiedAt).toBeTruthy();
+  invalidateCloudModelCatalog();
 });

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { Box, Text } from "ink";
 import { TUI_COLORS } from "../theme";
 
@@ -26,7 +26,8 @@ type Block =
   | { type: "blank" };
 
 export function MarkdownText({ content, role = "assistant", terminalWidth = 120 }: MarkdownTextProps) {
-  const blocks = parseBlocks(normalizeDisplaySpacing(content));
+  // Memoize the parse so completed entries don't re-parse on every streaming token.
+  const blocks = useMemo(() => parseBlocks(content), [content]);
 
   return (
     <Box flexDirection="column" width={terminalWidth}>
@@ -122,11 +123,6 @@ function renderBlock(
   }
 }
 
-function normalizeDisplaySpacing(content: string) {
-  return content
-    .replace(/([.!?])([A-Z][a-z])/g, "$1 $2")
-    .replace(/([a-z0-9])([A-Z][a-z])/g, "$1 $2");
-}
 
 function parseBlocks(content: string): Block[] {
   const lines = content.replace(/\r\n/g, "\n").split("\n");

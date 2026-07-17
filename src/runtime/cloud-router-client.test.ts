@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { CloudRouterClient } from "./cloud-router-client";
 import { invalidateCloudProvidersConfig } from "./cloud-providers";
+import { invalidateCloudModelCatalog, saveCloudModelCatalog } from "./cloud-model-catalog";
 import type { ChatRuntimeClient } from "./client";
 import type { ChatCompletionRequest } from "./types";
 
@@ -12,14 +16,31 @@ const savedEnv = {
   SWITCHBAY_CLOUD_PROVIDER: Bun.env.SWITCHBAY_CLOUD_PROVIDER,
   SWITCHBAY_CLOUD_ROUTER: Bun.env.SWITCHBAY_CLOUD_ROUTER,
   SWITCHBAY_IGNORE_SERVICE_ENV: Bun.env.SWITCHBAY_IGNORE_SERVICE_ENV,
+  SWITCHBAY_CONFIG_DIR: Bun.env.SWITCHBAY_CONFIG_DIR,
 };
 
+let tempDir = "";
+
 beforeEach(() => {
+  tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "switchbay-router-test-"));
+  Bun.env.SWITCHBAY_CONFIG_DIR = tempDir;
   Bun.env.SWITCHBAY_IGNORE_SERVICE_ENV = "1";
+  // Seed verified models for all three providers so intent-routing tests work
+  const ts = "2026-01-01T00:00:00.000Z";
+  saveCloudModelCatalog({
+    models: [
+      { id: "gpt-test", provider: "openai", addedAt: ts, verifiedAt: ts },
+      { id: "claude-test", provider: "anthropic", addedAt: ts, verifiedAt: ts },
+      { id: "gemini-test", provider: "google", addedAt: ts, verifiedAt: ts },
+    ],
+  });
+  invalidateCloudModelCatalog();
 });
 
 afterEach(() => {
   invalidateCloudProvidersConfig();
+  invalidateCloudModelCatalog();
+  fs.rmSync(tempDir, { recursive: true, force: true });
   for (const [key, value] of Object.entries(savedEnv)) {
     if (value === undefined) {
       delete Bun.env[key];

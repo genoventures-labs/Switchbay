@@ -2,7 +2,6 @@ import {
   type CloudProvider,
   type RuntimeLane,
 } from "../config/env";
-import { getCloudProviderConfig } from "./cloud-providers";
 import { loadCloudModelCatalog } from "./cloud-model-catalog";
 import { getActiveLocalProvider, getLocalProviderConfig } from "./local-providers";
 import { readConfiguredSecret } from "../config/secrets";
@@ -14,7 +13,7 @@ export type RuntimeModelOption = {
   label: string;
   lane: RuntimeLane;
   provider: RuntimeModelProvider;
-  source: "auto" | "preset" | "env" | "custom" | "ollama" | "ollama-cloud" | "openrouter" | "huggingface";
+  source: "auto" | "preset" | "custom" | "ollama" | "ollama-cloud" | "openrouter" | "huggingface";
 };
 
 export type RuntimeModelList = {
@@ -47,13 +46,7 @@ export function getCloudModelPresets(): RuntimeModelOption[] {
 }
 
 export function getCloudModelPresetsForLane(lane: Extract<RuntimeLane, "cloud" | "cloud-mcp">): RuntimeModelOption[] {
-  const openAi = getCloudProviderConfig("openai");
-  const anthropic = getCloudProviderConfig("anthropic");
-  const google = getCloudProviderConfig("google");
   return uniqueModels([
-    envModelOption(openAi.model, "OpenAI configured default", lane, "openai"),
-    envModelOption(anthropic.model, "Anthropic configured default", lane, "anthropic"),
-    envModelOption(google.model, "Google configured default", lane, "google"),
     ...loadCloudModelCatalog().models.map((model) => ({
       id: model.id,
       label: model.label ?? model.id,
@@ -189,8 +182,8 @@ export function normalizeOllamaHuggingFaceModel(target: string, quantization?: s
     if (url.hostname === "huggingface.co" || url.hostname === "www.huggingface.co") {
       const parts = url.pathname.split("/").filter(Boolean);
       if (parts.length >= 2) {
-        username = parts[0];
-        repository = parts[1];
+        username = parts[0]!;
+        repository = parts[1]!;
         // If there's a specific GGUF file in the URL
         const ggufFile = parts.find(p => p.toLowerCase().endsWith(".gguf"));
         if (ggufFile) {
@@ -209,7 +202,7 @@ export function normalizeOllamaHuggingFaceModel(target: string, quantization?: s
     } else if (trimmed.includes("/")) {
       // e.g. "username/repository" or "username/repository:tag"
       const parts = trimmed.split(":");
-      const repoPath = parts[0];
+      const repoPath = parts[0]!;
       const rest = parts.slice(1).join(":");
       const repoParts = repoPath.split("/");
       if (repoParts.length === 2) {
@@ -298,21 +291,6 @@ export async function pullOllamaModel(options: OllamaPullOptions): Promise<{ mod
 }
 
 
-
-function envModelOption(
-  id: string,
-  label: string,
-  lane: RuntimeLane,
-  provider: RuntimeModelProvider,
-): RuntimeModelOption {
-  return {
-    id,
-    label: `${label}: ${id}`,
-    lane,
-    provider,
-    source: "env",
-  };
-}
 
 function uniqueModels(models: RuntimeModelOption[]): RuntimeModelOption[] {
   const seen = new Set<string>();

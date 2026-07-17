@@ -17,4 +17,5 @@ export const ANSI_COLORS = {
   accentBright: "\x1b[38;2;41;190;177m",
   muted: "\x1b[38;2;127;135;141m",
   text: "\x1b[38;2;230;232;234m",
+  error: "\x1b[38;2;239;68;68m",
 } as const;

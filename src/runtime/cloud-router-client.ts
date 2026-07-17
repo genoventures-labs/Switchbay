@@ -4,6 +4,7 @@ import {
   hasCloudProviderKey,
   type CloudProviderId,
 } from "./cloud-providers";
+import { loadCloudModelCatalog } from "./cloud-model-catalog";
 import { AnthropicClient } from "./anthropic-client";
 import { OpenAiClient } from "./openai-client";
 import { OpenAiResponsesClient } from "./openai-responses-client";
@@ -90,9 +91,10 @@ function chooseProvider(request: ChatCompletionRequest): CloudRoutingDecision {
   const addressed = parseModelAddress(latestUserMessage ? messageText(latestUserMessage) : "");
   if (addressed?.provider) {
     assertProviderConfigured(addressed.provider);
+    const model = trustedModelFor(addressed.provider) ?? getCloudProviderConfig(addressed.provider).model;
     return {
       provider: addressed.provider,
-      model: getCloudProviderConfig(addressed.provider).model,
+      model,
       intent: classified.intent,
       reason: `The user addressed ${addressed.speaker} for this turn.`,
       mode: "explicit",
@@ -103,9 +105,10 @@ function chooseProvider(request: ChatCompletionRequest): CloudRoutingDecision {
       throw new Error("Image URL vision is currently wired for OpenAI. Switch with `/lane openai` or `switchbay cloud-provider set openai`.");
     }
     assertProviderConfigured(configured);
+    const model = trustedModelFor(configured) ?? getCloudProviderConfig(configured).model;
     return {
       provider: configured,
-      model: getCloudProviderConfig(configured).model,
+      model,
       intent: classified.intent,
       reason: `Explicit cloud provider: ${configured}.`,
       mode: "explicit",
@@ -114,9 +117,10 @@ function chooseProvider(request: ChatCompletionRequest): CloudRoutingDecision {
 
   if (classified.intent === "vision") {
     assertProviderConfigured("openai");
+    const model = trustedModelFor("openai") ?? getCloudProviderConfig("openai").model;
     return {
       provider: "openai",
-      model: getCloudProviderConfig("openai").model,
+      model,
       intent: classified.intent,
       reason: classified.reason,
       mode: "auto",
@@ -136,9 +140,10 @@ function chooseProvider(request: ChatCompletionRequest): CloudRoutingDecision {
   ].filter((provider): provider is ProviderName => Boolean(provider));
   if (configuredProviders.length === 1) {
     const provider = configuredProviders[0]!;
+    const model = trustedModelFor(provider) ?? getCloudProviderConfig(provider).model;
     return {
       provider,
-      model: getCloudProviderConfig(provider).model,
+      model,
       intent: classifyIntent(request).intent,
       reason: `Only ${getCloudProviderConfig(provider).label} key is configured.`,
       mode: "availability",
@@ -150,21 +155,37 @@ function chooseProvider(request: ChatCompletionRequest): CloudRoutingDecision {
     : classified.intent === "research"
       ? firstAvailable(["google", "openai", "anthropic"])
       : firstAvailable(["openai", "google", "anthropic"]);
+  const model = trustedModelFor(provider) ?? getCloudProviderConfig(provider).model;
   return {
     provider,
-    model: getCloudProviderConfig(provider).model,
+    model,
     intent: classified.intent,
     reason: classified.reason,
     mode: "auto",
   };
 }
 
+function trustedModelFor(provider: ProviderName): string | null {
+  const catalog = loadCloudModelCatalog();
+  const verified = catalog.models
+    .filter((m) => m.provider === provider && m.verifiedAt)
+    .sort((a, b) => (b.verifiedAt! > a.verifiedAt! ? 1 : -1));
+  return verified[0]?.id ?? null;
+}
+
+function hasTrustedModel(provider: ProviderName): boolean {
+  return Boolean(trustedModelFor(provider));
+}
+
 function firstAvailable(preferences: ProviderName[]): ProviderName {
-  const selected = preferences.find((provider) => hasCloudProviderKey(provider));
-  if (!selected) {
+  const selected = preferences.find((provider) => hasCloudProviderKey(provider) && hasTrustedModel(provider));
+  if (selected) return selected;
+  // Fall back to key-only if no provider has verified models yet
+  const keyOnly = preferences.find((provider) => hasCloudProviderKey(provider));
+  if (!keyOnly) {
     throw new Error("Missing cloud provider key. Set OPENAI_API_KEY, ANTHROPIC_API_KEY, or GOOGLE_API_KEY.");
   }
-  return selected;
+  return keyOnly;
 }
 
 function assertProviderConfigured(provider: ProviderName): void {

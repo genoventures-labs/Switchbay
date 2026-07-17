@@ -30,7 +30,13 @@ export type AddCloudModelResult = {
   notice?: string;
 };
 
+export type VerifyCloudModelResult = {
+  ok: boolean;
+  notice?: string;
+};
+
 const CATALOG_FILE = "cloud-models.json";
+const VERIFY_TIMEOUT_MS = 5000;
 
 type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 
@@ -72,12 +78,10 @@ export async function addCloudModel(options: AddCloudModelOptions): Promise<AddC
   let verified = false;
   let notice: string | undefined;
 
-  if (options.verify !== false && provider === "openai") {
-    const verification = await verifyOpenAiModel(id, options.fetchImpl ?? fetch);
+  if (options.verify !== false) {
+    const verification = await verifyCloudModel(id, provider, options.fetchImpl ?? fetch);
     verified = verification.ok;
     notice = verification.notice;
-  } else if (options.verify !== false && provider !== "openai") {
-    notice = `${provider} model added without live validation.`;
   }
 
   const existing = loadCloudModelCatalog();
@@ -97,8 +101,59 @@ export async function addCloudModel(options: AddCloudModelOptions): Promise<AddC
   return { catalog, model, verified, notice };
 }
 
+export async function reverifyCloudModel(id: string, provider: CloudProviderId, fetchImpl: FetchLike = fetch): Promise<{ catalog: CloudModelCatalog; verified: boolean; notice?: string }> {
+  const existing = loadCloudModelCatalog();
+  const entry = existing.models.find((m) => m.id === id && m.provider === provider);
+  if (!entry) throw new Error(`Model not found in catalog: ${id} (${provider})`);
+
+  const verification = await verifyCloudModel(id, provider, fetchImpl);
+  const now = new Date().toISOString();
+  const updated: CustomCloudModel = {
+    ...entry,
+    ...(verification.ok ? { verifiedAt: now } : {}),
+    ...(!verification.ok && entry.verifiedAt ? { verifiedAt: undefined } : {}),
+  };
+  const models = existing.models.map((m) => m.id === id && m.provider === provider ? updated : m);
+  const catalog = saveCloudModelCatalog({ models });
+  return { catalog, verified: verification.ok, notice: verification.notice };
+}
+
+export type RemoveCloudModelResult = {
+  catalog: CloudModelCatalog;
+  removed: boolean;
+};
+
+export function removeCloudModel(id: string, provider?: CloudProviderId | null): RemoveCloudModelResult {
+  const trimmed = id.trim();
+  if (!trimmed) throw new Error("Cloud model id is required.");
+  const existing = loadCloudModelCatalog();
+  const before = existing.models.length;
+  const models = existing.models.filter((item) => {
+    if (item.id !== trimmed) return true;
+    if (provider && item.provider !== provider) return true;
+    return false;
+  });
+  if (models.length === before) return { catalog: existing, removed: false };
+  const catalog = saveCloudModelCatalog({ models });
+  return { catalog, removed: true };
+}
+
+export function clearCloudModelCatalog(): { removed: number } {
+  const existing = loadCloudModelCatalog();
+  const removed = existing.models.length;
+  saveCloudModelCatalog({ models: [] });
+  return { removed };
+}
+
 export function invalidateCloudModelCatalog(): void {
   cached = null;
+}
+
+export async function verifyCloudModel(id: string, provider: CloudProviderId, fetchImpl: FetchLike = fetch): Promise<VerifyCloudModelResult> {
+  if (provider === "openai") return verifyOpenAiModel(id, fetchImpl);
+  if (provider === "anthropic") return verifyAnthropicModel(id, fetchImpl);
+  if (provider === "google") return verifyGoogleModel(id, fetchImpl);
+  return { ok: false, notice: `Unknown provider: ${provider}` };
 }
 
 function normalizeCatalog(value: unknown): CloudModelCatalog {
@@ -143,30 +198,89 @@ export function inferCloudModelProvider(id: string): CloudProviderId {
   return "openai";
 }
 
-async function verifyOpenAiModel(id: string, fetchImpl: FetchLike): Promise<{ ok: boolean; notice?: string }> {
+async function verifyOpenAiModel(id: string, fetchImpl: FetchLike): Promise<VerifyCloudModelResult> {
   const config = getCloudProviderConfig("openai");
   const apiKey = getCloudProviderApiKey("openai");
   if (!apiKey) {
-    return {
-      ok: false,
-      notice: `Added without OpenAI validation because ${config.apiKeyEnv} is not set.`,
-    };
+    return { ok: false, notice: `Skipped OpenAI validation: ${config.apiKeyEnv} is not set.` };
   }
-
   try {
     const response = await fetchImpl(`${config.apiBase}/models/${encodeURIComponent(id)}`, {
       headers: { Authorization: `Bearer ${apiKey}` },
+      signal: AbortSignal.timeout(VERIFY_TIMEOUT_MS),
     });
     if (response.ok) return { ok: true };
     const body = await response.text().catch(() => "");
     return {
       ok: false,
-      notice: `OpenAI model validation returned ${response.status}${body.trim() ? `: ${body.trim().slice(0, 120)}` : ""}. Added anyway.`,
+      notice: `OpenAI validation returned ${response.status}${body.trim() ? `: ${body.trim().slice(0, 120)}` : ""}. Added anyway.`,
     };
   } catch (error: any) {
+    const timedOut = error.name === "TimeoutError" || error.name === "AbortError";
     return {
       ok: false,
-      notice: `OpenAI model validation failed: ${error.message}. Added anyway.`,
+      notice: timedOut
+        ? `OpenAI validation timed out after ${VERIFY_TIMEOUT_MS / 1000}s. Added anyway.`
+        : `OpenAI validation failed: ${error.message}. Added anyway.`,
+    };
+  }
+}
+
+async function verifyAnthropicModel(id: string, fetchImpl: FetchLike): Promise<VerifyCloudModelResult> {
+  const config = getCloudProviderConfig("anthropic");
+  const apiKey = getCloudProviderApiKey("anthropic");
+  if (!apiKey) {
+    return { ok: false, notice: `Skipped Anthropic validation: ${config.apiKeyEnv} is not set.` };
+  }
+  try {
+    const response = await fetchImpl(`${config.apiBase}/models/${encodeURIComponent(id)}`, {
+      headers: {
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      signal: AbortSignal.timeout(VERIFY_TIMEOUT_MS),
+    });
+    if (response.ok) return { ok: true };
+    const body = await response.text().catch(() => "");
+    return {
+      ok: false,
+      notice: `Anthropic validation returned ${response.status}${body.trim() ? `: ${body.trim().slice(0, 120)}` : ""}. Added anyway.`,
+    };
+  } catch (error: any) {
+    const timedOut = error.name === "TimeoutError" || error.name === "AbortError";
+    return {
+      ok: false,
+      notice: timedOut
+        ? `Anthropic validation timed out after ${VERIFY_TIMEOUT_MS / 1000}s. Added anyway.`
+        : `Anthropic validation failed: ${error.message}. Added anyway.`,
+    };
+  }
+}
+
+async function verifyGoogleModel(id: string, fetchImpl: FetchLike): Promise<VerifyCloudModelResult> {
+  const apiKey = getCloudProviderApiKey("google");
+  if (!apiKey) {
+    return { ok: false, notice: "Skipped Google validation: GOOGLE_API_KEY is not set." };
+  }
+  // Use the native Generative Language API — the OpenAI-compat base doesn't expose model detail endpoints
+  const nativeBase = "https://generativelanguage.googleapis.com/v1beta";
+  try {
+    const response = await fetchImpl(`${nativeBase}/models/${encodeURIComponent(id)}?key=${encodeURIComponent(apiKey)}`, {
+      signal: AbortSignal.timeout(VERIFY_TIMEOUT_MS),
+    });
+    if (response.ok) return { ok: true };
+    const body = await response.text().catch(() => "");
+    return {
+      ok: false,
+      notice: `Google validation returned ${response.status}${body.trim() ? `: ${body.trim().slice(0, 120)}` : ""}. Added anyway.`,
+    };
+  } catch (error: any) {
+    const timedOut = error.name === "TimeoutError" || error.name === "AbortError";
+    return {
+      ok: false,
+      notice: timedOut
+        ? `Google validation timed out after ${VERIFY_TIMEOUT_MS / 1000}s. Added anyway.`
+        : `Google validation failed: ${error.message}. Added anyway.`,
     };
   }
 }

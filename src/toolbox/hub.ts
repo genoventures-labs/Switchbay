@@ -6,6 +6,7 @@ import { workspaceStorageDir } from "../config/paths";
 import { runCommand } from "../tools/shell";
 import { pluginAssetPaths } from "../plugins/registry";
 import { sharedAssetRoot } from "../config/authoring-paths";
+import { scanMarkdownContent } from "../security/scanner";
 
 export const DEFAULT_TOOLBOX_REPO = "https://github.com/genoventures-labs/Engine-Toolboxes.git";
 
@@ -139,10 +140,15 @@ async function loadSkillsFromRoot(root: string, source: ToolboxSkill["source"]):
   if (!existsSync(root)) return [];
   const files = await findRelativeFiles(root, isSkillFile);
   const skills: ToolboxSkill[] = [];
+  const externalSource = source === "synced" || source === "plugin";
   for (const file of files) {
     try {
       const absolute = path.join(root, file);
       const content = await fs.readFile(absolute, "utf-8");
+      if (externalSource) {
+        const scan = scanMarkdownContent(content);
+        if (!scan.safe) continue;
+      }
       skills.push(parseSkillMarkdown(content, absolute, source));
     } catch {
       // Skip malformed or unreadable skill files.
@@ -157,6 +163,8 @@ async function loadPluginSkills(cwd: string): Promise<ToolboxSkill[]> {
   for (const file of files) {
     try {
       const content = await fs.readFile(file, "utf-8");
+      const scan = scanMarkdownContent(content);
+      if (!scan.safe) continue;
       skills.push(parseSkillMarkdown(content, file, "plugin"));
     } catch {
       // Skip malformed or unreadable plugin skills.

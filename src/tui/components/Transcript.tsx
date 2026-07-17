@@ -1,4 +1,4 @@
-import React from "react";
+import React, { memo } from "react";
 import { Box, Text } from "ink";
 import type { TranscriptEntry } from "../../agent/turn-state";
 import type { ApprovalRequest } from "../../agent/turn-state";
@@ -23,6 +23,69 @@ type TranscriptProps = {
   streamingSpeaker?: string;
   terminalWidth?: number;
 };
+
+// Memoized so completed entries don't re-render on every streaming token update.
+const TranscriptEntryRow = memo(function TranscriptEntryRow({
+  entry,
+  brandColor,
+  grayColor,
+  terminalWidth,
+}: {
+  entry: TranscriptEntry;
+  brandColor: string;
+  grayColor: string;
+  terminalWidth: number;
+}) {
+  if (entry.kind === "user") {
+    return (
+      <Box flexDirection="column" marginBottom={1}>
+        <Box flexDirection="column">
+          <Text color={grayColor}>❯ <Text color={TUI_COLORS.text}>{entry.body}</Text></Text>
+        </Box>
+      </Box>
+    );
+  }
+  if (entry.kind === "assistant") {
+    return (
+      <Box flexDirection="column" marginBottom={1}>
+        <Box flexDirection="column">
+          <Box gap={1} marginBottom={0}>
+            <Text color={brandColor}>⏺</Text>
+            <Text color={TUI_COLORS.text} bold>{entry.title || "Model"}</Text>
+          </Box>
+          <Box paddingLeft={2} marginTop={0} flexShrink={1} flexDirection="column">
+            <MarkdownText content={entry.body} role="assistant" terminalWidth={terminalWidth - 4} />
+          </Box>
+        </Box>
+      </Box>
+    );
+  }
+  if (entry.kind === "tool") {
+    if (entry.tone === "warning") {
+      return (
+        <Box flexDirection="column" marginBottom={1}>
+          <Text color={brandColor}>! <Text color={grayColor}>{entry.title}</Text></Text>
+        </Box>
+      );
+    }
+    if (entry.tone === "error") {
+      return (
+        <Box flexDirection="column" marginBottom={0}>
+          <Text color={brandColor}>x <Text color={grayColor}>{entry.body || entry.title}</Text></Text>
+        </Box>
+      );
+    }
+    return (
+      <Box flexDirection="column" marginBottom={1} paddingLeft={1}>
+        <Box gap={1}>
+          <Text color={TUI_COLORS.muted}>◌</Text>
+          <Text color={TUI_COLORS.muted}>{entry.body || entry.title}</Text>
+        </Box>
+      </Box>
+    );
+  }
+  return null;
+});
 
 export function Transcript({
   lane,
@@ -50,60 +113,15 @@ export function Transcript({
         />
       ) : null}
 
-      {entries.map((entry) => {
-        if (entry.kind === "user") {
-          return (
-            <Box key={entry.id} flexDirection="column" marginBottom={1}>
-              <Box flexDirection="column">
-                <Text color={grayColor}>❯ <Text color={TUI_COLORS.text}>{entry.body}</Text></Text>
-              </Box>
-            </Box>
-          );
-        }
-
-        if (entry.kind === "assistant") {
-          return (
-            <Box key={entry.id} flexDirection="column" marginBottom={1}>
-              <Box flexDirection="column">
-                <Box gap={1} marginBottom={0}>
-                  <Text color={brandColor}>⏺</Text>
-                  <Text color={TUI_COLORS.text} bold>{entry.title || "Model"}</Text>
-                </Box>
-                <Box paddingLeft={2} marginTop={0} flexShrink={1} flexDirection="column">
-                  <MarkdownText content={entry.body} role="assistant" terminalWidth={terminalWidth - 4} />
-                </Box>
-              </Box>
-            </Box>
-          );
-        }
-
-        if (entry.kind === "tool") {
-          if (entry.tone === "warning") {
-            return (
-              <Box key={entry.id} flexDirection="column" marginBottom={1}>
-                <Text color={brandColor}>! <Text color={grayColor}>{entry.title}</Text></Text>
-              </Box>
-            );
-          }
-          if (entry.tone === "error") {
-            return (
-              <Box key={entry.id} flexDirection="column" marginBottom={0}>
-                <Text color={brandColor}>x <Text color={grayColor}>{entry.body || entry.title}</Text></Text>
-              </Box>
-            );
-          }
-          return (
-            <Box key={entry.id} flexDirection="column" marginBottom={1} paddingLeft={1}>
-              <Box gap={1}>
-                <Text color={TUI_COLORS.muted}>◌</Text>
-                <Text color={TUI_COLORS.muted}>{entry.body || entry.title}</Text>
-              </Box>
-            </Box>
-          );
-        }
-
-        return null;
-      })}
+      {entries.map((entry) => (
+        <TranscriptEntryRow
+          key={entry.id}
+          entry={entry}
+          brandColor={brandColor}
+          grayColor={grayColor}
+          terminalWidth={terminalWidth}
+        />
+      ))}
 
       {streamingText && (
         <Box flexDirection="column" marginBottom={1}>

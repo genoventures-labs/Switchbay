@@ -13,7 +13,7 @@ function record(input: Partial<TraceRecord> = {}): TraceRecord {
     userPrompt: "test",
     runtime: { lane: "cloud", toolMode: "standard", model: "gpt-test", provider: "openai" },
     workspace: { cwd: "/tmp/test", dirtyFiles: [] },
-    context: { knowledgeSources: ["README.md"], systemPromptChars: 100, promptChars: 50, estimatedPromptTokens: 40 },
+    context: { knowledgeSources: ["README.md"], receipt: [], systemPromptChars: 100, promptChars: 50, estimatedPromptTokens: 40 },
     actions: { toolCount: 1, tools: [{ tool: "read_file", ok: true, summary: "Read README", bodyPreview: "", bodyLength: 0 }], changedFiles: [], pendingApprovals: [] },
     result: { finalAnswer: "done", finalAnswerChars: 4, estimatedAnswerTokens: 10, finishReason: "stop" },
     ...input,

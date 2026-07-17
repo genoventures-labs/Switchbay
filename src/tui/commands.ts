@@ -152,6 +152,24 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     category: "runtime",
+    command: "/model remove",
+    description: "Remove a custom model from the cloud lane catalog.",
+    example: "/model remove gpt-5.5",
+  },
+  {
+    category: "runtime",
+    command: "/model verify",
+    description: "Re-verify a custom cloud model (or all catalog models) against the provider API.",
+    example: "/model verify gpt-5.5",
+  },
+  {
+    category: "runtime",
+    command: "/models clear",
+    description: "Remove all custom models from the cloud catalog, keeping built-in presets.",
+    example: "/models clear",
+  },
+  {
+    category: "runtime",
     command: "/models",
     description: "List/select models for the active runtime lane.",
     example: "/models",

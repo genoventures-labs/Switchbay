@@ -117,6 +117,36 @@ export function hasCloudProviderKey(provider: CloudProviderId): boolean {
   return Boolean(getCloudProviderApiKey(provider));
 }
 
+/** Additional env var names to check per provider beyond the primary apiKeyEnv. */
+const PROVIDER_KEY_ALIASES: Record<string, string[]> = {
+  openai:    ["OPENAI_API_KEY"],
+  anthropic: ["ANTHROPIC_API_KEY", "CLAUDE_API_KEY"],
+  google:    ["GOOGLE_API_KEY", "GEMINI_API_KEY", "GOOGLE_GENERATIVE_AI_API_KEY"],
+  openrouter: ["OPENROUTER_API_KEY"],
+  huggingface: ["HF_TOKEN", "HUGGINGFACE_API_KEY"],
+};
+
+/**
+ * Returns the set of provider ids for which at least one key was found,
+ * scanning Bun.env, the service .env, and shell rc files.
+ * Result is memoized per process lifetime — cheap to call repeatedly.
+ */
+let _availableProvidersCache: Set<string> | null = null;
+
+export function scanAvailableProviders(): Set<string> {
+  if (_availableProvidersCache) return _availableProvidersCache;
+  const found = new Set<string>();
+  for (const [provider, names] of Object.entries(PROVIDER_KEY_ALIASES)) {
+    if (readConfiguredSecret(...names)) found.add(provider);
+  }
+  _availableProvidersCache = found;
+  return found;
+}
+
+export function invalidateAvailableProvidersCache(): void {
+  _availableProvidersCache = null;
+}
+
 export function describeCloudProviders(): string {
   const config = loadCloudProvidersConfig();
   const rows = (Object.values(config.providers) as CloudProviderConfig[])

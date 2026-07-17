@@ -4,6 +4,7 @@ import {
 } from "../config/env";
 import { loadCloudModelCatalog } from "./cloud-model-catalog";
 import { getActiveLocalProvider, getLocalProviderConfig } from "./local-providers";
+import { scanAvailableProviders } from "./cloud-providers";
 import { readConfiguredSecret } from "../config/secrets";
 
 export type RuntimeModelProvider = CloudProvider | "ollama" | "ollama-cloud" | "openrouter" | "huggingface" | "apple-fm" | "llama-cpp" | "mlx";
@@ -47,18 +48,22 @@ export function getCloudModelPresets(): RuntimeModelOption[] {
 }
 
 export function getCloudModelPresetsForLane(lane: Extract<RuntimeLane, "cloud" | "cloud-mcp">): RuntimeModelOption[] {
-  return uniqueModels([
-    ...loadCloudModelCatalog().models.map((model) => ({
-      id: model.id,
-      label: model.label ?? model.id,
-      lane,
-      provider: model.provider,
-      source: "custom" as const,
-    })),
-    ...OPENAI_PRESETS.map((model) => ({ ...model, lane })),
-    ...ANTHROPIC_PRESETS.map((model) => ({ ...model, lane })),
-    ...GOOGLE_PRESETS.map((model) => ({ ...model, lane })),
-  ]);
+  const available = scanAvailableProviders();
+  // Custom-added models are always included — user explicitly added them.
+  const customModels = loadCloudModelCatalog().models.map((model) => ({
+    id: model.id,
+    label: model.label ?? model.id,
+    lane,
+    provider: model.provider,
+    source: "custom" as const,
+  }));
+  // Presets are only included when the provider's key is present.
+  const presets = [
+    ...(available.has("openai")    ? OPENAI_PRESETS    : []),
+    ...(available.has("anthropic") ? ANTHROPIC_PRESETS : []),
+    ...(available.has("google")    ? GOOGLE_PRESETS    : []),
+  ].map((model) => ({ ...model, lane }));
+  return uniqueModels([...customModels, ...presets]);
 }
 
 export async function listRuntimeModels(lane: RuntimeLane, localProvider = getActiveLocalProvider()): Promise<RuntimeModelList> {
@@ -71,8 +76,16 @@ export async function listRuntimeModels(lane: RuntimeLane, localProvider = getAc
     };
   }
 
-  if (lane === "openrouter") return listOpenRouterModels();
-  if (lane === "huggingface") return listHuggingFaceModels();
+  if (lane === "openrouter") {
+    const available = scanAvailableProviders();
+    if (!available.has("openrouter")) return { models: [], notice: "Set OPENROUTER_API_KEY to use OpenRouter." };
+    return listOpenRouterModels();
+  }
+  if (lane === "huggingface") {
+    const available = scanAvailableProviders();
+    if (!available.has("huggingface")) return { models: [], notice: "Set HF_TOKEN to use Hugging Face Inference Providers." };
+    return listHuggingFaceModels();
+  }
   if (lane === "apple") return listAppleFmModels();
 
   if (localProvider === "apple-fm") return listAppleFmModels();

@@ -790,6 +790,7 @@ export async function executeTurn(input: {
   onRoute?: (response: ChatCompletionResponse) => void;
   maxIterations?: number;
   signal?: AbortSignal;
+  isSubagent?: boolean;
 }): Promise<ExecutedTurn> {
   const toolExecutions: AgentToolExecution[] = [];
   const providerEvents: ProviderToolEvent[] = [];
@@ -977,7 +978,7 @@ export async function executeTurn(input: {
       let result: AgentToolExecution;
       if (!parsedArguments.ok) {
         result = { tool: toolName, ok: false, summary: `${toolName} rejected before execution`, body: parsedArguments.error };
-      } else if (toolName === "spawn_agent") {
+      } else if (toolName === "spawn_agent" && !input.isSubagent) {
         result = await (async () => {
           const spawnPrompt = String(args.prompt || "").trim();
           if (!spawnPrompt) return { tool: toolName, ok: false, summary: "spawn_agent: missing prompt", body: "prompt is required." };
@@ -1011,6 +1012,7 @@ export async function executeTurn(input: {
               onStep: input.onStep ? (step: string) => input.onStep!(`[${spawnLabel}] ${step}`) : undefined,
               maxIterations: 12,
               signal: input.signal,
+              isSubagent: true,
             });
             const subText = extractAssistantText(subExecuted.response);
             const subToolCount = subExecuted.toolExecutions.length;
@@ -1024,6 +1026,8 @@ export async function executeTurn(input: {
             return { tool: toolName, ok: false, summary: `Subagent "${spawnLabel}" failed`, body: err?.message ?? String(err) };
           }
         })();
+      } else if (toolName === "spawn_agent" && input.isSubagent) {
+        result = { tool: toolName, ok: false, summary: "spawn_agent is not available inside a subagent", body: "Subagents cannot spawn further subagents." };
       } else {
         result = mcpRuntime?.owns(toolName)
           ? { tool: toolName, ...await mcpRuntime.call(toolName, args, input.signal) }

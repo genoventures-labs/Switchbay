@@ -27,6 +27,10 @@ export function ResumeDrawer({
   const greenColor = TUI_COLORS.accent;
   const grayColor = TUI_COLORS.muted;
 
+  const visibleCount = Math.min(sessions.length, 8);
+  const startIndex = Math.max(0, Math.min(selectedIndex - 4, sessions.length - visibleCount));
+  const visibleSessions = sessions.slice(startIndex, startIndex + visibleCount);
+
   return (
     <Box
       flexDirection="column"
@@ -42,7 +46,8 @@ export function ResumeDrawer({
       </Box>
 
       {sessions.length > 0 ? (
-        sessions.map((session, index) => {
+        visibleSessions.map((session, offset) => {
+          const index = startIndex + offset;
           const selected = index === selectedIndex;
           const date = new Date(session.updatedAt).toLocaleString();
 
@@ -76,6 +81,11 @@ export function ResumeDrawer({
         })
       ) : (
         <Text color={grayColor}>No saved sessions found.</Text>
+      )}
+      {sessions.length > visibleCount && (
+        <Box paddingX={1}>
+          <Text color={grayColor}>... {sessions.length - visibleCount} more sessions</Text>
+        </Box>
       )}
     </Box>
   );

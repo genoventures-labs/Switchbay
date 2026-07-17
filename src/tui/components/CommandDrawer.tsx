@@ -22,6 +22,10 @@ export function CommandDrawer({
   const greenColor = TUI_COLORS.accent;
   const grayColor = TUI_COLORS.muted;
 
+  const visibleCount = Math.min(commands.length, 6);
+  const startIndex = Math.max(0, Math.min(selectedIndex - 3, commands.length - visibleCount));
+  const visibleCommands = commands.slice(startIndex, startIndex + visibleCount);
+
   return (
     <Box
       flexDirection="column"
@@ -37,7 +41,8 @@ export function CommandDrawer({
       </Box>
 
       {commands.length > 0 ? (
-        commands.map((item, index) => {
+        visibleCommands.map((item, offset) => {
+          const index = startIndex + offset;
           const selected = index === selectedIndex;
 
           return (
@@ -71,6 +76,11 @@ export function CommandDrawer({
         })
       ) : (
         <Text color={grayColor}>No matching slash commands.</Text>
+      )}
+      {commands.length > visibleCount && (
+        <Box paddingX={1}>
+          <Text color={grayColor}>... {commands.length - visibleCount} more</Text>
+        </Box>
       )}
     </Box>
   );

@@ -232,13 +232,23 @@ export function SwitchbayApp({
   const mainWidth = showRightRail ? Math.max(60, stdoutWidth - rightRailWidth) : stdoutWidth;
   const headerRows = state.transcript.length > 0 ? 5 : 0;
   const composerRows = initialQuery ? 3 : state.status === "THINKING" ? Math.min(7, 4 + turnThoughts.length) : 4;
+  // Each drawer type has a different natural height. Over-budgeting leaves room
+  // for the drawer's border and padding; under-budgeting causes it to overflow
+  // into the composer, which produces the same garbling as the transcript issue.
   const drawerRows =
-    commandDrawerVisible || mentionPickerVisible || resumeDrawerVisible || shortcutDrawerVisible ||
-    editPickerState.visible || composerMode === "agent_picker" || engineDrawerVisible || modelDrawerVisible || skillDrawerVisible || composerMode === "create_agent" || composerMode === "create_engine" || composerMode === "create_mcp" || composerMode === "create_rule" || composerMode === "create_skill" || composerMode === "create_plugin"
-      ? 10
-      : composerMode === "edit_intent"
-        ? 5
-        : 0;
+    shortcutDrawerVisible ? 28                                        // 4 sections × ~6 items + borders
+    : commandDrawerVisible ? 14                                       // header + up to 8 items × ~1.5 rows
+    : mentionPickerVisible ? 10                                       // header + up to 6 candidates
+    : resumeDrawerVisible ? 12                                        // header + up to 8 sessions
+    : composerMode === "agent_picker" ? 14                            // header + up to 6 agents × 2 rows
+    : engineDrawerVisible ? 14                                        // header + up to 6 engines × 2 rows
+    : modelDrawerVisible ? 16                                         // header + notice + up to 8 models × 1.5 rows
+    : skillDrawerVisible ? 16                                         // header + up to 10 skills × 1.5 rows
+    : editPickerState.visible ? 12                                    // header + up to 8 files
+    : composerMode === "create_agent" || composerMode === "create_engine" || composerMode === "create_mcp"
+      || composerMode === "create_rule" || composerMode === "create_skill" || composerMode === "create_plugin" ? 12
+    : composerMode === "edit_intent" ? 5
+    : 0;
   const transcriptAreaHeight = Math.max(5, stdoutHeight - headerRows - composerRows - drawerRows);
   // The live response renders below the persisted feed, but is not itself in
   // state.transcript until the turn completes. Reserve its actual row budget
@@ -2357,96 +2367,100 @@ export function SwitchbayApp({
             terminalWidth={mainWidth}
           />
         </Box>
-        <EditDrawer
-          files={editPickerState.files}
-          selectedIndex={selectedEditFileIndex}
-          visible={editPickerState.visible}
-        />
-        <EditIntentDrawer
-          file={selectedEditFile ?? ""}
-          onChange={setEditIntent}
-          onSubmit={handleEditIntentSubmit}
-          value={editIntent}
-          visible={composerMode === "edit_intent" && Boolean(selectedEditFile)}
-        />
-        <ResumeDrawer
-          sessions={resumeSessions}
-          selectedIndex={selectedResumeIndex}
-          visible={resumeDrawerVisible}
-        />
-        <AgentDrawer
-          agents={availableAgents}
-          activeAgentId={state.activeAgentId}
-          selectedIndex={selectedAgentIndex}
-          visible={composerMode === "agent_picker"}
-        />
-        <EngineDrawer
-          items={engineDrawerItems}
-          selectedIndex={selectedEngineIndex}
-          visible={engineDrawerVisible}
-        />
-        <ModelDrawer
-          activeModel={activeRuntimeModel}
-          items={availableModels}
-          notice={modelDrawerNotice}
-          selectedIndex={selectedModelIndex}
-          visible={modelDrawerVisible}
-        />
-        <SkillDrawer
-          items={availableSkills}
-          notice={skillDrawerNotice}
-          selectedIndex={selectedSkillIndex}
-          visible={skillDrawerVisible}
-        />
-        <CreateAgentDrawer
-          visible={composerMode === "create_agent" || createAgentGenerating}
-          generating={createAgentGenerating}
-          onComplete={handleCreateAgentComplete}
-          onCancel={() => { setComposerMode("default"); setQuerySync(""); }}
-        />
-        <CreateEngineDrawer
-          visible={composerMode === "create_engine" || createEngineGenerating}
-          generating={createEngineGenerating}
-          onComplete={handleCreateEngineComplete}
-          onCancel={() => { setComposerMode("default"); setQuerySync(""); }}
-        />
-        <CreateMcpDrawer
-          visible={composerMode === "create_mcp" || createMcpGenerating}
-          generating={createMcpGenerating}
-          onComplete={handleCreateMcpComplete}
-          onCancel={() => { setComposerMode("default"); setQuerySync(""); }}
-        />
-        <CreateRuleDrawer
-          visible={composerMode === "create_rule" || createRuleGenerating}
-          generating={createRuleGenerating}
-          onComplete={handleCreateRuleComplete}
-          onCancel={() => { setComposerMode("default"); setQuerySync(""); }}
-        />
-        <CreateSkillDrawer
-          visible={composerMode === "create_skill" || createSkillGenerating}
-          generating={createSkillGenerating}
-          onComplete={handleCreateSkillComplete}
-          onCancel={() => { setComposerMode("default"); setQuerySync(""); }}
-        />
-        <CreatePluginDrawer
-          visible={composerMode === "create_plugin" || createPluginGenerating}
-          generating={createPluginGenerating}
-          onComplete={handleCreatePluginComplete}
-          onCancel={() => { setComposerMode("default"); setQuerySync(""); }}
-        />
-        <ShortcutDrawer
-          visible={shortcutDrawerVisible}
-        />
-        <CommandDrawer
-          commands={commandMatches}
-          selectedIndex={selectedCommandIndex}
-          visible={commandDrawerVisible}
-        />
-        <MentionPicker
-          candidates={mentionCandidates}
-          selectedIndex={selectedMentionIndex}
-          visible={mentionPickerVisible}
-        />
+        {drawerRows > 0 && (
+          <Box height={drawerRows} overflowY="hidden" flexDirection="column">
+            <EditDrawer
+              files={editPickerState.files}
+              selectedIndex={selectedEditFileIndex}
+              visible={editPickerState.visible}
+            />
+            <EditIntentDrawer
+              file={selectedEditFile ?? ""}
+              onChange={setEditIntent}
+              onSubmit={handleEditIntentSubmit}
+              value={editIntent}
+              visible={composerMode === "edit_intent" && Boolean(selectedEditFile)}
+            />
+            <ResumeDrawer
+              sessions={resumeSessions}
+              selectedIndex={selectedResumeIndex}
+              visible={resumeDrawerVisible}
+            />
+            <AgentDrawer
+              agents={availableAgents}
+              activeAgentId={state.activeAgentId}
+              selectedIndex={selectedAgentIndex}
+              visible={composerMode === "agent_picker"}
+            />
+            <EngineDrawer
+              items={engineDrawerItems}
+              selectedIndex={selectedEngineIndex}
+              visible={engineDrawerVisible}
+            />
+            <ModelDrawer
+              activeModel={activeRuntimeModel}
+              items={availableModels}
+              notice={modelDrawerNotice}
+              selectedIndex={selectedModelIndex}
+              visible={modelDrawerVisible}
+            />
+            <SkillDrawer
+              items={availableSkills}
+              notice={skillDrawerNotice}
+              selectedIndex={selectedSkillIndex}
+              visible={skillDrawerVisible}
+            />
+            <CreateAgentDrawer
+              visible={composerMode === "create_agent" || createAgentGenerating}
+              generating={createAgentGenerating}
+              onComplete={handleCreateAgentComplete}
+              onCancel={() => { setComposerMode("default"); setQuerySync(""); }}
+            />
+            <CreateEngineDrawer
+              visible={composerMode === "create_engine" || createEngineGenerating}
+              generating={createEngineGenerating}
+              onComplete={handleCreateEngineComplete}
+              onCancel={() => { setComposerMode("default"); setQuerySync(""); }}
+            />
+            <CreateMcpDrawer
+              visible={composerMode === "create_mcp" || createMcpGenerating}
+              generating={createMcpGenerating}
+              onComplete={handleCreateMcpComplete}
+              onCancel={() => { setComposerMode("default"); setQuerySync(""); }}
+            />
+            <CreateRuleDrawer
+              visible={composerMode === "create_rule" || createRuleGenerating}
+              generating={createRuleGenerating}
+              onComplete={handleCreateRuleComplete}
+              onCancel={() => { setComposerMode("default"); setQuerySync(""); }}
+            />
+            <CreateSkillDrawer
+              visible={composerMode === "create_skill" || createSkillGenerating}
+              generating={createSkillGenerating}
+              onComplete={handleCreateSkillComplete}
+              onCancel={() => { setComposerMode("default"); setQuerySync(""); }}
+            />
+            <CreatePluginDrawer
+              visible={composerMode === "create_plugin" || createPluginGenerating}
+              generating={createPluginGenerating}
+              onComplete={handleCreatePluginComplete}
+              onCancel={() => { setComposerMode("default"); setQuerySync(""); }}
+            />
+            <ShortcutDrawer
+              visible={shortcutDrawerVisible}
+            />
+            <CommandDrawer
+              commands={commandMatches}
+              selectedIndex={selectedCommandIndex}
+              visible={commandDrawerVisible}
+            />
+            <MentionPicker
+              candidates={mentionCandidates}
+              selectedIndex={selectedMentionIndex}
+              visible={mentionPickerVisible}
+            />
+          </Box>
+        )}
         <Composer
           disabled={composerMode === "edit_intent" || composerMode === "create_agent" || composerMode === "create_engine" || composerMode === "create_mcp" || composerMode === "create_rule" || composerMode === "create_skill" || composerMode === "create_plugin"}
           initialQuery={initialQuery}

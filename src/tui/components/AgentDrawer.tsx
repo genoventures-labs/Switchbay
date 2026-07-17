@@ -17,6 +17,10 @@ export function AgentDrawer({ agents, activeAgentId, selectedIndex, visible }: A
   const greenColor = TUI_COLORS.accent;
   const grayColor = TUI_COLORS.muted;
 
+  const visibleCount = Math.min(agents.length, 6);
+  const startIndex = Math.max(0, Math.min(selectedIndex - 3, agents.length - visibleCount));
+  const visibleAgents = agents.slice(startIndex, startIndex + visibleCount);
+
   return (
     <Box
       flexDirection="column"
@@ -31,8 +35,9 @@ export function AgentDrawer({ agents, activeAgentId, selectedIndex, visible }: A
         <Text color={grayColor}>↑↓ navigate · Enter activate · Esc close</Text>
       </Box>
 
-      {agents.map((agent, index) => {
-        const isSelected = index === selectedIndex;
+      {visibleAgents.map((agent, offset) => {
+        const absoluteIndex = startIndex + offset;
+        const isSelected = absoluteIndex === selectedIndex;
         const isActive = agent.id === activeAgentId;
 
         return (
@@ -66,6 +71,11 @@ export function AgentDrawer({ agents, activeAgentId, selectedIndex, visible }: A
           </Box>
         );
       })}
+      {agents.length > visibleCount && (
+        <Box paddingX={1}>
+          <Text color={grayColor}>... {agents.length - visibleCount} more agents</Text>
+        </Box>
+      )}
     </Box>
   );
 }

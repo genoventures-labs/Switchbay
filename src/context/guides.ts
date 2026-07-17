@@ -439,7 +439,7 @@ export async function describeGuides(cwd = process.cwd(), kind?: GuideKind): Pro
   return lines.join("\n");
 }
 
-export async function buildGuidesPromptBlock(cwd = process.cwd(), maxGuides = 8): Promise<string> {
+export async function buildGuidesPromptBlock(cwd = process.cwd(), maxGuides = 24): Promise<string> {
   const guides = await loadGuides(cwd);
   if (!guides.length) return "";
   const directory = await materializeGuideDirectory(cwd, guides);

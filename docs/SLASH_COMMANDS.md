@@ -34,7 +34,10 @@ Type `/` in the Switchbay TUI to search this catalog. Type `?` or `/help` for th
 /lane mcp             Toggle the MCP bridge for the active model lane
 /model                Open the model picker for the active lane
 /model cloud-mcp      Pick a cloud model with MCP enabled
+/model remove         Remove a custom model from the cloud lane catalog
+/model verify         Re-verify a custom cloud model against the provider API
 /models               Alias for the active-lane model picker
+/models clear         Clear all custom cloud catalog entries
 /mcp                  Show MCP bridge status and configuration
 /mcp on               Enable the bridge for this session
 /mcp off              Disable the bridge for this session

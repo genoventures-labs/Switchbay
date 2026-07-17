@@ -137,7 +137,11 @@ function convertMessages(messages: ChatMessage[]): { system: string; messages: A
 
     if (message.role === "assistant") {
       if (Array.isArray(message.provider_content)) {
-        converted.push({ role: "assistant", content: message.provider_content as AnthropicContentBlock[] });
+        // Filter out thinking blocks with empty content — Anthropic rejects them on replay
+        const replayBlocks = (message.provider_content as AnthropicContentBlock[]).filter(
+          (b) => b.type !== "thinking" || (typeof (b as any).thinking === "string" && (b as any).thinking.length > 0)
+        );
+        converted.push({ role: "assistant", content: replayBlocks });
         continue;
       }
       const blocks: AnthropicContentBlock[] = [];
@@ -305,6 +309,18 @@ async function readAnthropicStream(response: Response, onToken: (token: string) 
         const block = contentBlocks[index] ?? (contentBlocks[index] = { type: "text", text: "" });
         block.text = String(block.text ?? "") + event.delta.text;
         onToken(event.delta.text);
+      }
+
+      if (event.type === "content_block_delta" && event.delta?.type === "thinking_delta" && (event.delta as any).thinking) {
+        const index = event.index ?? 0;
+        const block = contentBlocks[index] ?? (contentBlocks[index] = { type: "thinking", thinking: "" });
+        block.thinking = String(block.thinking ?? "") + String((event.delta as any).thinking);
+      }
+
+      if (event.type === "content_block_delta" && event.delta?.type === "signature_delta" && (event.delta as any).signature) {
+        const index = event.index ?? 0;
+        const block = contentBlocks[index];
+        if (block) block.signature = (event.delta as any).signature;
       }
 
       if (event.type === "content_block_delta" && event.delta?.type === "input_json_delta") {

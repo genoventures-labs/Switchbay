@@ -3,7 +3,7 @@ import path from "node:path";
 import { DEFAULTS } from "../config/defaults";
 import { userConfigPath } from "../config/paths";
 
-export type LocalProviderId = "ollama" | "ollama-cloud" | "apple-fm";
+export type LocalProviderId = "ollama" | "ollama-cloud" | "apple-fm" | "llama-cpp" | "mlx";
 
 export type LocalProviderConfig = {
   id: LocalProviderId;
@@ -40,6 +40,16 @@ const DEFAULT_CONFIG: LocalProvidersConfig = {
       apiBase: "local",
       model: "default",
     },
+    "llama-cpp": {
+      id: "llama-cpp",
+      label: "llama.cpp",
+      apiBase: "http://localhost:8080/v1",
+    },
+    "mlx": {
+      id: "mlx",
+      label: "MLX (Apple Silicon)",
+      apiBase: "http://localhost:8080/v1",
+    },
   },
 };
 
@@ -60,6 +70,12 @@ export function normalizeLocalProvider(value?: string | null): LocalProviderId |
   }
   if (normalized === "apple-fm" || normalized === "apple" || normalized === "apple-intelligence" || normalized === "ai" || normalized === "on-device") {
     return "apple-fm";
+  }
+  if (normalized === "llama-cpp" || normalized === "llama_cpp" || normalized === "llamacpp" || normalized === "llama" || normalized === "llama-server") {
+    return "llama-cpp";
+  }
+  if (normalized === "mlx" || normalized === "mlx-lm" || normalized === "mlxlm" || normalized === "apple-mlx") {
+    return "mlx";
   }
   return null;
 }
@@ -113,7 +129,7 @@ export function describeLocalProviders(): string {
     "",
     ...rows,
     "",
-    "Switch with `/lane ollama`, `/lane ollama-cloud`, `/lane apple`, or `switchbay local-provider set ollama|ollama-cloud|apple-fm`.",
+    "Switch with `/lane ollama`, `/lane ollama-cloud`, `/lane apple`, `/lane llama-cpp`, `/lane mlx`, or `switchbay local-provider set ollama|ollama-cloud|apple-fm|llama-cpp|mlx`.",
   ].join("\n");
 }
 
@@ -126,6 +142,8 @@ function normalizeConfig(parsed: Partial<LocalProvidersConfig>): LocalProvidersC
     ollama: normalizeProvider(parsed.providers?.["ollama"], DEFAULT_CONFIG.providers["ollama"]),
     "ollama-cloud": normalizeProvider(parsed.providers?.["ollama-cloud"], DEFAULT_CONFIG.providers["ollama-cloud"]),
     "apple-fm": normalizeProvider(parsed.providers?.["apple-fm"], DEFAULT_CONFIG.providers["apple-fm"]),
+    "llama-cpp": normalizeProvider(parsed.providers?.["llama-cpp"], DEFAULT_CONFIG.providers["llama-cpp"]),
+    "mlx": normalizeProvider(parsed.providers?.["mlx"], DEFAULT_CONFIG.providers["mlx"]),
   };
   const active = normalizeLocalProvider(parsed.active) ?? DEFAULT_CONFIG.active;
   return applyEnv({ active, providers });
@@ -149,6 +167,8 @@ function applyEnv(config: LocalProvidersConfig): LocalProvidersConfig {
   const ollamaModel = Bun.env.SWITCHBAY_OLLAMA_MODEL || Bun.env.OLLAMA_MODEL || lmModel;
   const ollamaCloudBase = Bun.env.SWITCHBAY_OLLAMA_CLOUD_BASE || Bun.env.OLLAMA_CLOUD_BASE;
   const ollamaCloudModel = Bun.env.SWITCHBAY_OLLAMA_CLOUD_MODEL || Bun.env.OLLAMA_CLOUD_MODEL;
+  const llamaCppBase = Bun.env.SWITCHBAY_LLAMA_CPP_BASE || Bun.env.LLAMA_CPP_API_BASE;
+  const mlxBase = Bun.env.SWITCHBAY_MLX_BASE || Bun.env.MLX_API_BASE;
   return {
     ...config,
     active: normalizeLocalProvider(Bun.env.SWITCHBAY_LOCAL_PROVIDER) ?? config.active,
@@ -169,6 +189,16 @@ function applyEnv(config: LocalProvidersConfig): LocalProvidersConfig {
         apiBase: config.providers["apple-fm"]?.apiBase ?? "local",
         model: Bun.env.SWITCHBAY_APPLE_FM_MODEL?.trim() || config.providers["apple-fm"]?.model || "default",
       },
+      "llama-cpp": {
+        ...config.providers["llama-cpp"],
+        apiBase: llamaCppBase?.trim() || config.providers["llama-cpp"]?.apiBase || "http://localhost:8080/v1",
+        model: Bun.env.SWITCHBAY_LLAMA_CPP_MODEL?.trim() || config.providers["llama-cpp"]?.model,
+      },
+      "mlx": {
+        ...config.providers["mlx"],
+        apiBase: mlxBase?.trim() || config.providers["mlx"]?.apiBase || "http://localhost:8080/v1",
+        model: Bun.env.SWITCHBAY_MLX_MODEL?.trim() || config.providers["mlx"]?.model,
+      },
     },
   };
 }
@@ -176,6 +206,11 @@ function applyEnv(config: LocalProvidersConfig): LocalProvidersConfig {
 function normalizeProviderBase(provider: LocalProviderId, value: string, fallback: string): string {
   const trimmed = value.trim();
   if (!trimmed) return fallback;
+  if (provider === "llama-cpp" || provider === "mlx") {
+    // These use OpenAI-compat /v1 paths — preserve as-is
+    if (!trimmed.endsWith("/v1")) return `${trimmed.replace(/\/$/, "")}/v1`;
+    return trimmed;
+  }
   if (provider === "ollama" || provider === "ollama-cloud") {
     let clean = trimmed;
     if (clean.endsWith("/v1")) {

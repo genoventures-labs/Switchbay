@@ -1,48 +1,137 @@
 import { cliHeader, cliColorEnabled } from "./presentation";
+import { SWITCHBAY_VERSION } from "../version";
 
-type Entry = [command: string, description: string];
+// ── ANSI helpers (local, not exported from presentation) ──────────────────────
+const A = {
+  reset:  "[0m",
+  bold:   "[1m",
+  muted:  "[38;5;244m",
+  bright: "[38;5;51m",
+  cyan:   "[38;5;44m",
+};
+function p(s: string, code: string, color: boolean): string {
+  return color ? `${code}${s}${A.reset}` : s;
+}
 
-const GROUPS: Array<[string, Entry[]]> = [
-  ["WORKSPACE", [
-    ["switchbay", "Open the terminal workspace"],
-    ["switchbay open", "Open the visual workspace"],
-    ['switchbay "<request>"', "Run a one-shot request"],
-    ["switchbay --resume [id]", "Resume a saved session"],
-    ["switchbay agenda", "Open today's Daily Board"],
-    ["switchbay task <add|done|clear>", "Manage today's work"],
-    ["switchbay memory <list|facts|add|refresh>", "Operate workspace memory"],
-    ["switchbay knowledge <search|refresh>", "Query the knowledge index"],
-  ]],
-  ["RUNTIME", [
-    ["switchbay models [--lane <lane>]", "Browse the model runtime"],
-    ["switchbay model [lane] [model|auto]", "Inspect or pin routing"],
-    ["switchbay model pull <model> [-y]", "Install a local model (--yes skips HF caution)"],
-    ["switchbay model add <id> [-y]", "Add cloud model (--yes skips unverified warning)"],
-    ["switchbay cloud-provider [set <id>]", "Configure trusted cloud routing"],
-    ["switchbay local-provider [set <id>]", "Configure the local runtime"],
-    ["switchbay local-mode [set <mode>]", "Pin routing to local/offline only"],
-    ["switchbay mcp <status|init|catalog>", "Manage external tool bridges"],
-  ]],
-  ["LIBRARY", [
-    ["switchbay agents <list|read|create>", "Specialist workers"],
-    ["switchbay engines <list|templates|sync>", "Engine Bay tools"],
-    ["switchbay skills <list|read|templates|sync>", "Skill Library guides"],
-    ["switchbay plugins <list|inspect>", "Installed capability packs"],
-  ]],
-  ["ACTIVITY", [
-    ["switchbay trace [export]", "Inspect the latest turn ledger"],
-    ["switchbay graph trace", "View the latest execution flow"],
-    ["switchbay usage", "See turns, tokens, tools, and spend"],
-    ["switchbay radar", "Run the Friction Radar"],
-    ["switchbay handoff", "Prepare the next session"],
-  ]],
-  ["SYSTEM", [
-    ["switchbay serve [--detach]", "Start the local API"],
-    ["switchbay service <status|install|restart|uninstall>", "Manage startup service"],
-    ["switchbay update", "Update, rebuild, and refresh"],
-    ["switchbay version", "Show installed version"],
-  ]],
-];
+// ── Layout constants ──────────────────────────────────────────────────────────
+const RULE_WIDTH  = 68;   // total width of a section rule line (after 2-char indent)
+const CMD_COL     = 26;   // visible chars reserved for the subcommand + args
+const SB          = "switchbay";
+const SB_LEN      = SB.length + 1; // "switchbay " = 10
+
+// ── Primitives ────────────────────────────────────────────────────────────────
+function rule(label: string, color: boolean): string {
+  const dashes = "─".repeat(Math.max(0, RULE_WIDTH - label.length - 1));
+  return `\n  ${p(label, A.bold, color)} ${p(dashes, A.muted, color)}`;
+}
+
+/**
+ * Format one command line.
+ * sub: everything after "switchbay " e.g. `models [--lane <lane>]`
+ *   or "" for the bare `switchbay` invocation.
+ * Special: if sub starts with a quote-like char it's shown as a literal arg.
+ */
+function cmd(sub: string, desc: string, color: boolean): string {
+  const prefix = `  ${p(SB, A.muted, color)} `;
+
+  if (sub === "") {
+    // bare `switchbay` — just show prefix with no subcommand
+    const pad = " ".repeat(CMD_COL);
+    return `${prefix}${pad}  ${desc}`;
+  }
+
+  // Split bare subcommand from optional args
+  // e.g. "models [--lane <lane>]" → bare="models", rest=" [--lane <lane>]"
+  const spaceIdx = sub.indexOf(" ");
+  const bare = spaceIdx >= 0 ? sub.slice(0, spaceIdx) : sub;
+  const rest  = spaceIdx >= 0 ? sub.slice(spaceIdx)   : "";
+
+  const restColored = rest ? p(rest, A.muted, color) : "";
+  const visibleLen  = sub.length; // bare + rest (no ANSI in source)
+  const pad = " ".repeat(Math.max(1, CMD_COL - visibleLen));
+
+  return `${prefix}${bare}${restColored}${pad}  ${desc}`;
+}
+
+function flag(name: string, desc: string, color: boolean): string {
+  const FLAG_COL = 18;
+  const pad = " ".repeat(Math.max(1, FLAG_COL - name.length));
+  return `  ${p(name, A.muted, color)}${pad}${desc}`;
+}
+
+// ── Main help ─────────────────────────────────────────────────────────────────
+
+export function renderCliHelp(color = cliColorEnabled()): string {
+  const ver = p(`v${SWITCHBAY_VERSION}`, A.muted, color);
+  const header = `${p("◆", A.bright, color)} ${p("Switchbay", A.bold, color)}  ${ver}  ${p("·  Local AI work system", A.muted, color)}`;
+
+  const lines: string[] = [header, ""];
+
+  // ── GETTING STARTED ────────────────────────────────────────────────
+  lines.push(rule("GETTING STARTED", color));
+  lines.push(cmd("",                            "Open the terminal workspace",         color));
+  lines.push(cmd('"<request>"',                 "Run a one-shot request",              color));
+  lines.push(cmd("--resume [id]",               "Continue a saved session",            color));
+  lines.push(cmd("agenda",                      "Today's Daily Board",                 color));
+  lines.push(cmd("open",                        "Open the visual web workspace",       color));
+
+  // ── MODELS ────────────────────────────────────────────────────────
+  lines.push(rule("MODELS", color));
+  lines.push(cmd("model",                       "Show active model and lane",          color));
+  lines.push(cmd("models [--lane <lane>]",      "Browse the model catalog",            color));
+  lines.push(cmd("models list --all",           "All lanes in one view",               color));
+  lines.push(cmd("model pull <id>",             "Install a local model via Ollama",    color));
+  lines.push(cmd("model add <id>",              "Add a model to the cloud catalog",    color));
+  lines.push(cmd("local-mode set <mode>",       "Route to local or offline only",      color));
+
+  // ── CAPABILITIES ──────────────────────────────────────────────────
+  lines.push(rule("CAPABILITIES", color));
+  lines.push(cmd("engines list",                "Installed Engine Bay tools",          color));
+  lines.push(cmd("skills list",                 "Skill Library guides",                color));
+  lines.push(cmd("agents list",                 "Specialist agent workers",            color));
+  lines.push(cmd("mcp catalog",                 "MCP tool bridge catalog",             color));
+  lines.push(cmd("plugins list",                "Installed capability packs",          color));
+
+  // ── WORKSPACE ─────────────────────────────────────────────────────
+  lines.push(rule("WORKSPACE", color));
+  lines.push(cmd("memory",                      "Workspace memory and facts",          color));
+  lines.push(cmd("knowledge search <query>",    "Query indexed documents",             color));
+  lines.push(cmd("task add / done / clear",     "Today's task list",                   color));
+  lines.push(cmd("handoff",                     "Wrap session and prep next",          color));
+
+  // ── INSPECTION ────────────────────────────────────────────────────
+  lines.push(rule("INSPECTION", color));
+  lines.push(cmd("trace",                       "Last turn ledger",                    color));
+  lines.push(cmd("usage",                       "Turns, tokens, tools, spend",         color));
+  lines.push(cmd("radar",                       "Friction Radar preflight check",      color));
+  lines.push(cmd("graph trace",                 "Execution flow visualizer",           color));
+
+  // ── SYSTEM ────────────────────────────────────────────────────────
+  lines.push(rule("SYSTEM", color));
+  lines.push(cmd("update",                      "Update, rebuild, and refresh",        color));
+  lines.push(cmd("serve [--detach]",            "Start the local API server",          color));
+  lines.push(cmd("service status",              "Manage the startup service",          color));
+
+  // ── FLAGS ─────────────────────────────────────────────────────────
+  lines.push(rule("FLAGS", color));
+  lines.push(flag("--lane <lane>",   "cloud · local · apple · openrouter · huggingface", color));
+  lines.push(flag("--hop <path>",    "Switch to another workspace",                       color));
+  lines.push(flag("--vision <img>",  "Attach an image to this turn",                      color));
+  lines.push(flag("--new",           "Start a clean session",                             color));
+  lines.push(flag("--resume [id]",   "Resume a saved session",                            color));
+  lines.push(flag("--mode <mode>",   "build · design · debug",                            color));
+  lines.push(flag("--deep-research", "Structured multi-step research",                    color));
+
+  // ── Footer ────────────────────────────────────────────────────────
+  lines.push("");
+  const tip = `${p(SB, A.muted, color)} ${p("<command> --help", A.cyan, color)}  ${p("·", A.muted, color)}  ${p(SB, A.muted, color)} ${p("version", A.cyan, color)}`;
+  lines.push(`  ${tip}`);
+  lines.push("");
+
+  return lines.join("\n");
+}
+
+// ── Subcommand help ───────────────────────────────────────────────────────────
 
 const SUBCOMMAND_HELP: Record<string, string[]> = {
   "models": [
@@ -138,6 +227,27 @@ const SUBCOMMAND_HELP: Record<string, string[]> = {
     "    switchbay engines list                  All engines",
     "    switchbay engines sync                  Refresh from remote",
   ],
+  "skills": [
+    "  switchbay skills",
+    "",
+    "  Manage the Skill Library — prompt guides that shape how Claude works.",
+    "",
+    "  USAGE",
+    "    switchbay skills [<action>] [<skill-name>]",
+    "",
+    "  ACTIONS",
+    "    status      Show Skill Library state  (default)",
+    "    list        List all installed skills",
+    "    read <name> Read a specific skill's content",
+    "    templates   Show skill scaffold templates",
+    "    sync        Pull the latest skill definitions",
+    "",
+    "  EXAMPLES",
+    "    switchbay skills                        Skill Library status",
+    "    switchbay skills list                   All skills",
+    "    switchbay skills read code-review       Read the code-review skill",
+    "    switchbay skills sync                   Refresh from remote",
+  ],
   "local-mode": [
     "  switchbay local-mode",
     "",
@@ -167,27 +277,6 @@ const SUBCOMMAND_HELP: Record<string, string[]> = {
     "  ENV OVERRIDE",
     "    SWITCHBAY_LOCAL_MODE=local|offline    Override config for one session",
   ],
-  "skills": [
-    "  switchbay skills",
-    "",
-    "  Manage the Skill Library — prompt guides that shape how Claude works.",
-    "",
-    "  USAGE",
-    "    switchbay skills [<action>] [<skill-name>]",
-    "",
-    "  ACTIONS",
-    "    status      Show Skill Library state  (default)",
-    "    list        List all installed skills",
-    "    read <name> Read a specific skill's content",
-    "    templates   Show skill scaffold templates",
-    "    sync        Pull the latest skill definitions",
-    "",
-    "  EXAMPLES",
-    "    switchbay skills                        Skill Library status",
-    "    switchbay skills list                   All skills",
-    "    switchbay skills read code-review       Read the code-review skill",
-    "    switchbay skills sync                   Refresh from remote",
-  ],
 };
 
 export function renderSubcommandHelp(context: string, color = cliColorEnabled()): string {
@@ -200,30 +289,4 @@ export function renderSubcommandHelp(context: string, color = cliColorEnabled())
     ].join("\n");
   }
   return [cliHeader(`switchbay ${context}`, "Command reference", color), "", ...lines, ""].join("\n");
-}
-
-export function renderCliHelp(color = cliColorEnabled()): string {
-  const lines = [
-    cliHeader("Switchbay · Command Center", "Local AI Work System", color),
-    "",
-    "  Open a workspace, route models, operate tools, and inspect every run.",
-  ];
-  for (const [name, entries] of GROUPS) {
-    lines.push("", `  ${name}`);
-    for (const [command, description] of entries) lines.push(`  ${command.padEnd(47)}  ${description}`);
-  }
-  lines.push(
-    "", "  OPTIONS",
-    "  --lane <lane>                                  cloud | local | apple | openai | anthropic | gemini | cloud-mcp | ollama-cloud | openrouter | huggingface",
-    "  --hop <workspace>                              Open another known workspace",
-    "  --vision <path|url>                            Attach an image for this turn",
-    "  --new                                          Start a clean session",
-    "  --deep-research                                Run structured multi-step research (search → read → instance → report)",
-    "  --purge <1d|1w|...>                            Remove older saved sessions",
-    "  -s, --surface <type>  -p, --profile <name>     Set working context",
-    "  -m, --mode <build|design|debug>                Set operating mode",
-    "  -h, --help            -v, --version            System information",
-    "", "  Next  switchbay",
-  );
-  return lines.join("\n");
 }

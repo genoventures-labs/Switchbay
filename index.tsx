@@ -1010,6 +1010,8 @@ async function runModelsAllCommand() {
     { rawLane: "google", label: "Cloud · Google" },
     { rawLane: "apple", label: "Apple Intelligence" },
     { rawLane: "local", label: "Local (Ollama)" },
+    { rawLane: "llama-cpp", label: "Local (llama.cpp)" },
+    { rawLane: "mlx", label: "Local (MLX)" },
     { rawLane: "openrouter", label: "OpenRouter" },
     { rawLane: "huggingface", label: "Hugging Face" },
   ];
@@ -1201,11 +1203,13 @@ async function runModelCommand(
     const result = await listRuntimeModels(lane);
     const match = findRuntimeModel(result.models, target);
     if (!match) {
-      console.error(`switchbay model: model not found on ${getRuntimeLaneLabel(lane)}: ${target}`);
-      if (result.models.length) {
-        console.error(`Available: ${result.models.map((model) => model.id).join(", ")}`);
-      }
-      if (result.notice) console.error(result.notice);
+      console.error(cliFailure(
+        "Model not found",
+        `${target} is not available on the ${getRuntimeLaneLabel(lane)} lane.`,
+        result.models.length
+          ? [`Available: ${result.models.slice(0, 6).map((m) => m.id).join(", ")}${result.models.length > 6 ? ` +${result.models.length - 6} more` : ""}`, "switchbay models --lane " + lane]
+          : ["switchbay models --lane " + lane],
+      ));
       process.exit(1);
     }
 
@@ -1239,7 +1243,6 @@ async function runModelAddCommand(rawLane: string | null, target: string | null,
   }
 
   try {
-    // Verify first so we can gate on the result before saving
     process.stdout.write(`Verifying ${provider}/${modelId}... `);
     const verification = await verifyCloudModel(modelId, provider);
 
@@ -1247,16 +1250,17 @@ async function runModelAddCommand(rawLane: string | null, target: string | null,
       process.stdout.write("✓\n");
     } else {
       process.stdout.write("✗\n");
-      console.log(`\n  ${verification.notice ?? "Could not verify this model with the provider."}`);
+      if (verification.notice) {
+        console.log(`\n  ${verification.notice}`);
+      }
 
-      // Only block when the provider API actively rejected it (we had a key and got a response)
-      // Timeouts and missing keys are config gaps — warn and proceed
-      const apiRejected = verification.notice && !verification.notice.includes("not set") && !verification.notice.includes("timed out");
-      if (apiRejected && !yes) {
+      // Gate on explicit API rejection (model doesn't exist on account).
+      // Timeouts, missing keys, and network errors are config gaps — warn and proceed silently.
+      if (verification.reason === "not_found" && !yes) {
         console.log("");
-        const proceed = await confirm("  This model was not found on your account. Add it anyway?");
+        const proceed = await confirm("  Add it anyway?");
         if (!proceed) {
-          console.log("Aborted.");
+          console.log("  Aborted.");
           process.exit(0);
         }
         console.log("");
@@ -1310,18 +1314,19 @@ async function runModelVerifyCommand(rawLane: string | null, target: string | nu
       try {
         const result = await reverifyCloudModel(model.id, model.provider);
         if (result.verified) {
-          process.stdout.write("✓ verified\n");
+          process.stdout.write("✓\n");
           verified++;
         } else {
-          process.stdout.write(`✗ ${result.notice ?? "not verified"}\n`);
+          const detail = result.notice ? `  ${result.notice}` : "not verified";
+          process.stdout.write(`✗  ${detail}\n`);
           failed++;
         }
       } catch (err: any) {
-        process.stdout.write(`✗ ${err.message}\n`);
+        process.stdout.write(`✗  ${err.message}\n`);
         failed++;
       }
     }
-    console.log(`\nDone: ${verified} verified, ${failed} failed.`);
+    console.log(`\n  ${verified} verified, ${failed} failed.`);
     return;
   }
 
@@ -1342,16 +1347,20 @@ async function runModelVerifyCommand(rawLane: string | null, target: string | nu
     process.exit(1);
   }
 
-  console.log(`Verifying ${provider}/${modelId}...`);
+  process.stdout.write(`Verifying ${provider}/${modelId}... `);
   try {
     const result = await reverifyCloudModel(modelId, provider);
     if (result.verified) {
-      console.log(`✓ ${modelId} verified with ${provider}.`);
+      process.stdout.write("✓\n");
+      console.log(cliReceipt("Model Verified", `${provider}/${modelId}`, [], "switchbay models --lane cloud"));
     } else {
-      console.log(`✗ ${result.notice ?? "Verification failed. Status updated in catalog."}`);
+      process.stdout.write("✗\n");
+      if (result.notice) console.log(`\n  ${result.notice}`);
+      console.log(`\n  Status updated in catalog.`);
     }
   } catch (err: any) {
-    console.error(`switchbay model verify: ${err.message}`);
+    process.stdout.write("✗\n");
+    console.error(`\n  ${err.message}`);
     process.exit(1);
   }
 }
@@ -1369,15 +1378,22 @@ async function runModelRemoveCommand(rawLane: string | null, target: string | nu
   try {
     const result = removeCloudModel(modelId, provider);
     if (!result.removed) {
-      console.error(`switchbay model remove: model not found in catalog: ${modelId}`);
-      console.error("Use: switchbay models --lane cloud to see the current catalog.");
+      console.error(cliFailure(
+        "Model not found",
+        `${modelId} is not in the cloud catalog.`,
+        ["switchbay models --lane cloud"],
+      ));
       process.exit(1);
     }
-    console.log(`Removed ${modelId} from cloud model catalog.`);
-    console.log(`Catalog: ~/.switchbay/cloud-models.json`);
+    console.log(cliReceipt(
+      "Cloud Model Catalog",
+      `Removed ${modelId}`,
+      [["Catalog", "~/.switchbay/cloud-models.json"]],
+      "switchbay models --lane cloud",
+    ));
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error(`switchbay model remove: ${msg}`);
+    console.error(cliFailure("Model Remove Failed", msg));
     process.exit(1);
   }
 }
@@ -1402,12 +1418,27 @@ function isCloudProviderAlias(value: string | null): boolean {
 }
 
 async function runModelPullCommand(rawLane: string | null, target: string | null, quantization: string | null, yes = false) {
-  const lane = "local";
   if (!target?.trim()) {
-    console.error("switchbay model pull: requires a model catalog id or Hugging Face URL.");
-    console.error("Example: switchbay model pull ibm/granite-4-micro");
-    console.error("Example: switchbay model pull https://huggingface.co/bartowski/Llama-3-8B-Instruct-Gradient-1048k-GGUF --quant Q4_K_M");
+    console.error(cliFailure(
+      "Missing model id",
+      "switchbay model pull requires a model id or Hugging Face repo.",
+      [
+        "switchbay model pull llama3.2                              (Ollama)",
+        "switchbay model pull ibm/granite-4-micro                   (Ollama ← HF)",
+        "switchbay model pull apple/OpenELM-3B-Instruct --provider mlx  (MLX, on-device)",
+        "switchbay model pull Qwen/Qwen2.5-3B-Instruct --provider llama-cpp  (GGUF)",
+      ],
+    ));
     process.exit(1);
+  }
+
+  // Dispatch to HF-local providers when --provider or active provider is llama-cpp/mlx
+  const { normalizeLocalProvider, getActiveLocalProvider } = await import("./src/runtime/local-providers");
+  const explicitProvider = rawLane ? normalizeLocalProvider(rawLane) : null;
+  const activeProvider = explicitProvider ?? getActiveLocalProvider();
+  if (activeProvider === "llama-cpp" || activeProvider === "mlx") {
+    await runHfLocalPullCommand(target.trim(), activeProvider, yes);
+    return;
   }
 
   try {
@@ -1416,24 +1447,24 @@ async function runModelPullCommand(rawLane: string | null, target: string | null
 
     // HuggingFace models are arbitrary weights — show a caution before pulling
     if (targetModel.startsWith("hf.co/") && !yes) {
-      console.log(`\n  ⚠  Caution: HuggingFace model`);
-      console.log(`  ─────────────────────────────────────────────────────────`);
-      console.log(`  Model : ${targetModel}`);
-      console.log(`  Source: HuggingFace (hf.co) — community-uploaded weights`);
-      console.log(`  `);
-      console.log(`  Unlike the Ollama library, HuggingFace models are not`);
-      console.log(`  curated or audited. Anyone can upload weights under any`);
-      console.log(`  name. Only pull from authors you trust.`);
-      console.log(`  ─────────────────────────────────────────────────────────\n`);
+      console.log("\n" + cliPage({
+        title: "HuggingFace Model",
+        state: "community weights",
+        rows: [
+          ["Model",  targetModel],
+          ["Source", "hf.co — not curated or audited"],
+          ["Note",   "Anyone can upload weights under any name. Only pull from authors you trust."],
+        ],
+      }));
       const proceed = await confirm("  Pull this model anyway?");
       if (!proceed) {
-        console.log("Aborted.");
+        console.log("  Aborted.");
         process.exit(0);
       }
       console.log("");
     }
 
-    console.log(`Pulling ${targetModel} through Ollama...`);
+    console.log(`\n  Pulling ${targetModel} through Ollama…`);
     try {
       let lastPercent = -1;
       const result = await pullOllamaModel({
@@ -1443,35 +1474,165 @@ async function runModelPullCommand(rawLane: string | null, target: string | null
             const percent = Math.floor((progress.completed / progress.total) * 100);
             if (percent !== lastPercent) {
               lastPercent = percent;
-              process.stdout.write(`\rPulling... ${percent}% (${progress.status})`);
+              process.stdout.write(`\r  Pulling… ${percent}%  (${progress.status})`);
             }
           } else {
-            process.stdout.write(`\rPulling... ${progress.status}`);
+            process.stdout.write(`\r  Pulling… ${progress.status}`);
           }
         }
       });
       process.stdout.write("\n");
       setSelectedRuntimeModel("local", { id: result.model, provider: "ollama" });
       setActiveLocalProvider("ollama");
-      console.log(`Pulled: ${result.status}`);
-      console.log(`Selected ${result.model} for Ollama.`);
+      console.log(cliReceipt(
+        "Local Model",
+        result.status ?? "Pulled",
+        [["Model", result.model], ["Provider", "Ollama"], ["Lane", "local"]],
+        "switchbay model",
+      ));
     } catch (error: any) {
-      console.error(`Ollama pull API failed: ${error.message}`);
-      console.log("");
+      const msg: string = error?.message ?? String(error);
+      const notGguf = /not GGUF|not compatible with llama\.cpp/i.test(msg);
+      if (notGguf) {
+        console.error("\n" + cliFailure(
+          "Model not compatible",
+          `${targetModel} is not a GGUF repo and cannot be run by Ollama.`,
+          [
+            "Only repos that contain pre-quantized .gguf weights work with Ollama.",
+            `Try: hf.co/${targetModel.replace(/^hf\.co\//, "")}-GGUF  (if a GGUF fork exists)`,
+            "Or search: https://huggingface.co/models?search=gguf",
+          ],
+        ));
+        process.exit(1);
+      }
+      console.error(`\n  Ollama pull API failed: ${msg}`);
+      console.log("  Falling back to Ollama CLI…\n");
       await runOllamaCliFallback(targetModel);
       setSelectedRuntimeModel("local", { id: targetModel, provider: "ollama" });
       setActiveLocalProvider("ollama");
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error(`switchbay model pull: ${msg}`);
+    console.error(cliFailure("Model Pull Failed", msg));
     process.exit(1);
   }
 }
 
+async function runHfLocalPullCommand(repo: string, provider: "llama-cpp" | "mlx", yes = false) {
+  // Normalize repo: strip https://huggingface.co/ prefix if present
+  const normalizedRepo = repo
+    .replace(/^https?:\/\/(www\.)?huggingface\.co\//, "")
+    .replace(/^hf\.co\//, "")
+    .trim();
+
+  if (!normalizedRepo.includes("/")) {
+    console.error(cliFailure(
+      "Invalid HF repo",
+      `"${repo}" doesn't look like a Hugging Face repo (expected user/repo-name).`,
+      ["switchbay model pull apple/OpenELM-3B-Instruct --provider mlx"],
+    ));
+    process.exit(1);
+  }
+
+  const { hfModelLocalPath, registerHfModel } = await import("./src/runtime/hf-model-catalog");
+  const localPath = hfModelLocalPath(normalizedRepo);
+  const color = cliColorEnabled();
+
+  const providerLabel = provider === "mlx" ? "MLX (Apple Silicon)" : "llama.cpp";
+  const includeFilter = provider === "llama-cpp" ? "*.gguf" : undefined;
+
+  // Check huggingface-cli availability
+  const hfCliCheck = Bun.spawnSync(["huggingface-cli", "--version"], { stderr: "pipe" });
+  if (hfCliCheck.exitCode !== 0) {
+    console.error(cliFailure(
+      "huggingface-cli not found",
+      "The huggingface_hub Python package is required to download HF models.",
+      [
+        "pip install huggingface_hub[cli]",
+        "Then re-run: switchbay model pull " + normalizedRepo + " --provider " + provider,
+      ],
+    ));
+    process.exit(1);
+  }
+
+  if (!yes) {
+    console.log("\n" + cliPage({
+      title: `Download ${normalizedRepo}`,
+      state: providerLabel,
+      rows: [
+        ["Repo",     `huggingface.co/${normalizedRepo}`],
+        ["Provider", providerLabel],
+        ["Save to",  localPath],
+        ...(includeFilter ? [["Filter", includeFilter] as [string, string]] : []),
+      ],
+      color,
+    }));
+    const proceed = await confirm("  Download this model?");
+    if (!proceed) {
+      console.log("  Aborted.");
+      process.exit(0);
+    }
+    console.log("");
+  }
+
+  const args = [
+    "huggingface-cli", "download", normalizedRepo,
+    "--local-dir", localPath,
+    ...(includeFilter ? ["--include", includeFilter] : []),
+  ];
+
+  console.log(`\n  Downloading from huggingface.co/${normalizedRepo}…\n`);
+  const proc = Bun.spawn(args, { stdin: "inherit", stdout: "inherit", stderr: "inherit" });
+  const exitCode = await proc.exited;
+
+  if (exitCode !== 0) {
+    console.error(cliFailure(
+      "Download failed",
+      `huggingface-cli exited with code ${exitCode}.`,
+      [
+        "Check that the repo exists and is public (or set HF_TOKEN for private repos).",
+        `huggingface-cli download ${normalizedRepo} --local-dir ${localPath}`,
+      ],
+    ));
+    process.exit(1);
+  }
+
+  // Find the primary file (first GGUF for llama-cpp, or note the directory for MLX)
+  let primaryFile: string | undefined;
+  if (provider === "llama-cpp") {
+    const { readdirSync } = await import("node:fs");
+    try {
+      const files = readdirSync(localPath).filter((f) => f.toLowerCase().endsWith(".gguf")).sort();
+      primaryFile = files[0];
+    } catch { /* ignore */ }
+  }
+
+  const modelId = primaryFile ? `${localPath}/${primaryFile}` : localPath;
+  registerHfModel({ repo: normalizedRepo, provider, localPath, ...(primaryFile ? { file: primaryFile } : {}) });
+  setSelectedRuntimeModel("local", { id: modelId, provider });
+  setActiveLocalProvider(provider);
+
+  const startCmd = provider === "mlx"
+    ? `mlx_lm.server --model ${localPath} --port 8080`
+    : `llama-server --model ${primaryFile ? `${localPath}/${primaryFile}` : localPath + "/<file>.gguf"} --port 8080`;
+
+  console.log("\n" + cliReceipt(
+    providerLabel,
+    `Downloaded ${normalizedRepo}`,
+    [
+      ["Saved to",   localPath],
+      ...(primaryFile ? [["Model file", primaryFile] as [string, string]] : []),
+      ["Provider",   provider],
+      ["Lane",       "local"],
+    ],
+    startCmd,
+  ));
+  console.log(`\n  To run: ${startCmd}\n  Then use Switchbay normally — requests will route to your local server.\n`);
+}
+
 async function runOllamaCliFallback(model: string) {
   if (!model) throw new Error("Ollama CLI fallback needs a model id.");
-  console.log(`Trying Ollama CLI fallback: \`ollama pull ${model}\`.`);
+  console.log(`  Trying: \`ollama pull ${model}\``);
   try {
     const proc = Bun.spawn(["ollama", "pull", model], {
       stdin: "inherit",

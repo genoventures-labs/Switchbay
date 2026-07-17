@@ -6,14 +6,14 @@ import { loadCloudModelCatalog } from "./cloud-model-catalog";
 import { getActiveLocalProvider, getLocalProviderConfig } from "./local-providers";
 import { readConfiguredSecret } from "../config/secrets";
 
-export type RuntimeModelProvider = CloudProvider | "ollama" | "ollama-cloud" | "openrouter" | "huggingface" | "apple-fm";
+export type RuntimeModelProvider = CloudProvider | "ollama" | "ollama-cloud" | "openrouter" | "huggingface" | "apple-fm" | "llama-cpp" | "mlx";
 
 export type RuntimeModelOption = {
   id: string;
   label: string;
   lane: RuntimeLane;
   provider: RuntimeModelProvider;
-  source: "auto" | "preset" | "custom" | "ollama" | "ollama-cloud" | "openrouter" | "huggingface" | "apple-fm";
+  source: "auto" | "preset" | "custom" | "ollama" | "ollama-cloud" | "openrouter" | "huggingface" | "apple-fm" | "llama-cpp" | "mlx";
 };
 
 export type RuntimeModelList = {
@@ -76,6 +76,8 @@ export async function listRuntimeModels(lane: RuntimeLane, localProvider = getAc
   if (lane === "apple") return listAppleFmModels();
 
   if (localProvider === "apple-fm") return listAppleFmModels();
+  if (localProvider === "llama-cpp") return listOpenAiCompatLocalModels("llama-cpp");
+  if (localProvider === "mlx") return listOpenAiCompatLocalModels("mlx");
   return listOllamaModels(undefined, localProvider as "ollama" | "ollama-cloud");
 }
 
@@ -214,6 +216,43 @@ export async function listOllamaModels(fetchImpl: FetchLike = fetch, provider: "
 }
 
 
+
+export async function listOpenAiCompatLocalModels(
+  provider: "llama-cpp" | "mlx",
+  fetchImpl: FetchLike = fetch,
+): Promise<RuntimeModelList> {
+  const config = getLocalProviderConfig(provider);
+  const label = config.label;
+  const apiBase = config.apiBase;
+  try {
+    const response = await fetchImpl(`${apiBase}/models`, {
+      signal: AbortSignal.timeout(3000),
+    });
+    const body = await response.text().catch(() => "");
+    if (!response.ok) {
+      return { models: [], notice: serverNotRunningNotice(provider, label, apiBase) };
+    }
+    const parsed = JSON.parse(body) as { data?: Array<{ id?: string }> };
+    const models: RuntimeModelOption[] = (parsed.data ?? []).flatMap((m) => {
+      const id = m.id?.trim();
+      if (!id) return [];
+      return [{ id, label: id, lane: "local" as const, provider, source: provider }];
+    });
+    return {
+      models: uniqueModels(models),
+      notice: models.length ? undefined : `${label} is running but has no loaded model. Start with a model first.`,
+    };
+  } catch {
+    return { models: [], notice: serverNotRunningNotice(provider, label, apiBase) };
+  }
+}
+
+function serverNotRunningNotice(provider: "llama-cpp" | "mlx", label: string, apiBase: string): string {
+  const startCmd = provider === "llama-cpp"
+    ? "llama-server --model <path/to/model.gguf> --port 8080"
+    : "mlx_lm.server --model <hf-repo-or-path> --port 8080";
+  return `${label} server not reachable at ${apiBase}. Start it with: ${startCmd}`;
+}
 
 export function normalizeOllamaHuggingFaceModel(target: string, quantization?: string | null): string {
   const trimmed = target.trim();

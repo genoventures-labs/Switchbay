@@ -44,7 +44,7 @@ export type OperatorConfig = {
 
 export type SelectedRuntimeModel = {
   id: string;
-  provider?: Exclude<CloudProvider, "auto"> | "ollama" | "ollama-cloud" | "openrouter" | "huggingface" | "apple-fm";
+  provider?: Exclude<CloudProvider, "auto"> | "ollama" | "ollama-cloud" | "openrouter" | "huggingface" | "apple-fm" | "llama-cpp" | "mlx";
 };
 
 const DEFAULTS: SwitchbayConfig = {

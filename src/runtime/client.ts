@@ -82,6 +82,23 @@ export function createRuntimeClient(
         routerMode,
       });
     }
+    if (localProvider === "llama-cpp" || localProvider === "mlx") {
+      const config = getLocalProviderConfig(localProvider);
+      const activeModel = model ?? config.model ?? undefined;
+      const apiKey = (localProvider === "llama-cpp"
+        ? Bun.env.LLAMA_CPP_API_KEY
+        : Bun.env.MLX_API_KEY) ?? "sk-local";
+      client = new OpenAiClient({ apiBase: config.apiBase, apiKey, apiLabel: config.label });
+      using = `local/${localProvider}/${activeModel ?? "default"}`;
+      routerIntent = "local_provider";
+      routerReason = `${config.label} selected.`;
+      routerMode = options.localProvider ? "explicit" : "configured";
+      const tagged = new RuntimeRouteTagClient(
+        activeModel ? new ModelOverrideClient(client, activeModel) : client,
+        { using, provider: localProvider, model: activeModel ?? "default", routerIntent, routerReason, routerMode },
+      );
+      return tagged;
+    }
     client = new OllamaClient({ provider: localProvider as "ollama" | "ollama-cloud" });
     const config = getLocalProviderConfig(localProvider);
     using = `${localProvider === "ollama-cloud" ? "cloud/ollama" : "local/ollama"}/${model ?? config.model ?? "default"}`;

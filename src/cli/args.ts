@@ -805,7 +805,7 @@ function parseModelCommand(args: string[]): ParsedModelCommand {
   let label: string | null = null;
   let yes = false;
   for (let i = 0; i < args.length; i++) {
-    if (args[i] === "--lane") {
+    if (args[i] === "--lane" || args[i] === "--provider" || args[i] === "-p") {
       flagLane = args[++i] ?? null;
     } else if (args[i] === "--quant" || args[i] === "--quantization" || args[i] === "-q") {
       quantization = args[++i] ?? null;
@@ -876,5 +876,14 @@ function isLaneAlias(value: string | null): boolean {
     value === "anthropic" ||
     value === "claude" ||
     value === "google" ||
-    value === "gemini";
+    value === "gemini" ||
+    value === "llama-cpp" ||
+    value === "llama_cpp" ||
+    value === "llamacpp" ||
+    value === "llama" ||
+    value === "llama-server" ||
+    value === "mlx" ||
+    value === "mlx-lm" ||
+    value === "mlxlm" ||
+    value === "apple-mlx";
 }

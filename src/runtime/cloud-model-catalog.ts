@@ -32,6 +32,15 @@ export type AddCloudModelResult = {
 
 export type VerifyCloudModelResult = {
   ok: boolean;
+  /**
+   * Machine-readable reason for non-ok results.
+   * "not_found" — provider API actively rejected the model (4xx response).
+   * "no_key"    — API key not configured; cannot verify but don't block.
+   * "timeout"   — verification request timed out; don't block.
+   * "error"     — other network or fetch error; don't block.
+   */
+  reason?: "not_found" | "no_key" | "timeout" | "error";
+  /** Human-readable detail. No trailing "Added anyway." — caller decides. */
   notice?: string;
 };
 
@@ -198,11 +207,22 @@ export function inferCloudModelProvider(id: string): CloudProviderId {
   return "openai";
 }
 
+/** Extract the human-readable message from a provider error response body. */
+function parseProviderError(body: string): string {
+  try {
+    const parsed = JSON.parse(body);
+    const msg = parsed?.error?.message ?? parsed?.message ?? parsed?.detail;
+    if (typeof msg === "string" && msg.trim()) return msg.trim();
+  } catch { /* not JSON */ }
+  const trimmed = body.trim();
+  return trimmed.length > 0 ? trimmed.slice(0, 120) : "";
+}
+
 async function verifyOpenAiModel(id: string, fetchImpl: FetchLike): Promise<VerifyCloudModelResult> {
   const config = getCloudProviderConfig("openai");
   const apiKey = getCloudProviderApiKey("openai");
   if (!apiKey) {
-    return { ok: false, notice: `Skipped OpenAI validation: ${config.apiKeyEnv} is not set.` };
+    return { ok: false, reason: "no_key", notice: `${config.apiKeyEnv} is not set — skipping verification.` };
   }
   try {
     const response = await fetchImpl(`${config.apiBase}/models/${encodeURIComponent(id)}`, {
@@ -211,17 +231,20 @@ async function verifyOpenAiModel(id: string, fetchImpl: FetchLike): Promise<Veri
     });
     if (response.ok) return { ok: true };
     const body = await response.text().catch(() => "");
+    const detail = parseProviderError(body);
     return {
       ok: false,
-      notice: `OpenAI validation returned ${response.status}${body.trim() ? `: ${body.trim().slice(0, 120)}` : ""}. Added anyway.`,
+      reason: "not_found",
+      notice: detail || `OpenAI returned ${response.status}`,
     };
   } catch (error: any) {
     const timedOut = error.name === "TimeoutError" || error.name === "AbortError";
     return {
       ok: false,
+      reason: timedOut ? "timeout" : "error",
       notice: timedOut
-        ? `OpenAI validation timed out after ${VERIFY_TIMEOUT_MS / 1000}s. Added anyway.`
-        : `OpenAI validation failed: ${error.message}. Added anyway.`,
+        ? `OpenAI verification timed out after ${VERIFY_TIMEOUT_MS / 1000}s.`
+        : `OpenAI verification failed: ${error.message}`,
     };
   }
 }
@@ -230,7 +253,7 @@ async function verifyAnthropicModel(id: string, fetchImpl: FetchLike): Promise<V
   const config = getCloudProviderConfig("anthropic");
   const apiKey = getCloudProviderApiKey("anthropic");
   if (!apiKey) {
-    return { ok: false, notice: `Skipped Anthropic validation: ${config.apiKeyEnv} is not set.` };
+    return { ok: false, reason: "no_key", notice: `${config.apiKeyEnv} is not set — skipping verification.` };
   }
   try {
     const response = await fetchImpl(`${config.apiBase}/models/${encodeURIComponent(id)}`, {
@@ -242,17 +265,20 @@ async function verifyAnthropicModel(id: string, fetchImpl: FetchLike): Promise<V
     });
     if (response.ok) return { ok: true };
     const body = await response.text().catch(() => "");
+    const detail = parseProviderError(body);
     return {
       ok: false,
-      notice: `Anthropic validation returned ${response.status}${body.trim() ? `: ${body.trim().slice(0, 120)}` : ""}. Added anyway.`,
+      reason: "not_found",
+      notice: detail || `Anthropic returned ${response.status}`,
     };
   } catch (error: any) {
     const timedOut = error.name === "TimeoutError" || error.name === "AbortError";
     return {
       ok: false,
+      reason: timedOut ? "timeout" : "error",
       notice: timedOut
-        ? `Anthropic validation timed out after ${VERIFY_TIMEOUT_MS / 1000}s. Added anyway.`
-        : `Anthropic validation failed: ${error.message}. Added anyway.`,
+        ? `Anthropic verification timed out after ${VERIFY_TIMEOUT_MS / 1000}s.`
+        : `Anthropic verification failed: ${error.message}`,
     };
   }
 }
@@ -260,7 +286,7 @@ async function verifyAnthropicModel(id: string, fetchImpl: FetchLike): Promise<V
 async function verifyGoogleModel(id: string, fetchImpl: FetchLike): Promise<VerifyCloudModelResult> {
   const apiKey = getCloudProviderApiKey("google");
   if (!apiKey) {
-    return { ok: false, notice: "Skipped Google validation: GOOGLE_API_KEY is not set." };
+    return { ok: false, reason: "no_key", notice: "GOOGLE_API_KEY is not set — skipping verification." };
   }
   // Use the native Generative Language API — the OpenAI-compat base doesn't expose model detail endpoints
   const nativeBase = "https://generativelanguage.googleapis.com/v1beta";
@@ -270,17 +296,20 @@ async function verifyGoogleModel(id: string, fetchImpl: FetchLike): Promise<Veri
     });
     if (response.ok) return { ok: true };
     const body = await response.text().catch(() => "");
+    const detail = parseProviderError(body);
     return {
       ok: false,
-      notice: `Google validation returned ${response.status}${body.trim() ? `: ${body.trim().slice(0, 120)}` : ""}. Added anyway.`,
+      reason: "not_found",
+      notice: detail || `Google returned ${response.status}`,
     };
   } catch (error: any) {
     const timedOut = error.name === "TimeoutError" || error.name === "AbortError";
     return {
       ok: false,
+      reason: timedOut ? "timeout" : "error",
       notice: timedOut
-        ? `Google validation timed out after ${VERIFY_TIMEOUT_MS / 1000}s. Added anyway.`
-        : `Google validation failed: ${error.message}. Added anyway.`,
+        ? `Google verification timed out after ${VERIFY_TIMEOUT_MS / 1000}s.`
+        : `Google verification failed: ${error.message}`,
     };
   }
 }

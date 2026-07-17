@@ -1,6 +1,6 @@
 # Switchbay
 
-[![Version](https://img.shields.io/badge/version-1.6.1319-111827)](#)
+[![Version](https://img.shields.io/badge/version-1.6.1320-111827)](#)
 [![Runtime](https://img.shields.io/badge/runtime-Bun-000000?logo=bun)](https://bun.sh)
 [![UI](https://img.shields.io/badge/UI-React%20%2B%20Ink-2563eb)](https://github.com/vadimdemedes/ink)
 [![Model lanes](https://img.shields.io/badge/lanes-cloud%20%7C%20local%20%7C%20MCP-16a34a)](#model-lanes)

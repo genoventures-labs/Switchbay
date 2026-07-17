@@ -1,5 +1,5 @@
 export const DEFAULTS = {
-  openAiModel: "gpt-5.5",
+  openAiModel: "gpt-5.6-sol",
   anthropicModel: "claude-sonnet-4-5",
   googleModel: "gemini-3.5-flash",
   ollamaModel: "llama3.2",

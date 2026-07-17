@@ -17,8 +17,14 @@ test("cost calculator prices known cloud models and treats local inference as ze
   expect(estimateTraceCost({ ...record("ollama", "qwen"), runtime: { lane: "local", toolMode: "standard" } })).toBe(0);
 });
 
+test("cost calculator prices the GPT-5.6 Sol, Terra, and Luna tiers", () => {
+  expect(estimateTraceCost(record("openai", "gpt-5.6-sol"))).toBe(35);
+  expect(estimateTraceCost(record("openai", "gpt-5.6-terra"))).toBe(17.5);
+  expect(estimateTraceCost(record("openai", "gpt-5.6-luna"))).toBe(7);
+});
+
 test("cost calculator reports unpriced custom models instead of guessing", () => {
-  expect(modelPrice("openai", "gpt-5.6-terra")).toBeNull();
-  expect(estimateCost([record("openai", "gpt-5.6-terra")])).toEqual({ usd: 0, pricedTurns: 0, unpricedTurns: 1, totalTurns: 1 });
+  expect(modelPrice("openai", "gpt-6-nova")).toBeNull();
+  expect(estimateCost([record("openai", "gpt-6-nova")])).toEqual({ usd: 0, pricedTurns: 0, unpricedTurns: 1, totalTurns: 1 });
   expect(formatUsd(0.00125)).toBe("$0.0013");
 });

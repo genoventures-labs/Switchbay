@@ -70,7 +70,7 @@ afterEach(() => {
   invalidateCloudModelCatalog();
 });
 
-test("cloud presets include the current OpenAI main, mini, and nano models", () => {
+test("cloud presets include the current OpenAI Sol, Terra, and Luna tiers", () => {
   delete Bun.env.SWITCHBAY_OPENAI_MODEL;
 
   const openAiPresets = getCloudModelPresets()
@@ -78,9 +78,9 @@ test("cloud presets include the current OpenAI main, mini, and nano models", () 
     .map((model) => model.id);
 
   expect(openAiPresets.slice(0, 3)).toEqual([
-    "gpt-5.5",
-    "gpt-5.4-mini",
-    "gpt-5.4-nano",
+    "gpt-5.6-sol",
+    "gpt-5.6-terra",
+    "gpt-5.6-luna",
   ]);
 });
 

@@ -4,6 +4,10 @@ export type ModelPrice = { input: number; output: number; source: "builtin" | "o
 export type CostEstimate = { usd: number; pricedTurns: number; unpricedTurns: number; totalTurns: number };
 
 const BUILTIN_PRICES: Array<{ provider: string; pattern: RegExp; input: number; output: number }> = [
+  { provider: "openai", pattern: /^gpt-5\.6-sol(?:-|$)/i, input: 5, output: 30 },
+  { provider: "openai", pattern: /^gpt-5\.6-terra(?:-|$)/i, input: 2.5, output: 15 },
+  { provider: "openai", pattern: /^gpt-5\.6-luna(?:-|$)/i, input: 1, output: 6 },
+  { provider: "openai", pattern: /^gpt-5\.5(?:-|$)/i, input: 2.5, output: 15 },
   { provider: "openai", pattern: /^gpt-5\.4-mini(?:-|$)/i, input: 0.75, output: 4.5 },
   { provider: "openai", pattern: /^gpt-5\.4-nano(?:-|$)/i, input: 0.2, output: 1.25 },
   { provider: "openai", pattern: /^gpt-5\.4(?:-|$)/i, input: 2.5, output: 15 },

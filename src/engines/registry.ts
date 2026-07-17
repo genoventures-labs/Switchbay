@@ -328,6 +328,7 @@ function createSkillBridgeEngine(cwd: string): EngineManifest {
     description: "Preview, import, and convert OpenAI, Claude, Gemini, and generic Markdown skills into Switchbay's synced skill repository.",
     cwd,
     tools: [
+      { name: "status", description: "Check that the Skill Bridge engine is alive and list its available tools.", command: `bun ${shellQuote(scriptPath)} status`, required: [], parameters: {} },
       { name: "preview_skill_import", description: "Inspect a foreign skill and preview its normalized Switchbay metadata and content without writing files.", command: command("preview"), required: ["source_path", "provider", "mode"], parameters },
       { name: "import_skill", description: "Import a foreign skill into the synced Switchbay toolbox, preserving or converting its body.", command: command("import"), required: ["source_path", "provider", "mode"], parameters, approval: "always", approval_reason: "Importing a skill writes a new file to the shared Engine Toolboxes source repository." },
     ],

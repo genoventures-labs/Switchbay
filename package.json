@@ -1,7 +1,7 @@
 {
   "name": "@genoventures/switchbay",
   "version": "1.6.1511",
-  "description": "Terminal-first AI coding workbench with cloud/local model lanes and MCP bridge",
+  "description": "AI operating system for the terminal — persistent agent, multi-model routing, engines, skills, and plugins",
   "module": "./dist/client/index.js",
   "type": "module",
   "private": false,

@@ -70,7 +70,7 @@ sed -i \
   -e "s|homepage \".*\"|homepage \"https://github.com/$REPO\"|" \
   -e "s|url \".*\"|url \"$TARBALL_URL\"|" \
   -e "s|sha256 \".*\"|sha256 \"$SHA256\"|" \
-  -e 's|desc ".*"|desc "Terminal-first AI coding workbench with cloud/local model lanes and MCP bridge"|' \
+  -e 's|desc ".*"|desc "AI operating system for the terminal — persistent agent, multi-model routing, engines, skills, and plugins"|' \
   "$TMP_TAP/$FORMULA_PATH"
 
 perl -0pi -e 's|  def install\n.*?\n  end|  def install\n    system "bun", "install", "--frozen-lockfile"\n    prefix.install Dir["*"]\n    rm_f bin/"switchbay"\n    (bin/"switchbay").write <<~SH\n      #!/bin/bash\n      exec bun "#{prefix}/index.tsx" "\$@"\n    SH\n  end|s' "$TMP_TAP/$FORMULA_PATH"

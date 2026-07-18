@@ -13,6 +13,7 @@ import type { ChatCompletionRequest, ChatCompletionResponse, WorkspaceFocus } fr
 import { readConfiguredSecret } from "../config/secrets";
 import { getNativeToolsConfig } from "../config/switchbay-config";
 import { getLocalMode } from "../config/local-mode";
+import { recordOpenRouterRequest } from "./openrouter-rate-limiter";
 
 export type ChatRuntimeClient = {
   createChatCompletion(
@@ -122,14 +123,10 @@ export function createRuntimeClient(
     routerIntent = "explicit_provider";
     routerReason = "Explicit OpenRouter lane selected.";
     routerMode = "explicit";
-    return new RuntimeRouteTagClient(new ModelOverrideClient(client, openRouterModel), {
-      using,
-      provider: "openrouter",
-      model: openRouterModel,
-      routerIntent,
-      routerReason,
-      routerMode,
-    });
+    return new RuntimeRouteTagClient(
+      new OpenRouterRateLimitClient(new ModelOverrideClient(client, openRouterModel)),
+      { using, provider: "openrouter", model: openRouterModel, routerIntent, routerReason, routerMode },
+    );
   } else if (lane === "huggingface") {
     const apiKey = readConfiguredSecret("HF_TOKEN", "HUGGINGFACE_API_KEY");
     if (!apiKey) throw new Error("Missing HF_TOKEN");
@@ -244,5 +241,18 @@ class RuntimeRouteTagClient implements ChatRuntimeClient {
       router_mode: response.meta?.router_mode ?? this.route.routerMode ?? undefined,
     };
     return response;
+  }
+}
+
+class OpenRouterRateLimitClient implements ChatRuntimeClient {
+  constructor(private readonly inner: ChatRuntimeClient) {}
+
+  async createChatCompletion(
+    surface: string,
+    request: ChatCompletionRequest,
+    options?: Parameters<ChatRuntimeClient["createChatCompletion"]>[2],
+  ): Promise<ChatCompletionResponse> {
+    recordOpenRouterRequest(); // throws if either limit is exceeded
+    return this.inner.createChatCompletion(surface, request, options);
   }
 }

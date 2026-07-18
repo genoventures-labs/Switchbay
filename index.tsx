@@ -1003,16 +1003,17 @@ async function runCloudProviderCommand(action: "status" | "set", target: string 
 }
 
 async function runModelsAllCommand() {
-  const LANES: Array<{ rawLane: string; label: string }> = [
-    { rawLane: "cloud", label: "Cloud (Auto Pool)" },
-    { rawLane: "openai", label: "Cloud · OpenAI" },
-    { rawLane: "anthropic", label: "Cloud · Anthropic" },
-    { rawLane: "google", label: "Cloud · Google" },
-    { rawLane: "apple", label: "Apple Intelligence" },
-    { rawLane: "local", label: "Local (Ollama)" },
-    { rawLane: "llama-cpp", label: "Local (llama.cpp)" },
-    { rawLane: "mlx", label: "Local (MLX)" },
-    { rawLane: "openrouter", label: "OpenRouter" },
+  type LaneEntry = { rawLane: string; label: string; localProvider?: string };
+  const LANES: LaneEntry[] = [
+    { rawLane: "cloud",       label: "Cloud (Auto Pool)" },
+    { rawLane: "openai",      label: "Cloud · OpenAI" },
+    { rawLane: "anthropic",   label: "Cloud · Anthropic" },
+    { rawLane: "google",      label: "Cloud · Google" },
+    { rawLane: "apple",       label: "Apple Intelligence" },
+    { rawLane: "local",       label: "Local (Ollama)" },
+    { rawLane: "local",       label: "Local (llama.cpp)", localProvider: "llama-cpp" },
+    { rawLane: "local",       label: "Local (MLX)",       localProvider: "mlx" },
+    { rawLane: "openrouter",  label: "OpenRouter" },
     { rawLane: "huggingface", label: "Hugging Face" },
   ];
 
@@ -1024,7 +1025,7 @@ async function runModelsAllCommand() {
   console.log(cliHeader("All Model Lanes", "switchbay models list --all", cliColorEnabled()));
   console.log("");
 
-  for (const { rawLane, label } of LANES) {
+  for (const { rawLane, label, localProvider: overrideProvider } of LANES) {
     let models: RuntimeModelOption[] = [];
     let notice: string | undefined;
     try {
@@ -1043,7 +1044,9 @@ async function runModelsAllCommand() {
         continue;
       }
       const lane = normalizeRuntimeLane(rawLane);
-      const localProvider = normalizeLocalProvider(rawLane) ?? getActiveLocalProvider();
+      const localProvider = overrideProvider
+        ? (normalizeLocalProvider(overrideProvider) ?? getActiveLocalProvider())
+        : (normalizeLocalProvider(rawLane) ?? getActiveLocalProvider());
       const cloudProvider = normalizeCloudProvider(rawLane);
       const result = await listRuntimeModels(lane, localProvider ?? undefined);
       models = cloudProvider && cloudProvider !== "auto"

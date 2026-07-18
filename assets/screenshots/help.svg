@@ -1,0 +1,107 @@
+<svg width="780" height="530" viewBox="0 0 780 530" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="fade-help" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0D1117" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#0D1117" stop-opacity="1"/>
+    </linearGradient>
+    <clipPath id="clip-help">
+      <rect width="780" height="530" rx="12"/>
+    </clipPath>
+  </defs>
+
+  <!-- Window background -->
+  <rect width="780" height="530" rx="12" fill="#0D1117"/>
+
+  <g clip-path="url(#clip-help)">
+    <!-- Chrome bar -->
+    <rect width="780" height="40" fill="#161B22"/>
+    <line x1="0" y1="40" x2="780" y2="40" stroke="#30363D" stroke-width="1"/>
+
+    <!-- Traffic lights -->
+    <circle cx="20" cy="20" r="6" fill="#FF5F57"/>
+    <circle cx="40" cy="20" r="6" fill="#FFBD2E"/>
+    <circle cx="60" cy="20" r="6" fill="#28C840"/>
+
+    <!-- Window title -->
+    <text x="390" y="25" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" fill="#636E7B">switchbay — zsh</text>
+
+    <!-- ── CONTENT ─────────────────────────────────── -->
+    <!-- font stack for all code lines -->
+
+    <!-- prompt -->
+    <text y="72" font-family="'SF Mono','Menlo','Monaco','Cascadia Code','Courier New',monospace" font-size="13">
+      <tspan x="24" fill="#56D364">$</tspan><tspan fill="#7D8590"> switchbay </tspan><tspan fill="#CDD9E5">--help</tspan>
+    </text>
+
+    <!-- ◆ header -->
+    <text y="108" font-family="'SF Mono','Menlo','Monaco','Cascadia Code','Courier New',monospace" font-size="13">
+      <tspan x="24" fill="#79C0FF">◆</tspan><tspan fill="#E6EDF3" font-weight="bold"> Switchbay</tspan><tspan fill="#7D8590">  v1.6.30  ·  Local AI work system</tspan>
+    </text>
+
+    <!-- GETTING STARTED -->
+    <text y="144" font-family="'SF Mono','Menlo','Monaco','Cascadia Code','Courier New',monospace" font-size="13">
+      <tspan x="24" fill="#E6EDF3" font-weight="bold">  GETTING STARTED</tspan><tspan fill="#484F58"> ────────────────────────────────────────────────────</tspan>
+    </text>
+    <text y="162" font-family="'SF Mono','Menlo','Monaco','Cascadia Code','Courier New',monospace" font-size="13">
+      <tspan x="24" fill="#7D8590">  switchbay </tspan><tspan fill="#CDD9E5">                          </tspan><tspan x="350" fill="#CDD9E5">Open the terminal workspace</tspan>
+    </text>
+    <text y="180" font-family="'SF Mono','Menlo','Monaco','Cascadia Code','Courier New',monospace" font-size="13">
+      <tspan x="24" fill="#7D8590">  switchbay </tspan><tspan fill="#CDD9E5">&quot;&lt;request&gt;&quot;</tspan><tspan fill="#7D8590">              </tspan><tspan x="350" fill="#CDD9E5">Run a one-shot request</tspan>
+    </text>
+    <text y="198" font-family="'SF Mono','Menlo','Monaco','Cascadia Code','Courier New',monospace" font-size="13">
+      <tspan x="24" fill="#7D8590">  switchbay </tspan><tspan fill="#CDD9E5">--resume</tspan><tspan fill="#7D8590"> [id]          </tspan><tspan x="350" fill="#CDD9E5">Continue a saved session</tspan>
+    </text>
+    <text y="216" font-family="'SF Mono','Menlo','Monaco','Cascadia Code','Courier New',monospace" font-size="13">
+      <tspan x="24" fill="#7D8590">  switchbay </tspan><tspan fill="#CDD9E5">agenda</tspan><tspan fill="#7D8590">                </tspan><tspan x="350" fill="#CDD9E5">Today's Daily Board</tspan>
+    </text>
+    <text y="234" font-family="'SF Mono','Menlo','Monaco','Cascadia Code','Courier New',monospace" font-size="13">
+      <tspan x="24" fill="#7D8590">  switchbay </tspan><tspan fill="#CDD9E5">open</tspan><tspan fill="#7D8590">                  </tspan><tspan x="350" fill="#CDD9E5">Open the visual web workspace</tspan>
+    </text>
+
+    <!-- MODELS -->
+    <text y="262" font-family="'SF Mono','Menlo','Monaco','Cascadia Code','Courier New',monospace" font-size="13">
+      <tspan x="24" fill="#E6EDF3" font-weight="bold">  MODELS</tspan><tspan fill="#484F58"> ──────────────────────────────────────────────────────────────</tspan>
+    </text>
+    <text y="280" font-family="'SF Mono','Menlo','Monaco','Cascadia Code','Courier New',monospace" font-size="13">
+      <tspan x="24" fill="#7D8590">  switchbay </tspan><tspan fill="#CDD9E5">model</tspan><tspan fill="#7D8590">                 </tspan><tspan x="350" fill="#CDD9E5">Show active model and lane</tspan>
+    </text>
+    <text y="298" font-family="'SF Mono','Menlo','Monaco','Cascadia Code','Courier New',monospace" font-size="13">
+      <tspan x="24" fill="#7D8590">  switchbay </tspan><tspan fill="#CDD9E5">models</tspan><tspan fill="#7D8590"> [--lane &lt;lane&gt;]</tspan><tspan x="350" fill="#CDD9E5">Browse the model catalog</tspan>
+    </text>
+    <text y="316" font-family="'SF Mono','Menlo','Monaco','Cascadia Code','Courier New',monospace" font-size="13">
+      <tspan x="24" fill="#7D8590">  switchbay </tspan><tspan fill="#CDD9E5">models list --all</tspan><tspan fill="#7D8590">      </tspan><tspan x="350" fill="#CDD9E5">All lanes in one view</tspan>
+    </text>
+    <text y="334" font-family="'SF Mono','Menlo','Monaco','Cascadia Code','Courier New',monospace" font-size="13">
+      <tspan x="24" fill="#7D8590">  switchbay </tspan><tspan fill="#CDD9E5">model pull</tspan><tspan fill="#7D8590"> &lt;id&gt;         </tspan><tspan x="350" fill="#CDD9E5">Install a local model via Ollama</tspan>
+    </text>
+    <text y="352" font-family="'SF Mono','Menlo','Monaco','Cascadia Code','Courier New',monospace" font-size="13">
+      <tspan x="24" fill="#7D8590">  switchbay </tspan><tspan fill="#CDD9E5">model add</tspan><tspan fill="#7D8590"> &lt;id&gt;          </tspan><tspan x="350" fill="#CDD9E5">Add a model to the cloud catalog</tspan>
+    </text>
+    <text y="370" font-family="'SF Mono','Menlo','Monaco','Cascadia Code','Courier New',monospace" font-size="13">
+      <tspan x="24" fill="#7D8590">  switchbay </tspan><tspan fill="#CDD9E5">local-mode set</tspan><tspan fill="#7D8590"> &lt;mode&gt;  </tspan><tspan x="350" fill="#CDD9E5">Route to local or offline only</tspan>
+    </text>
+
+    <!-- CAPABILITIES -->
+    <text y="398" font-family="'SF Mono','Menlo','Monaco','Cascadia Code','Courier New',monospace" font-size="13">
+      <tspan x="24" fill="#E6EDF3" font-weight="bold">  CAPABILITIES</tspan><tspan fill="#484F58"> ─────────────────────────────────────────────────────────</tspan>
+    </text>
+    <text y="416" font-family="'SF Mono','Menlo','Monaco','Cascadia Code','Courier New',monospace" font-size="13">
+      <tspan x="24" fill="#7D8590">  switchbay </tspan><tspan fill="#CDD9E5">engines list</tspan><tspan fill="#7D8590">          </tspan><tspan x="350" fill="#CDD9E5">Installed Engine Bay tools</tspan>
+    </text>
+    <text y="434" font-family="'SF Mono','Menlo','Monaco','Cascadia Code','Courier New',monospace" font-size="13">
+      <tspan x="24" fill="#7D8590">  switchbay </tspan><tspan fill="#CDD9E5">skills list</tspan><tspan fill="#7D8590">           </tspan><tspan x="350" fill="#CDD9E5">Skill Library guides</tspan>
+    </text>
+    <text y="452" font-family="'SF Mono','Menlo','Monaco','Cascadia Code','Courier New',monospace" font-size="13">
+      <tspan x="24" fill="#7D8590">  switchbay </tspan><tspan fill="#CDD9E5">agents list</tspan><tspan fill="#7D8590">           </tspan><tspan x="350" fill="#CDD9E5">Specialist agent workers</tspan>
+    </text>
+    <text y="470" font-family="'SF Mono','Menlo','Monaco','Cascadia Code','Courier New',monospace" font-size="13">
+      <tspan x="24" fill="#7D8590">  switchbay </tspan><tspan fill="#CDD9E5">mcp catalog</tspan><tspan fill="#7D8590">           </tspan><tspan x="350" fill="#CDD9E5">MCP tool bridge catalog</tspan>
+    </text>
+    <text y="488" font-family="'SF Mono','Menlo','Monaco','Cascadia Code','Courier New',monospace" font-size="13">
+      <tspan x="24" fill="#7D8590">  switchbay </tspan><tspan fill="#CDD9E5">plugins list</tspan><tspan fill="#7D8590">          </tspan><tspan x="350" fill="#CDD9E5">Installed capability packs</tspan>
+    </text>
+
+    <!-- Fade overlay -->
+    <rect x="0" y="390" width="780" height="140" fill="url(#fade-help)"/>
+  </g>
+</svg>

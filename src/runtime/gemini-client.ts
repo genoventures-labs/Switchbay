@@ -134,6 +134,27 @@ function convertMessages(messages: ChatMessage[]) {
       contents.push({ role: "model", parts });
       continue;
     }
+    // User message — handle multimodal content parts (vision)
+    if (Array.isArray(message.content)) {
+      const parts: GeminiPart[] = [];
+      for (const part of message.content as Array<{ type: string; text?: string; image_url?: { url: string } }>) {
+        if (part.type === "text" && part.text) {
+          parts.push({ text: part.text });
+        } else if (part.type === "image_url" && part.image_url?.url) {
+          const url = part.image_url.url;
+          if (url.startsWith("data:")) {
+            const match = url.match(/^data:(image\/[a-z+]+);base64,(.+)$/);
+            if (match) {
+              parts.push({ inlineData: { mimeType: match[1], data: match[2] } });
+            }
+          } else {
+            parts.push({ fileData: { fileUri: url } });
+          }
+        }
+      }
+      contents.push({ role: "user", parts: parts.length > 0 ? parts : [{ text: "" }] });
+      continue;
+    }
     contents.push({ role: "user", parts: [{ text: stringifyContent(message.content) }] });
   }
   return {

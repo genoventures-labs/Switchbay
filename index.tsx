@@ -1946,8 +1946,8 @@ You have been invoked with --deep-research. Follow this workflow strictly:
 Do not skip steps or rush to a conclusion. Cite every claim with its source URL. Flag anything that needs verification.` : undefined;
 
     const result = await runSwitchbayTurn({
-      input: options.visionPath ? `${options.initialQuery}\n\nImage: ${options.visionPath}` : options.initialQuery,
-      lane: options.visionPath ? "openai" : options.lane,
+      input: options.visionPath ? `${options.initialQuery}\n\n${options.visionPath}` : options.initialQuery,
+      lane: options.lane,
       mode: options.mode,
       profile: options.profile,
       surface: options.surface,

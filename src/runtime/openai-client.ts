@@ -42,9 +42,9 @@ export class OpenAiClient {
     }
 
     const useStream = typeof options.onToken === "function";
-    const messages = this.provider === "openai"
-      ? await prepareOpenAiVisionMessages(request.messages)
-      : request.messages;
+    // Images are pre-encoded upstream in executeTurn; this is a safety pass for
+    // any path that bypasses that (one-shot CLI, direct client use, etc.)
+    const messages = await prepareOpenAiVisionMessages(request.messages);
     const response = await this.fetchImpl(`${this.apiBase}/chat/completions`, {
       method: "POST",
       headers: {

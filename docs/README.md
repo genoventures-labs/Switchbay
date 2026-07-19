@@ -253,6 +253,7 @@ Full reference: [SLASH_COMMANDS.md](SLASH_COMMANDS.md)
 
 | Doc | Contents |
 |---|---|
+| [MODEL_SHELL.md](MODEL_SHELL.md) | The environment models operate in — context, tools, approval gates, memory |
 | [MODEL_LANES.md](MODEL_LANES.md) | Cloud, local, Apple, OpenRouter, HuggingFace — routing and config |
 | [AGENTS.md](AGENTS.md) | Built-in specialists, custom agent authoring |
 | [ENGINE_BAY.md](ENGINE_BAY.md) | Engine manifests, GitHub sync, built-in engines |

@@ -101,9 +101,6 @@ function chooseProvider(request: ChatCompletionRequest): CloudRoutingDecision {
     };
   }
   if (configured === "openai" || configured === "anthropic" || configured === "google") {
-    if (classified.intent === "vision" && configured !== "openai") {
-      throw new Error("Image URL vision is currently wired for OpenAI. Switch with `/lane openai` or `switchbay cloud-provider set openai`.");
-    }
     assertProviderConfigured(configured);
     const model = trustedModelFor(configured) ?? getCloudProviderConfig(configured).model;
     return {
@@ -116,13 +113,16 @@ function chooseProvider(request: ChatCompletionRequest): CloudRoutingDecision {
   }
 
   if (classified.intent === "vision") {
-    assertProviderConfigured("openai");
-    const model = trustedModelFor("openai") ?? getCloudProviderConfig("openai").model;
+    // Route to the best available vision-capable provider: openai → google → anthropic
+    const visionProviders = ["openai", "google", "anthropic"] as const;
+    const available = visionProviders.find((p) => hasCloudProviderKey(p));
+    if (!available) throw new Error("No vision-capable cloud provider configured. Set OPENAI_API_KEY, GOOGLE_API_KEY, or ANTHROPIC_API_KEY.");
+    const model = trustedModelFor(available) ?? getCloudProviderConfig(available).model;
     return {
-      provider: "openai",
+      provider: available,
       model,
       intent: classified.intent,
-      reason: classified.reason,
+      reason: `Vision input — routed to ${available}.`,
       mode: "auto",
     };
   }

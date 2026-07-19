@@ -47,6 +47,7 @@ import {
   type TranscriptEntry,
 } from "./turn-state";
 import { loadWorkspaceSnapshot, type WorkspaceSnapshot } from "../session/workspace";
+import { prepareOpenAiVisionMessages } from "../runtime/image-inputs";
 import { listProjectFiles } from "../tools/files";
 import { runCommand } from "../tools/shell";
 import { createDefaultSwitchbayMcpConfig, switchbayMcpConfigPath } from "../runtime/mcp-config";
@@ -855,7 +856,7 @@ export async function executeTurn(input: {
     if (input.signal?.aborted) throw new DOMException("Turn cancelled", "AbortError");
     const request: ChatCompletionRequest = {
       ...input.turn.request,
-      messages,
+      messages: await prepareOpenAiVisionMessages(messages, input.workspace?.cwd),
       tools: filteredTools,
       tool_choice: "auto",
     };

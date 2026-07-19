@@ -164,6 +164,34 @@ function convertMessages(messages: ChatMessage[]): { system: string; messages: A
       continue;
     }
 
+    // User message — handle plain text or multimodal content parts (vision)
+    if (Array.isArray(message.content)) {
+      const blocks: AnthropicContentBlock[] = [];
+      for (const part of message.content as Array<{ type: string; text?: string; image_url?: { url: string } }>) {
+        if (part.type === "text" && part.text) {
+          blocks.push({ type: "text", text: part.text });
+        } else if (part.type === "image_url" && part.image_url?.url) {
+          const url = part.image_url.url;
+          if (url.startsWith("data:")) {
+            const match = url.match(/^data:(image\/[a-z+]+);base64,(.+)$/);
+            if (match) {
+              blocks.push({
+                type: "image",
+                source: { type: "base64", media_type: match[1] as "image/jpeg" | "image/png" | "image/gif" | "image/webp", data: match[2] },
+              } as unknown as AnthropicContentBlock);
+            }
+          } else {
+            blocks.push({
+              type: "image",
+              source: { type: "url", url },
+            } as unknown as AnthropicContentBlock);
+          }
+        }
+      }
+      converted.push({ role: "user", content: blocks.length > 0 ? blocks : "" });
+      continue;
+    }
+
     converted.push({
       role: "user",
       content: stringifyContent(message.content),

@@ -8,6 +8,7 @@ import { getToolMode, normalizeRuntimeLane } from "../config/env";
 import { clearSelectedRuntimeModel, getSelectedRuntimeModel, setSelectedRuntimeModel } from "../config/switchbay-config";
 import { normalizeCloudProvider, setActiveCloudProvider } from "../runtime/cloud-providers";
 import { createRuntimeClient } from "../runtime/client";
+import { getOpenRouterRateStatus, isOpenRouterNearLimit } from "../runtime/openrouter-rate-limiter";
 import { modelOptionForAddress, parseModelAddress } from "../runtime/model-identity";
 import { normalizeLocalProvider, setActiveLocalProvider } from "../runtime/local-providers";
 import { loadPersistedSession, savePersistedSession } from "../session/persistence";
@@ -15,7 +16,7 @@ import { loadWorkspaceSnapshot } from "../session/workspace";
 import { saveTraceRecord } from "../trace/store";
 import type { TurnRequest, TurnResponse } from "./types";
 
-export async function runSwitchbayTurn(input: TurnRequest, options: { requestId?: string; signal?: AbortSignal; onToken?: (token: string) => void; onStep?: (step: string) => void } = {}): Promise<TurnResponse> {
+export async function runSwitchbayTurn(input: TurnRequest, options: { requestId?: string; signal?: AbortSignal; onToken?: (token: string) => void; onStep?: (step: string) => void; onNotice?: (notice: { type: string; message: string }) => void } = {}): Promise<TurnResponse> {
   const requestId = options.requestId ?? crypto.randomUUID();
   const prompt = input.input?.trim();
   if (!prompt) throw new Error("input is required");
@@ -98,6 +99,12 @@ export async function runSwitchbayTurn(input: TurnRequest, options: { requestId?
 
   const modelPrompt = localCommand.followUpInput ?? prompt;
 
+  if (input.lane === "openrouter" && isOpenRouterNearLimit(0.8)) {
+    const s = getOpenRouterRateStatus();
+    const pct = Math.round(Math.max(s.minuteUsed / s.minuteLimit, s.dayUsed / s.dayLimit) * 100);
+    options.onNotice?.({ type: "rate_limit_warning", message: `OpenRouter usage at ${pct}% — approaching rate limit. Will auto-switch to cloud if hit.` });
+  }
+
   const turn = await buildTurn({
     input: modelPrompt,
     mode: state.mode,
@@ -131,6 +138,9 @@ export async function runSwitchbayTurn(input: TurnRequest, options: { requestId?
   state.updatedAt = Date.now();
   await savePersistedSession(state);
   const meta = executedTurn.response.meta;
+  if (meta?.router_intent === "rate_limit_fallback") {
+    options.onNotice?.({ type: "rate_limit_rerouted", message: meta.router_reason ?? "Rate limited — rerouted to cloud auto." });
+  }
   return response(requestId, state.sessionId, content, effectiveRuntimeLane, traceSaved, turn.contextReceipt ?? [], executedTurn.toolExecutions, workspace, state.pendingApproval, meta ? { provider: meta.provider, model: meta.model, using: meta.using } : null, executedTurn.response.provider);
 }
 

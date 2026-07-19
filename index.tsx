@@ -11,8 +11,8 @@ import { fuzzyMatchLocations, travelTo } from "./src/tools/travel";
 import { listSessions, purgeSessions, loadPersistedSession, savePersistedSession } from "./src/session/persistence";
 import { buildTurn, executeTurn, extractAssistantText, refreshWorkspace, synthesizeAssistantFallback } from "./src/agent/loop";
 import { tryLocalCommand } from "./src/agent/commands";
-import { describeEngineBay, loadEngineBayInventory, syncEngineBayRepo } from "./src/engines/hub";
-import { describeToolbox, loadToolboxInventory, readToolboxSkill } from "./src/toolbox/hub";
+import { describeEngineBay, loadEngineBayInventory, syncEngineBayRepo, syncEngineBayWithDiff } from "./src/engines/hub";
+import { describeToolbox, loadToolboxInventory, readToolboxSkill, syncToolboxWithDiff } from "./src/toolbox/hub";
 import { addMemoryNote, describeMemory, listMemoryNotes, readMemoryFacts, refreshMemory } from "./src/memory/store";
 import { describeKnowledgeIndex, formatKnowledgeSearchResults, refreshKnowledgeIndex, searchKnowledgeIndex } from "./src/knowledge/store";
 import { describeLatestTrace, latestTraceExportPath, saveTraceRecord } from "./src/trace/store";
@@ -22,14 +22,14 @@ import { createDefaultSwitchbayMcpConfig, describeSwitchbayMcpConfig, loadSwitch
 import { describeTrustedMcpCatalog } from "./src/runtime/mcp-catalog";
 import { ANSI_COLORS as CLR } from "./src/tui/theme";
 import { describePlugins, loadPluginInventory, readPlugin } from "./src/plugins/registry";
-import { listRuntimeModels, type RuntimeModelOption } from "./src/runtime/models";
+import { getCloudModelPresets, listRuntimeModels, type RuntimeModelOption } from "./src/runtime/models";
 import { getActiveLocalProvider, loadLocalProvidersConfig, normalizeLocalProvider, setActiveLocalProvider, type LocalProviderId } from "./src/runtime/local-providers";
 import { formatRouteTag } from "./src/runtime/route-display";
 import { getActiveCloudProvider, listAutoModelPool, loadCloudProvidersConfig, normalizeCloudProvider, setActiveCloudProvider } from "./src/runtime/cloud-providers";
 import { addDailyTask, clearDailyBoard, completeDailyTask, describeDailyBoard } from "./src/operator/daily-board";
 import { formatFrictionRadar, runFrictionRadar } from "./src/operator/radar";
 import { buildQuickHandoff } from "./src/operator/handoff";
-import { addCloudModel, clearCloudModelCatalog, inferCloudModelProvider, loadCloudModelCatalog, removeCloudModel, reverifyCloudModel, verifyCloudModel } from "./src/runtime/cloud-model-catalog";
+import { addCloudModel, clearCloudModelCatalog, inferCloudModelProvider, loadCloudModelCatalog, removeCloudModel, removeCloudModelsByProvider, reverifyCloudModel, verifyCloudModel } from "./src/runtime/cloud-model-catalog";
 import type { CloudProviderId } from "./src/runtime/cloud-providers";
 import { findAgent, loadAllAgents, saveAgentDefinition, type AgentScope } from "./src/agent/agents";
 import { loadEngineRegistry } from "./src/engines/registry";
@@ -37,6 +37,9 @@ import { renderCliList } from "./src/cli/list-output";
 import { cliColorEnabled, cliFailure, cliPage, cliReceipt, cleanTerminalText } from "./src/cli/presentation";
 import { renderCliHelp, renderSubcommandHelp } from "./src/cli/help";
 import { confirm } from "./src/cli/confirm";
+import { createCanvasDoc, editCanvasDoc, listCanvasDocs } from "./src/tools/canvas";
+import { runBenchmark, runPreBench, type BenchmarkResult } from "./src/benchmark/runner";
+import { getAllGrades, getModelGrade, isTrusted, saveModelGrade } from "./src/benchmark/grades";
 
 // Ensure config is initialized on first boot
 loadSwitchbayConfig();
@@ -150,6 +153,20 @@ async function boot() {
     return;
   }
 
+  if (options.subcommand === "benchmark") {
+    if (options.benchmarkPre) {
+      await runPreBenchCommand();
+    } else {
+      await runBenchmarkCommand(options.benchmarkModel ?? null, options.benchmarkLane ?? null);
+    }
+    return;
+  }
+
+  if (options.subcommand === "sync") {
+    await runSyncCommand();
+    return;
+  }
+
   if (options.subcommand === "engines") {
     await runEngineCommand(options.engineAction);
     return;
@@ -230,8 +247,19 @@ async function boot() {
     return;
   }
 
+  if (options.subcommand === "docs") {
+    const { openSwitchbayWorkspace } = await import("./src/web/launcher");
+    console.log(await openSwitchbayWorkspace("Docs"));
+    return;
+  }
+
+  if (options.subcommand === "brief") {
+    await runBriefCommand(options.briefAction ?? "list", options.briefName ?? null, options.briefPrompt ?? null, options.lane);
+    return;
+  }
+
   if (options.subcommand === "models") {
-    await runModelsCommand(options.lane, options.modelsAction ?? "list", options.modelsAll ?? false);
+    await runModelsCommand(options.lane, options.modelsAction ?? "list", options.modelsAll ?? false, options.modelsTrusted ?? false, options.modelsProvider ?? null);
     return;
   }
 
@@ -353,11 +381,158 @@ async function applyInitialHop(query: string) {
   }
 }
 
+async function runPreBenchCommand() {
+  const color = cliColorEnabled();
+  const ANSI = {
+    reset: "[0m", bold: "[1m",
+    green: "[38;5;42m", yellow: "[38;5;214m",
+    red: "[38;5;203m", cyan: "[38;5;44m",
+    muted: "[38;5;244m", bright: "[38;5;51m",
+  };
+  const paint = (s: string, code: string) => color ? `${code}${s}${ANSI.reset}` : s;
+
+  const seen = new Set<string>();
+  const targets = getCloudModelPresets().filter((m) => { if (seen.has(m.id)) return false; seen.add(m.id); return true; });
+
+  console.log(`\n${paint("◆", ANSI.bright)} ${paint("Switchbay Pre-Bench", ANSI.bold)} ${paint(`· ${targets.length} cloud models`, ANSI.muted)}\n`);
+
+  type BenchEntry =
+    | { kind: "ok"; grade: string; score: number; trusted: boolean }
+    | { kind: "config-error"; reason: string }   // auth / key / quota
+    | { kind: "error"; reason: string };          // network, timeout, unexpected
+
+  const CONCURRENCY = 3;
+  const queue = [...targets];
+  const resultMap = new Map<string, BenchEntry>();
+
+  function classifyError(err: any): BenchEntry {
+    const msg: string = (err?.message ?? String(err)).toLowerCase();
+    const isConfigErr =
+      /401|403|unauthorized|invalid.?api.?key|api.?key|authentication|permission|quota|billing|no.?key|not.?configured/.test(msg) ||
+      /invalid_api_key|insufficient_quota|access.?denied/.test(msg);
+    const short = (err?.message ?? String(err)).slice(0, 72);
+    return isConfigErr
+      ? { kind: "config-error", reason: short }
+      : { kind: "error", reason: short };
+  }
+
+  // Run concurrently but collect results silently — print in original order after
+  async function worker() {
+    while (true) {
+      const model = queue.shift();
+      if (!model) break;
+      try {
+        const client = createRuntimeClient("cloud", { model: model.id, provider: model.provider as any });
+        const report = await runPreBench(client, model.id, model.provider);
+        saveModelGrade({ modelId: model.id, provider: model.provider, grade: report.grade, score: report.score, passedTests: report.passedTests, totalTests: report.totalTests, benchedAt: Date.now() });
+        resultMap.set(model.id, { kind: "ok", grade: report.grade, score: report.score, trusted: isTrusted(report as any) });
+      } catch (err: any) {
+        resultMap.set(model.id, classifyError(err));
+      }
+    }
+  }
+
+  await Promise.all(Array.from({ length: CONCURRENCY }, worker));
+
+  // Print in original order
+  for (const model of targets) {
+    const r = resultMap.get(model.id)!;
+    if (r.kind === "config-error") {
+      console.log(`  ${paint("○", ANSI.muted)} ${model.id.padEnd(38)} ${paint("—", ANSI.muted)}   ${paint("no key / auth error", ANSI.yellow)}  ${paint(r.reason, ANSI.muted)}`);
+    } else if (r.kind === "error") {
+      console.log(`  ${paint("!", ANSI.red)} ${model.id.padEnd(38)} ${paint("—", ANSI.muted)}   ${paint("error", ANSI.red)}  ${paint(r.reason, ANSI.muted)}`);
+    } else {
+      const gradeColor = r.trusted ? ANSI.green : r.grade === "C" ? ANSI.yellow : ANSI.red;
+      const tag = r.trusted ? paint("✓ trusted", ANSI.green) : paint("✗ not trusted", ANSI.muted);
+      const gradeStr = paint(r.grade.padEnd(2), `${gradeColor}${ANSI.bold}`);
+      const scoreStr = paint(`${r.score}/100`, ANSI.muted);
+      console.log(`  ${paint("●", ANSI.cyan)} ${model.id.padEnd(38)} ${gradeStr}  ${scoreStr}  ${tag}`);
+    }
+  }
+
+  const trusted = [...resultMap.values()].filter((r): r is Extract<BenchEntry, { kind: "ok" }> => r.kind === "ok" && r.trusted);
+  console.log(`\n${"─".repeat(64)}`);
+  console.log(`  ${paint("Trusted (A/B)", ANSI.muted)}  ${paint(`${trusted.length}/${targets.length}`, ANSI.bold)}    ${paint("Run:", ANSI.muted)}  ${paint("switchbay models --trusted", ANSI.cyan)}`);
+  console.log();
+}
+
+async function runBenchmarkCommand(model: string | null, lane: string | null) {
+  const color = cliColorEnabled();
+  const ANSI = {
+    reset: "[0m", bold: "[1m",
+    green: "[38;5;42m", yellow: "[38;5;214m",
+    red: "[38;5;203m", cyan: "[38;5;44m",
+    muted: "[38;5;244m", bright: "[38;5;51m",
+  };
+  const paint = (s: string, code: string) => color ? `${code}${s}${ANSI.reset}` : s;
+
+  const runtimeLane = normalizeRuntimeLane(lane ?? "cloud");
+  const client = createRuntimeClient(runtimeLane, { model: model ?? undefined });
+  const modelLabel = model ?? getRuntimeLaneLabel(runtimeLane);
+
+  console.log(`\n${paint("◆", ANSI.bright)} ${paint("Switchbay Benchmark", ANSI.bold)} ${paint(`· ${modelLabel}`, ANSI.muted)}\n`);
+
+  const categoryWidth = 10;
+  const nameWidth = 28;
+
+  try {
+    const report = await runBenchmark(client, modelLabel, runtimeLane, (result: BenchmarkResult, index: number, total: number) => {
+      const icon = result.passed ? paint("✓", ANSI.green) : paint("✗", ANSI.red);
+      const cat = paint(result.category.padEnd(categoryWidth), ANSI.muted);
+      const name = result.name.padEnd(nameWidth);
+      const pct = paint(`${Math.round(result.score * 100)}%`.padStart(4), result.score >= 0.75 ? ANSI.green : result.score >= 0.4 ? ANSI.yellow : ANSI.red);
+      const ms = paint(`${result.latencyMs}ms`, ANSI.muted);
+      const detail = paint(result.detail.slice(0, 40), ANSI.muted);
+      console.log(`  ${icon}  ${cat}  ${name}  ${pct}  ${ms}  ${detail}`);
+    });
+
+    const gradeColor = report.grade.startsWith("A") ? ANSI.green : report.grade === "B" ? ANSI.cyan : report.grade === "C" ? ANSI.yellow : ANSI.red;
+    const passed = report.results.filter(r => r.passed).length;
+    const total = report.results.length;
+    const dur = `${(report.durationMs / 1000).toFixed(1)}s`;
+
+    console.log(`\n${"─".repeat(72)}`);
+    console.log(`  ${paint("Grade", ANSI.muted)}  ${paint(report.grade, `${gradeColor}${ANSI.bold}`)}    ${paint("Score", ANSI.muted)}  ${paint(`${report.totalScore}/100`, ANSI.bold)}    ${paint("Passed", ANSI.muted)}  ${paint(`${passed}/${total}`, ANSI.bold)}    ${paint("Time", ANSI.muted)}  ${paint(dur, ANSI.bold)}`);
+    console.log();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(cliFailure("Benchmark failed", msg, [`switchbay benchmark --lane <cloud|openrouter|local>`]));
+    process.exit(1);
+  }
+}
+
+async function runSyncCommand() {
+  try {
+    const [engineResult, skillResult] = await Promise.allSettled([
+      syncEngineBayWithDiff(),
+      syncToolboxWithDiff(),
+    ]);
+    const engineOk = engineResult.status === "fulfilled";
+    const skillOk = skillResult.status === "fulfilled";
+    const engineDiff = engineOk ? (engineResult as PromiseFulfilledResult<any>).value : null;
+    const skillDiff = skillOk ? (skillResult as PromiseFulfilledResult<any>).value : null;
+    const engineMsg = engineOk ? `${engineDiff.after} engines${engineDiff.added > 0 ? ` (+${engineDiff.added} new)` : ", up to date"}` : `Failed: ${(engineResult as PromiseRejectedResult).reason?.message ?? "unknown error"}`;
+    const skillMsg = skillOk ? `${skillDiff.after} skills${skillDiff.added > 0 ? ` (+${skillDiff.added} new)` : ", up to date"}` : `Failed: ${(skillResult as PromiseRejectedResult).reason?.message ?? "unknown error"}`;
+    console.log(cliReceipt(
+      "Sync",
+      engineOk && skillOk ? "All libraries synchronized" : "Sync completed with errors",
+      [["Engines", engineMsg], ["Skills", skillMsg]],
+      "switchbay engines list · switchbay skills list",
+    ));
+    if (!engineOk || !skillOk) process.exit(1);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(cliFailure("Sync", msg, ["switchbay engines sync", "switchbay skills sync"]));
+    process.exit(1);
+  }
+}
+
 async function runEngineCommand(action: "status" | "sync" | "list" | "templates") {
   try {
     if (action === "sync") {
-      await syncEngineBayRepo();
-      console.log(cliReceipt("Engine Bay", "Library synchronized", [], "switchbay engines list"));
+      const diff = await syncEngineBayWithDiff();
+      const detail = diff.added > 0 ? `+${diff.added} new` : "up to date";
+      console.log(cliReceipt("Engine Bay", `Library synchronized — ${diff.after} engines (${detail})`, [], "switchbay engines list"));
       return;
     }
 
@@ -418,8 +593,9 @@ async function runToolboxCommand(
   const command = `switchbay ${commandName}`;
   try {
     if (action === "sync") {
-      await describeToolbox(true);
-      console.log(cliReceipt("Skill Library", "Library synchronized", [], `${command} list`));
+      const diff = await syncToolboxWithDiff();
+      const detail = diff.added > 0 ? `+${diff.added} new` : "up to date";
+      console.log(cliReceipt("Skill Library", `Library synchronized — ${diff.after} skills (${detail})`, [], `${command} list`));
       return;
     }
 
@@ -1002,6 +1178,52 @@ async function runCloudProviderCommand(action: "status" | "set", target: string 
   console.log(cliPage({ title: "Cloud Runtime", state: getActiveCloudProvider(), summary: `Trusted pool: ${pool.length} verified model(s)`, rows: pool.length ? pool.map((entry) => [entry.lane, `${entry.status === "ready" ? "● ready" : `○ ${entry.status}`} · ${entry.model}`]) : [["pool", "Empty — add and verify models with: switchbay model add <id>"]], next: "switchbay models --lane cloud" }));
 }
 
+async function runBriefCommand(action: "list" | "create" | "draft", name: string | null, prompt: string | null, lane: string | null) {
+  const cwd = process.cwd();
+
+  if (action === "list") {
+    const docs = await listCanvasDocs(cwd);
+    if (!docs.length) {
+      console.log(cliPage({ title: "Brief", state: "No documents", body: "No briefs yet in this workspace.\n\nCreate one:\n  switchbay brief create \"My Document\"\n  switchbay brief draft \"Write a product brief for X\" --name \"Product Brief\"" }));
+      return;
+    }
+    const rows = docs.map((doc) => [doc.file, `${doc.name}  ·  ${doc.size} bytes  ·  ${doc.updatedAt.slice(0, 10)}`]);
+    console.log(cliPage({ title: "Brief", state: `${docs.length} document${docs.length === 1 ? "" : "s"}`, rows, next: "switchbay open  (view in workspace)" }));
+    return;
+  }
+
+  if (action === "create") {
+    if (!name?.trim()) {
+      console.log(cliFailure("brief create requires a document name.\n\nUsage: switchbay brief create \"My Document\""));
+      return;
+    }
+    const file = await createCanvasDoc(cwd, name.trim());
+    console.log(cliReceipt(`Brief created: ${file}`, undefined, [["file", file], ["workspace", cwd]], "switchbay open  (view in Brief)"));
+    return;
+  }
+
+  if (action === "draft") {
+    if (!prompt?.trim()) {
+      console.log(cliFailure("brief draft requires a prompt", "Usage: switchbay brief draft \"Write a product brief for...\" --name \"My Doc\""));
+      return;
+    }
+    const docName = name?.trim() || prompt.trim().slice(0, 60);
+    const file = await createCanvasDoc(cwd, docName);
+    console.log(`  ${CLR.muted}◆ Brief created: ${file} — drafting…${CLR.reset}`);
+
+    // Run a real turn so the AI drafts the document
+    const runtimeLane = normalizeRuntimeLane(lane);
+    const client = createRuntimeClient(runtimeLane);
+    const workspace = await (await import("./src/session/workspace")).loadWorkspaceSnapshot(cwd);
+    const fullPrompt = `Use the brief-draft skill. Draft a Brief document.\n\nFile: ${file}\nTopic: ${prompt.trim()}\n\nUse edit_canvas with file="${file}" and op="replace_all" to write the full draft.`;
+    const turn = await buildTurn({ input: fullPrompt, mode: "build", profile: "switchbay", transcript: [], workspace, runtimeLane, toolMode: getToolMode() });
+    const executed = await executeTurn({ client, cwd, sessionId: crypto.randomUUID(), surface: "cli", turn, workspace });
+    const content = extractAssistantText(executed.response);
+    if (content) console.log(`\n  ${content}\n`);
+    console.log(cliReceipt(`Brief drafted: ${file}`, undefined, [["file", file], ["workspace", cwd]], "switchbay open  (view in Brief)"));
+  }
+}
+
 async function runModelsAllCommand() {
   type LaneEntry = { rawLane: string; label: string; localProvider?: string };
   const LANES: LaneEntry[] = [
@@ -1073,25 +1295,30 @@ async function runModelsAllCommand() {
   console.log("");
 }
 
-async function runModelsCommand(rawLane: string | null, action: "list" | "clear" = "list", all = false) {
+async function runModelsCommand(rawLane: string | null, action: "list" | "clear" = "list", all = false, trustedOnly = false, providerFilter: string | null = null) {
   if (action === "list" && all) {
     await runModelsAllCommand();
     return;
   }
   if (action === "clear") {
-    const lane = normalizeRuntimeLane(rawLane);
-    if (lane !== "cloud" && lane !== "cloud-mcp") {
-      console.error("switchbay models clear: only supported for the cloud lane.");
-      console.error("Usage: switchbay models clear --lane cloud");
-      process.exit(1);
+    const providerToClear = providerFilter ? normalizeCloudModelProviderOrNull(providerFilter) : null;
+    if (providerToClear) {
+      const result = removeCloudModelsByProvider(providerToClear);
+      console.log(cliReceipt(
+        "Cloud Model Catalog",
+        result.removed === 0 ? `No ${providerToClear} models to clear` : `Cleared ${result.removed} ${providerToClear} model(s)`,
+        [["Catalog", "~/.switchbay/cloud-models.json"]],
+        "switchbay models --lane cloud",
+      ));
+    } else {
+      const result = clearCloudModelCatalog();
+      console.log(cliReceipt(
+        "Cloud Model Catalog",
+        result.removed === 0 ? "Already empty" : `Cleared ${result.removed} model(s)`,
+        [["Catalog", "~/.switchbay/cloud-models.json"]],
+        "switchbay models --lane cloud",
+      ));
     }
-    const result = clearCloudModelCatalog();
-    console.log(cliReceipt(
-      "Cloud Model Catalog",
-      result.removed === 0 ? "Already empty" : `Cleared ${result.removed} custom model(s)`,
-      [["Presets", "Retained (built-in)"], ["Catalog", "~/.switchbay/cloud-models.json"]],
-      "switchbay models --lane cloud",
-    ));
     return;
   }
   const lane = normalizeRuntimeLane(rawLane);
@@ -1101,9 +1328,13 @@ async function runModelsCommand(rawLane: string | null, action: "list" | "clear"
     const result = await listRuntimeModels(lane, localProvider);
     const requestedCloudProvider = normalizeCloudProvider(rawLane);
     const activeCloudProvider = requestedCloudProvider ?? getActiveCloudProvider();
-    const visibleModels = lane === "cloud" && activeCloudProvider !== "auto"
-      ? result.models.filter((model) => model.provider === activeCloudProvider)
-      : result.models;
+    const resolvedProviderFilter = providerFilter ? normalizeCloudModelProviderOrNull(providerFilter) : null;
+    const visibleModels = (() => {
+      let models = result.models;
+      if (lane === "cloud" && activeCloudProvider !== "auto") models = models.filter((m) => m.provider === activeCloudProvider);
+      if (resolvedProviderFilter) models = models.filter((m) => m.provider === resolvedProviderFilter);
+      return models;
+    })();
     if (lane === "cloud" && activeCloudProvider === "auto") {
       const pool = listAutoModelPool();
       console.log(`${renderCliList({
@@ -1126,34 +1357,43 @@ async function runModelsCommand(rawLane: string | null, action: "list" | "clear"
     const catalogIndex = isCloudLane
       ? new Map(loadCloudModelCatalog().models.map((m) => [`${m.provider}:${m.id}`, m]))
       : new Map();
+    const gradeIndex = isCloudLane
+      ? new Map(getAllGrades().map((g) => [`${g.provider}:${g.modelId}`, g]))
+      : new Map();
+    let displayModels = visibleModels;
+    if (trustedOnly && isCloudLane) {
+      displayModels = visibleModels.filter((m) => {
+        const g = gradeIndex.get(`${m.provider}:${m.id}`);
+        return g ? isTrusted(g) : false;
+      });
+    }
     console.log(renderCliList({
-      title: `${getRuntimeLaneLabel(lane)} Models`,
-      count: visibleModels.length,
+      title: `${getRuntimeLaneLabel(lane)} Models${resolvedProviderFilter ? ` · ${resolvedProviderFilter}` : ""}${trustedOnly ? " · Trusted" : ""}`,
+      count: displayModels.length,
       noun: "model",
-      summary: lane === "cloud" ? `${visibleModels.length} shown · mode=${activeCloudProvider}` : `${visibleModels.length} available`,
+      summary: lane === "cloud"
+        ? `${displayModels.length} shown · mode=${activeCloudProvider}${resolvedProviderFilter ? ` · provider=${resolvedProviderFilter}` : ""}${trustedOnly ? " · A/B grade only" : ""}`
+        : `${displayModels.length} available`,
       columns: [
         { key: "active", label: "", width: 2 },
-        { key: "id", label: "Model", width: 36 },
+        { key: "id", label: "Model", width: 34 },
         { key: "provider", label: "Provider", width: 12 },
         { key: "source", label: "Source", width: 10 },
-        ...(isCloudLane ? [{ key: "status", label: "Status", width: 12 }] : []),
+        ...(isCloudLane ? [{ key: "grade", label: "Grade", width: 6 }, { key: "status", label: "Status", width: 12 }] : []),
       ],
-      rows: visibleModels.map((model) => {
+      rows: displayModels.map((model) => {
         let status: string | undefined;
+        let grade: string | undefined;
         if (isCloudLane) {
-          if (model.source === "custom") {
-            const entry = catalogIndex.get(`${model.provider}:${model.id}`);
-            status = entry?.verifiedAt ? "Verified" : "Custom";
-          } else if (model.source === "preset") {
-            status = "Preset";
-          } else {
-            status = "—";
-          }
+          const catalogEntry = catalogIndex.get(`${model.provider}:${model.id}`);
+          const gradeEntry = gradeIndex.get(`${model.provider}:${model.id}`);
+          status = model.source === "custom" ? (catalogEntry?.verifiedAt ? "Verified" : "Custom") : model.source === "preset" ? "Preset" : "—";
+          grade = gradeEntry ? gradeEntry.grade : "—";
         }
-        return { active: selected?.id === model.id ? "●" : "", id: model.id, provider: model.provider, source: model.source, ...(isCloudLane ? { status } : {}) };
+        return { active: selected?.id === model.id ? "●" : "", id: model.id, provider: model.provider, source: model.source, ...(isCloudLane ? { grade, status } : {}) };
       }),
-      empty: "No models found for this lane.",
-      hint: `Switch: switchbay model ${lane} <model-id>`,
+      empty: trustedOnly ? "No trusted (A/B) models found. Run: switchbay benchmark --pre" : "No models found for this lane.",
+      hint: trustedOnly ? "Run pre-bench: switchbay benchmark --pre" : `Switch: switchbay model ${lane} <model-id>`,
     }));
     if (selected && !visibleModels.some((model) => model.id === selected.id)) {
       console.log(`\nSelected: ${selected.id} (not returned by the current model list)`);
@@ -1369,12 +1609,29 @@ async function runModelVerifyCommand(rawLane: string | null, target: string | nu
 }
 
 async function runModelRemoveCommand(rawLane: string | null, target: string | null) {
+  // `remove --lane {provider}` with no target — bulk remove all models for that provider
+  const laneAsProvider = rawLane ? normalizeCloudModelProviderOrNull(rawLane) : null;
+  if (!target?.trim() && laneAsProvider) {
+    const { removed } = removeCloudModelsByProvider(laneAsProvider);
+    if (!removed) {
+      console.log(cliReceipt("Cloud Model Catalog", `No ${laneAsProvider} models to remove`, [], "switchbay models --lane cloud"));
+      return;
+    }
+    console.log(cliReceipt(
+      "Cloud Model Catalog",
+      `Removed ${removed} ${laneAsProvider} model${removed === 1 ? "" : "s"}`,
+      [["Catalog", "~/.switchbay/cloud-models.json"]],
+      "switchbay models --lane cloud",
+    ));
+    return;
+  }
+
   const provider = isCloudProviderAlias(target) ? null : normalizeCloudModelProvider(rawLane, target);
   const modelId = isCloudProviderAlias(target) ? null : target;
   if (!modelId?.trim()) {
-    console.error("switchbay model remove: requires a cloud model id.");
+    console.error("switchbay model remove: requires a model id or --lane to bulk remove.");
     console.error("Example: switchbay model remove gpt-5.5");
-    console.error("Example: switchbay model remove openai gpt-5.5");
+    console.error("Example: switchbay model remove --lane openai");
     process.exit(1);
   }
 
@@ -1407,6 +1664,14 @@ function normalizeCloudModelProvider(rawLane: string | null, target: string | nu
   if (alias === "anthropic" || alias === "claude") return "anthropic";
   if (alias === "google" || alias === "gemini") return "google";
   return inferCloudModelProvider(target ?? "");
+}
+
+function normalizeCloudModelProviderOrNull(raw: string): CloudProviderId | null {
+  const alias = raw.toLowerCase();
+  if (alias === "openai" || alias === "open-ai" || alias === "gpt") return "openai";
+  if (alias === "anthropic" || alias === "claude") return "anthropic";
+  if (alias === "google" || alias === "gemini") return "google";
+  return null;
 }
 
 function isCloudProviderAlias(value: string | null): boolean {

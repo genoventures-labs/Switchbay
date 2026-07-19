@@ -63,7 +63,7 @@ function flag(name: string, desc: string, color: boolean): string {
 
 export function renderCliHelp(color = cliColorEnabled()): string {
   const ver = p(`v${SWITCHBAY_VERSION}`, A.muted, color);
-  const header = `${p("◆", A.bright, color)} ${p("Switchbay", A.bold, color)}  ${ver}  ${p("·  Local AI work system", A.muted, color)}`;
+  const header = `${p("◆", A.bright, color)} ${p("Switchbay", A.bold, color)}  ${ver}  ${p("·  Model management across local and cloud AI", A.muted, color)}`;
 
   const lines: string[] = [header, ""];
 

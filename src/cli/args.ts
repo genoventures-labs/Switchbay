@@ -13,7 +13,11 @@ export type CliOptions = {
   purge: string | null;
   visionPath?: string | null;
   detach?: boolean;
-  subcommand: "run" | "open" | "web-serve" | "serve" | "service" | "update" | "version" | "help" | "engines" | "skills" | "toolbox" | "plugins" | "agents" | "memory" | "knowledge" | "trace" | "usage" | "graph" | "radar" | "handoff" | "mcp" | "models" | "model" | "local-provider" | "cloud-provider" | "local-mode" | "agenda" | "task";
+  subcommand: "run" | "open" | "web-serve" | "serve" | "service" | "update" | "version" | "help" | "engines" | "skills" | "toolbox" | "plugins" | "agents" | "memory" | "knowledge" | "trace" | "usage" | "graph" | "radar" | "handoff" | "mcp" | "models" | "model" | "local-provider" | "cloud-provider" | "local-mode" | "agenda" | "task" | "brief" | "docs" | "sync" | "benchmark";
+  benchmarkModel?: string | null;
+  benchmarkLane?: string | null;
+  benchmarkPre?: boolean;
+  benchmarkTrusted?: boolean;
   graphAction?: "trace";
   serviceAction?: "install" | "status" | "restart" | "uninstall";
   engineAction: "status" | "sync" | "list" | "templates";
@@ -43,6 +47,8 @@ export type CliOptions = {
   taskId?: number | null;
   modelsAction?: "list" | "clear";
   modelsAll?: boolean;
+  modelsTrusted?: boolean;
+  modelsProvider?: string | null;
   helpContext?: string;
   localModeAction?: "status" | "set";
   localModeValue?: string | null;
@@ -53,6 +59,9 @@ export type CliOptions = {
   modelLabel?: string | null;
   yes?: boolean;
   deepResearch?: boolean;
+  briefAction?: "list" | "create" | "draft";
+  briefName?: string | null;
+  briefPrompt?: string | null;
 };
 
 export function parseCliArgs(argv: string[]): CliOptions {
@@ -365,6 +374,79 @@ export function parseCliArgs(argv: string[]): CliOptions {
         modelTarget: null,
         modelLane: null,
       };
+    } else if (arg === "benchmark" || arg === "bench") {
+      // switchbay benchmark [model] [--lane <lane>]
+      let benchmarkModel: string | null = null;
+      let benchmarkLane: string | null = lane;
+      let benchmarkPre = false;
+      let benchmarkTrusted = false;
+      while (i + 1 < args.length) {
+        const next = args[i + 1]!;
+        if (next === "--lane" && args[i + 2]) { benchmarkLane = args[i + 2]!; i += 2; }
+        else if (next === "--pre") { benchmarkPre = true; i++; }
+        else if (next === "--trusted") { benchmarkTrusted = true; i++; }
+        else if (!next.startsWith("-")) { benchmarkModel = next; i++; }
+        else break;
+      }
+      return {
+        surface, profile, mode, lane, initialQuery: "", hop, resume, newSession, purge,
+        subcommand: "benchmark", benchmarkModel, benchmarkLane, benchmarkPre, benchmarkTrusted,
+        engineAction: "status", toolboxAction: "status", toolboxSkill: null,
+        memoryAction: "status", memoryNote: null,
+        knowledgeAction: "status", knowledgeQuery: null,
+        traceAction: "last", mcpAction: "status",
+        modelTarget: null, modelLane: null,
+      };
+    } else if (arg === "sync") {
+      return {
+        surface, profile, mode, lane, initialQuery: "", hop, resume, newSession, purge,
+        subcommand: "sync",
+        engineAction: "status", toolboxAction: "status", toolboxSkill: null,
+        memoryAction: "status", memoryNote: null,
+        knowledgeAction: "status", knowledgeQuery: null,
+        traceAction: "last", mcpAction: "status",
+        modelTarget: null, modelLane: null,
+      };
+    } else if (arg === "docs" || arg === "wiki") {
+      return {
+        surface, profile, mode, lane, initialQuery: "", hop, resume, newSession, purge,
+        subcommand: "docs",
+        engineAction: "status", toolboxAction: "status", toolboxSkill: null,
+        memoryAction: "status", memoryNote: null,
+        knowledgeAction: "status", knowledgeQuery: null,
+        traceAction: "last", mcpAction: "status",
+        modelTarget: null, modelLane: null,
+      };
+    } else if (arg === "brief" || arg === "briefs") {
+      const sub = args[i + 1];
+      let briefAction: "list" | "create" | "draft" = "list";
+      let briefName: string | null = null;
+      let briefPrompt: string | null = null;
+      if (sub === "create") {
+        briefAction = "create";
+        briefName = args.slice(i + 2).join(" ") || null;
+      } else if (sub === "draft") {
+        briefAction = "draft";
+        // --name <name> and remaining args as prompt
+        const nameIdx = args.indexOf("--name", i + 2);
+        if (nameIdx !== -1) {
+          briefName = args[nameIdx + 1] ?? null;
+          const promptArgs = args.slice(i + 2).filter((_, idx) => idx !== nameIdx - (i + 2) && idx !== nameIdx - (i + 2) + 1);
+          briefPrompt = promptArgs.join(" ") || null;
+        } else {
+          briefPrompt = args.slice(i + 2).join(" ") || null;
+        }
+      }
+      return {
+        surface, profile, mode, lane, initialQuery: "", hop, resume, newSession, purge,
+        subcommand: "brief",
+        engineAction: "status", toolboxAction: "status", toolboxSkill: null,
+        memoryAction: "status", memoryNote: null,
+        knowledgeAction: "status", knowledgeQuery: null,
+        traceAction: "last", mcpAction: "status",
+        modelTarget: null, modelLane: null,
+        briefAction, briefName, briefPrompt,
+      };
     } else if (arg === "knowledge" || arg === "index") {
       const action = args[i + 1];
       const knowledgeAction = action === "refresh" || action === "search" || action === "status"
@@ -587,6 +669,8 @@ export function parseCliArgs(argv: string[]): CliOptions {
       }
       const modelsAction: "list" | "clear" = rest[0] === "clear" ? "clear" : "list";
       const modelsAll = rest.includes("--all");
+      const modelsTrusted = rest.includes("--trusted");
+      const modelsProvider = readProviderFlag(modelsAction === "clear" ? rest.slice(1) : rest);
       const commandLane = readLaneFlag(modelsAction === "clear" ? rest.slice(1) : rest);
       return {
         surface,
@@ -601,6 +685,8 @@ export function parseCliArgs(argv: string[]): CliOptions {
         subcommand: "models",
         modelsAction,
         modelsAll,
+        modelsTrusted,
+        modelsProvider,
         engineAction: "status",
         toolboxAction: "status",
         toolboxSkill: null,
@@ -841,6 +927,11 @@ function parseModelCommand(args: string[]): ParsedModelCommand {
 
 function readLaneFlag(args: string[]): string | null {
   const index = args.indexOf("--lane");
+  return index >= 0 ? args[index + 1] ?? null : null;
+}
+
+function readProviderFlag(args: string[]): string | null {
+  const index = args.findIndex((a) => a === "--provider" || a === "--p");
   return index >= 0 ? args[index + 1] ?? null : null;
 }
 

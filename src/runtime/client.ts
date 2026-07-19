@@ -11,9 +11,21 @@ import { OpenAiResponsesClient } from "./openai-responses-client";
 import { GeminiClient } from "./gemini-client";
 import type { ChatCompletionRequest, ChatCompletionResponse, WorkspaceFocus } from "./types";
 import { readConfiguredSecret } from "../config/secrets";
+import { DEFAULTS } from "../config/defaults";
 import { getNativeToolsConfig } from "../config/switchbay-config";
 import { getLocalMode } from "../config/local-mode";
 import { recordOpenRouterRequest } from "./openrouter-rate-limiter";
+
+export class RateLimitError extends Error {
+  constructor(
+    message: string,
+    public readonly provider: string,
+    public readonly reroutedTo?: string,
+  ) {
+    super(message);
+    this.name = "RateLimitError";
+  }
+}
 
 export type ChatRuntimeClient = {
   createChatCompletion(
@@ -109,7 +121,7 @@ export function createRuntimeClient(
   } else if (lane === "openrouter") {
     const apiKey = readConfiguredSecret("OPENROUTER_API_KEY");
     if (!apiKey) throw new Error("Missing OPENROUTER_API_KEY");
-    const openRouterModel = model ?? Bun.env.SWITCHBAY_OPENROUTER_MODEL?.trim() ?? "openai/gpt-5.2";
+    const openRouterModel = model ?? Bun.env.SWITCHBAY_OPENROUTER_MODEL?.trim() ?? DEFAULTS.openRouterModel;
     client = new OpenAiClient({
       apiBase: Bun.env.SWITCHBAY_OPENROUTER_BASE?.trim() ?? "https://openrouter.ai/api/v1",
       apiKey,
@@ -123,14 +135,19 @@ export function createRuntimeClient(
     routerIntent = "explicit_provider";
     routerReason = "Explicit OpenRouter lane selected.";
     routerMode = "explicit";
+    const fallback = new CloudRouterClient();
     return new RuntimeRouteTagClient(
-      new OpenRouterRateLimitClient(new ModelOverrideClient(client, openRouterModel)),
+      new RateLimitFallbackClient(
+        new OpenRouterRateLimitClient(new ModelOverrideClient(client, openRouterModel)),
+        fallback,
+        "openrouter",
+      ),
       { using, provider: "openrouter", model: openRouterModel, routerIntent, routerReason, routerMode },
     );
   } else if (lane === "huggingface") {
     const apiKey = readConfiguredSecret("HF_TOKEN", "HUGGINGFACE_API_KEY");
     if (!apiKey) throw new Error("Missing HF_TOKEN");
-    const huggingFaceModel = model ?? Bun.env.SWITCHBAY_HF_MODEL?.trim() ?? "openai/gpt-oss-120b:groq";
+    const huggingFaceModel = model ?? Bun.env.SWITCHBAY_HF_MODEL?.trim() ?? DEFAULTS.huggingFaceModel;
     client = new OpenAiClient({
       apiBase: Bun.env.SWITCHBAY_HF_BASE?.trim() ?? "https://router.huggingface.co/v1",
       apiKey,
@@ -254,5 +271,35 @@ class OpenRouterRateLimitClient implements ChatRuntimeClient {
   ): Promise<ChatCompletionResponse> {
     recordOpenRouterRequest(); // throws if either limit is exceeded
     return this.inner.createChatCompletion(surface, request, options);
+  }
+}
+
+/** Catches 429s (and local pre-flight rate errors) from the primary client and retries via fallback. */
+class RateLimitFallbackClient implements ChatRuntimeClient {
+  constructor(
+    private readonly primary: ChatRuntimeClient,
+    private readonly fallback: ChatRuntimeClient,
+    private readonly primaryLabel: string,
+  ) {}
+
+  async createChatCompletion(
+    surface: string,
+    request: ChatCompletionRequest,
+    options?: Parameters<ChatRuntimeClient["createChatCompletion"]>[2],
+  ): Promise<ChatCompletionResponse> {
+    try {
+      return await this.primary.createChatCompletion(surface, request, options);
+    } catch (err: any) {
+      const is429 = err?.status === 429 || err?.statusCode === 429 || /429|rate.?limit/i.test(String(err?.message ?? ""));
+      if (!is429) throw err;
+      const response = await this.fallback.createChatCompletion(surface, request, options);
+      response.meta = {
+        ...response.meta,
+        router_intent: "rate_limit_fallback",
+        router_reason: `${this.primaryLabel} rate limited — rerouted to cloud auto.`,
+        router_mode: "auto",
+      };
+      return response;
+    }
   }
 }

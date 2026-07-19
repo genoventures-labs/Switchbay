@@ -24,6 +24,8 @@ import { getNativeToolsConfig } from "../config/switchbay-config";
 import { nativeEnvironmentAvailability } from "../environment/native-environment";
 import { SWITCHBAY_VERSION } from "../version";
 import { createAuthoredResource } from "../authoring/resources";
+import { createCanvasDoc, deleteCanvasDoc, editCanvasDoc, listCanvasDocs, readCanvasDoc, renameCanvasDoc, writeCanvasDoc } from "../tools/canvas";
+import { getCliManifest } from "../cli/manifest";
 import { importSkill, previewSkillImport } from "../toolbox/skill-bridge";
 
 let turnQueue: Promise<void> = Promise.resolve();
@@ -145,6 +147,40 @@ export function createApiHandler(options: { token?: string; runTurn?: typeof run
       if (req.method === "POST" && url.pathname === "/v1/knowledge/refresh") { const body = await readBody(req, true); return json(await refreshKnowledgeIndex(await workspaceFrom(body.workspace))); }
       if (req.method === "GET" && url.pathname === "/v1/knowledge/search") { const q = url.searchParams.get("q")?.trim(); if (!q) return fail("q is required", 400, "bad_request"); return json({ results: await searchKnowledgeIndex(q, cwd, 10) }); }
       if (req.method === "GET" && url.pathname === "/v1/trace/latest") return json({ content: await describeLatestTrace(cwd) });
+      if (req.method === "GET" && url.pathname === "/v1/manifest") return json(getCliManifest());
+
+      // Canvas
+      if (req.method === "GET" && url.pathname === "/v1/canvas") return json({ docs: await listCanvasDocs(cwd) });
+      if (req.method === "POST" && url.pathname === "/v1/canvas") {
+        const body = await readBody(req);
+        const name = typeof body.name === "string" ? body.name.trim() : "";
+        if (!name) return fail("name is required", 400, "bad_request");
+        const file = await createCanvasDoc(cwd, name, typeof body.content === "string" ? body.content : "");
+        return json({ file }, 201);
+      }
+      const canvasMatch = url.pathname.match(/^\/v1\/canvas\/(.+)$/);
+      if (canvasMatch?.[1]) {
+        const file = decodeURIComponent(canvasMatch[1]);
+        if (req.method === "GET") return json({ file, content: await readCanvasDoc(cwd, file) });
+        if (req.method === "PUT") {
+          const body = await readBody(req);
+          const content = typeof body.content === "string" ? body.content : "";
+          await writeCanvasDoc(cwd, file, content);
+          return json({ ok: true });
+        }
+        if (req.method === "DELETE") {
+          await deleteCanvasDoc(cwd, file);
+          return json({ ok: true });
+        }
+        if (req.method === "PATCH") {
+          const body = await readBody(req);
+          const newName = typeof body.name === "string" ? body.name : "";
+          if (!newName.trim()) return fail("name is required", 400, "bad_request");
+          const newFile = await renameCanvasDoc(cwd, file, newName);
+          return json({ ok: true, file: newFile });
+        }
+      }
+
       return fail("Not found", 404, "not_found");
     } catch (error) {
       if (error instanceof SyntaxError) return fail("Request body must be valid JSON", 400, "bad_request");
@@ -163,7 +199,7 @@ export function startApiServer(options: ServeOptions = {}) {
   const port = options.port ?? Number(Bun.env.SWITCHBAY_API_PORT ?? 7349);
   if (!isLoopback(hostname) && !apiToken()) throw new Error("An API token is required when binding beyond localhost");
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("SWITCHBAY_API_PORT must be a valid port");
-  return Bun.serve({ hostname, port, fetch: createApiHandler() });
+  return Bun.serve({ hostname, port, idleTimeout: 0, fetch: createApiHandler() });
 }
 
 function enqueue<T>(fn: () => Promise<T>): Promise<T> { queueDepth++; const run = async () => { try { return await fn(); } finally { queueDepth--; } }; const next = turnQueue.then(run, run); turnQueue = next.then(() => undefined, () => undefined); return next; }
@@ -212,7 +248,7 @@ function streamTurn(req: Request, runTurn: typeof runSwitchbayTurn): Response {
       try {
         const input = await readBody(req);
         if (typeof input.input !== "string" || !input.input.trim()) throw Object.assign(new Error("input is required"), { code: "bad_request" });
-        const result = await enqueue(() => runTurn(input as any, { requestId, signal: controller.signal, onToken: token => send("token", { token }), onStep: step => send("step", { step }) }));
+        const result = await enqueue(() => runTurn(input as any, { requestId, signal: controller.signal, onToken: token => send("token", { token }), onStep: step => send("step", { step }), onNotice: notice => send("notice", notice) }));
         send("done", result);
       } catch (error) { send("error", { message: error instanceof Error ? error.message : String(error), code: (error as any)?.name === "AbortError" ? "cancelled" : (error as any)?.code ?? "internal_error" }); }
       finally { activeRequests.delete(requestId); stream.close(); }

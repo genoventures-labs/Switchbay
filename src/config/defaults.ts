@@ -1,8 +1,10 @@
 export const DEFAULTS = {
   openAiModel: "gpt-5.6-sol",
   anthropicModel: "claude-sonnet-4-5",
-  googleModel: "gemini-3.5-flash",
+  googleModel: "gemini-2.5-flash",
   ollamaModel: "llama3.2",
+  openRouterModel: "openai/gpt-5.2",
+  huggingFaceModel: "openai/gpt-oss-120b:groq",
   surface: "dev",
   profile: "switchbay",
   mode: "build",

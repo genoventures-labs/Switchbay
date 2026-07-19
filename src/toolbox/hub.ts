@@ -63,15 +63,26 @@ export async function syncToolboxRepo(): Promise<string> {
   return clone.stdout || clone.stderr || `Cloned ${repo}`;
 }
 
+export type SyncDiff = { before: number; after: number; added: number };
+
+export async function syncToolboxWithDiff(cwd = process.cwd()): Promise<SyncDiff> {
+  const before = (await loadToolboxInventory(cwd)).skills.length;
+  await syncToolboxRepo();
+  const after = (await loadToolboxInventory(cwd)).skills.length;
+  return { before, after, added: Math.max(0, after - before) };
+}
+
 export async function loadToolboxInventory(cwd = process.cwd()): Promise<ToolboxInventory> {
   const cachePath = toolboxCachePath();
   const exists = existsSync(cachePath);
   const builtinPath = builtinToolboxPath();
   const workspacePath = path.join(workspaceStorageDir(cwd), "toolbox");
   const authoringPath = sharedAssetRoot("skill", cwd);
-  const [builtinSkills, authoringSkills, syncedSkills, workspaceSkills, pluginSkills, templates, head] = await Promise.all([
+  const engineAuthoringEnginesPath = path.join(sharedAssetRoot("engine", cwd), "engines");
+  const [builtinSkills, authoringSkills, engineAuthoringSkills, syncedSkills, workspaceSkills, pluginSkills, templates, head] = await Promise.all([
     loadSkillsFromRoot(builtinPath, "builtin"),
     loadSkillsFromRoot(authoringPath, "workspace"),
+    loadSkillsFromRoot(engineAuthoringEnginesPath, "workspace"),
     exists ? loadSkillsFromRoot(cachePath, "synced") : Promise.resolve([]),
     loadSkillsFromRoot(workspacePath, "workspace"),
     loadPluginSkills(cwd),
@@ -79,7 +90,7 @@ export async function loadToolboxInventory(cwd = process.cwd()): Promise<Toolbox
     exists ? readHead(cachePath) : Promise.resolve(null),
   ]);
 
-  const merged = mergeSkills([...authoringSkills, ...builtinSkills, ...syncedSkills, ...workspaceSkills, ...pluginSkills]);
+  const merged = mergeSkills([...authoringSkills, ...engineAuthoringSkills, ...builtinSkills, ...syncedSkills, ...workspaceSkills, ...pluginSkills]);
   return {
     path: cachePath,
     repo: toolboxRepoUrl(),
@@ -249,7 +260,12 @@ async function walk(root: string, relativeDir: string, found: string[], predicat
 function isSkillFile(relativePath: string): boolean {
   const normalized = relativePath.replace(/\\/g, "/").toLowerCase();
   if (isTemplateFile(normalized)) return false;
-  return normalized.endsWith(".skill.md") || normalized.startsWith("skills/") && normalized.endsWith(".md");
+  // Match any .skill.md anywhere in the tree (including subfolders models may create).
+  if (normalized.endsWith(".skill.md")) return true;
+  // Also match plain .md files inside any folder named "skills" at any depth.
+  const parts = normalized.split("/");
+  const inSkillsDir = parts.slice(0, -1).some((part) => part === "skills");
+  return inSkillsDir && normalized.endsWith(".md");
 }
 
 function isTemplateFile(relativePath: string): boolean {

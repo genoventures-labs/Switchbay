@@ -1,15 +1,15 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import {
   ArrowUp, BookOpen, BracketsCurly, CaretDown, CaretRight, Check, CheckCircle,
-  ClockCounterClockwise, Code, Cpu, CurrencyDollar, Database, File, FolderOpen,
+  ClockCounterClockwise, Code, Cpu, CurrencyDollar, Database, DotsThree, File, FolderOpen,
   GitBranch, HardDrives, House, Lightning, ListChecks, MagnifyingGlass,
-  Plug, Plus, Robot, SidebarSimple, Pulse, Sparkle, SpinnerGap, SquaresFour,
-  TrendUp, UserCircle, Warning, Wrench, X,
+  BookBookmark, NotePencil, Plug, Plus, Robot, SidebarSimple, Pulse, Sparkle, SpinnerGap, SquaresFour,
+  TextAa, TrendUp, UserCircle, Warning, Wrench, X,
 } from "@phosphor-icons/react";
 
 const nav = [
-  ["Home", House], ["Workspaces", FolderOpen], ["Sessions", ClockCounterClockwise],
+  ["Home", House], ["Brief", NotePencil], ["Docs", BookBookmark], ["Workspaces", FolderOpen], ["Sessions", ClockCounterClockwise],
   ["Models", Cpu], ["Engines", Wrench], ["Agents", Robot], ["Skills", Sparkle],
   ["Plugins", Plug], ["Guides", BookOpen], ["Trace", Pulse], ["Usage", BracketsCurly],
 ];
@@ -43,7 +43,10 @@ export function App() {
 
   useEffect(() => {
     fetch("/switchbay-api/health").then((r) => setConnected(r.ok)).catch(() => setConnected(false));
-    const urlWorkspace = new URLSearchParams(window.location.search).get("workspace");
+    const params = new URLSearchParams(window.location.search);
+    const urlWorkspace = params.get("workspace");
+    const urlPage = params.get("page");
+    if (urlPage) setActiveNav(urlPage);
     const workspacePromise = urlWorkspace
       ? Promise.resolve(urlWorkspace)
       : fetch("/switchbay-api/v1/workspaces")
@@ -122,6 +125,8 @@ export function App() {
             setMessages((items) => items.map((item) => item.id === replyId ? { ...item, body: received } : item));
           } else if (event === "step" && typeof data.step === "string") {
             setSteps((items) => [...items.map((item) => ({ ...item, state: "done" })), { label: data.step, state: "active", detail: "In progress" }]);
+          } else if (event === "notice") {
+            setMessages((items) => [...items, { id: Date.now(), role: "notice", body: data.message, noticeType: data.type }]);
           } else if (event === "done") {
             if (!received) {
               const answer = data.content ?? data.output ?? data.text ?? data.message ?? "The turn completed without a text response.";
@@ -256,23 +261,23 @@ export function App() {
           </div>
 
           {railOpen && <DetailsRail steps={steps} job={job} running={running} connected={connected} onClose={() => setRailOpen(false)} />}
-        </section> : <CatalogPage page={activeNav} connected={connected} workspace={workspace} />}
+        </section> : activeNav === "Brief" ? <BriefPage workspace={workspace} model={model} /> : activeNav === "Docs" ? <DocsPage /> : <CatalogPage page={activeNav} connected={connected} workspace={workspace} />}
       </main>
     </div>
   );
 }
 
 const pageMeta = {
-  Workspaces: ["Workspace map", "Move between the projects Switchbay is allowed to enter."],
-  Sessions: ["Session history", "Resume durable conversations without losing their workspace boundary."],
-  Models: ["Model registry", "See trusted auto candidates, local models, and explicit selections."],
-  Engines: ["Engine bay", "Inspect executable tool families and their approval posture."],
-  Agents: ["Agent directory", "Specialist operating modes available to models in this workspace."],
-  Skills: ["Skill toolbox", "Reusable working methods discovered from built-in, synced, and workspace sources."],
-  Plugins: ["Plugin registry", "Installed capability bundles and the assets each contributes."],
-  Guides: ["Quick guides", "Operating rules and quick starts models can discover before acting."],
-  Trace: ["Flight recorder", "Inspect what the latest turn knew, touched, called, and returned."],
-  Usage: ["Usage & spend", "Estimated tokens, model spend, tool calls, and activity over time."],
+  Workspaces: ["Workspaces", "Switch between the project directories Switchbay can work in."],
+  Sessions: ["Session history", "Browse and resume past conversations — context and workspace are preserved."],
+  Models: ["Model catalog", "Models you've added across cloud and local runtimes. Add models with: switchbay model add <id>"],
+  Engines: ["Engine bay", "Tool families available to the agent — each engine adds callable commands."],
+  Agents: ["Agents", "Specialist personas that shift how the agent operates for a given task."],
+  Skills: ["Skills", "Working methods the agent can apply — from built-in, synced, and workspace sources."],
+  Plugins: ["Plugins", "Capability bundles that contribute agents, skills, engines, and MCP config."],
+  Guides: ["Guides", "Quick-start prompts and operating rules the agent discovers before acting."],
+  Trace: ["Turn trace", "What the last turn knew, routed to, called, and returned."],
+  Usage: ["Usage & spend", "Turns, tokens, tool calls, and estimated API spend over time."],
 };
 
 function CatalogPage({ page, connected, workspace }) {
@@ -298,7 +303,7 @@ function CatalogPage({ page, connected, workspace }) {
   };
 
   useEffect(() => { setQuery(""); load(); }, [page]);
-  const [title, description] = pageMeta[page] || [page, "Switchbay workspace data."];
+  const [title, description] = pageMeta[page] || [page, "Workspace data."];
 
   return <section className="catalog-page">
     <div className="catalog-header">
@@ -339,7 +344,7 @@ function SkillBridge({ workspace, onClose, onImported }) {
   };
   return <div className="builder-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
     <section className="resource-builder skill-bridge" role="dialog" aria-modal="true" aria-labelledby="skill-bridge-title">
-      <header><div><p className="eyebrow">Skill bridge</p><h2 id="skill-bridge-title">Import a model skill</h2><p>Bring GPT, Claude, Gemini, or generic Markdown skills into Switchbay without losing the original.</p></div><button className="icon-button" onClick={onClose} aria-label="Close skill importer"><X size={18} /></button></header>
+      <header><div><p className="eyebrow">Skill bridge</p><h2 id="skill-bridge-title">Import a skill</h2><p>Import GPT, Claude, Gemini, or Markdown skills into your workspace skill library.</p></div><button className="icon-button" onClick={onClose} aria-label="Close skill importer"><X size={18} /></button></header>
       <div className="bridge-layout">
         <div className="bridge-source">
           <div className="bridge-controls"><label><span>Source format</span><select value={provider} onChange={(event) => { setProvider(event.target.value); setPreview(null); }}><option value="auto">Auto detect</option><option value="openai">GPT / OpenAI</option><option value="claude">Claude</option><option value="gemini">Gemini</option><option value="generic">Generic Markdown</option></select></label><label><span>Import mode</span><select value={mode} onChange={(event) => { setMode(event.target.value); setPreview(null); }}><option value="preserve">Use as-is</option><option value="convert">Convert to Switchbay</option></select></label></div>
@@ -384,7 +389,7 @@ function ResourceBuilder({ initialKind, workspace, onClose, onCreated }) {
   };
   return <div className="builder-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
     <section className="resource-builder" role="dialog" aria-modal="true" aria-labelledby="builder-title">
-      <header><div><p className="eyebrow">Workspace authoring</p><h2 id="builder-title">Create a Switchbay resource</h2><p>Build it once, save it to its source repository, and let every model discover it.</p></div><button className="icon-button" onClick={onClose} aria-label="Close builder"><X size={18} /></button></header>
+      <header><div><p className="eyebrow">Workspace authoring</p><h2 id="builder-title">Create a resource</h2><p>Build a skill, agent, engine, or guide and save it to your workspace.</p></div><button className="icon-button" onClick={onClose} aria-label="Close builder"><X size={18} /></button></header>
       <div className="builder-layout">
         <aside className="builder-kind-list">{builderKinds.map(([id, label, Icon, description]) => <button key={id} type="button" className={kind === id ? "active" : ""} onClick={() => { setKind(id); setError(""); }}><span><Icon size={18} weight="duotone" /></span><div><strong>{label}</strong><small>{description}</small></div>{kind === id && <Check size={15} />}</button>)}</aside>
         <form onSubmit={save} className="builder-form">
@@ -446,10 +451,415 @@ function PageContent({ page, data, query }) {
 function SummaryStrip({ items }) { return <div className="summary-strip">{items.map(([label,value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}</div>; }
 function ResourceGrid({ children }) { return <div className="resource-grid">{children}</div>; }
 function ResourceCard({ icon: Icon, title, badge, meta, description, tags=[] }) { return <article className="resource-card"><div className="resource-card-head"><span className="resource-icon"><Icon size={18} weight="duotone" /></span><span className="resource-badge">{badge}</span></div><h2>{title}</h2><p className="resource-meta">{meta}</p><p className="resource-description">{description || "No description provided."}</p>{tags.length > 0 && <div className="tag-row">{tags.map(tag => <span key={tag}>{tag}</span>)}</div>}</article>; }
-function LoadingState({ label }) { return <div className="page-state"><SpinnerGap className="spin" size={22} /><strong>{label}</strong><span>Reading the local Switchbay service…</span></div>; }
+function LoadingState({ label }) { return <div className="page-state"><SpinnerGap className="spin" size={22} /><strong>{label}</strong><span>Connecting to the local Switchbay service…</span></div>; }
 function ErrorState({ message, onRetry }) { return <div className="page-state error"><Warning size={23} /><strong>Couldn’t load this page</strong><span>{message}</span><button onClick={onRetry}>Try again</button></div>; }
-function EmptyState({ label }) { return <div className="page-state"><Database size={22} /><strong>{label}</strong><span>This view reflects the current local workspace.</span></div>; }
+function EmptyState({ label }) { return <div className="page-state"><Database size={22} /><strong>{label}</strong><span>Reflects the current local workspace.</span></div>; }
 function Notice({ text }) { return <div className="notice"><Warning size={16} /><span>{text}</span></div>; }
+
+function DocsPage() {
+  const [manifest, setManifest] = useState(null);
+  const [error, setError] = useState("");
+  const [search, setSearch] = useState("");
+  const [activeSection, setActiveSection] = useState(null);
+
+  useEffect(() => {
+    fetch("/switchbay-api/v1/manifest")
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((data) => { setManifest(data); setActiveSection(data.sections?.[0]?.title ?? null); })
+      .catch(() => setError("Could not load manifest from local service."));
+  }, []);
+
+  const query = search.trim().toLowerCase();
+  const filtered = manifest?.sections.map((section) => ({
+    ...section,
+    commands: query
+      ? section.commands.filter((cmd) =>
+          cmd.usage.toLowerCase().includes(query) ||
+          cmd.description.toLowerCase().includes(query) ||
+          (cmd.examples ?? []).some((ex) => ex.toLowerCase().includes(query))
+        )
+      : section.commands,
+  })).filter((section) => section.commands.length > 0);
+
+  if (error) return <div className="docs-shell"><div className="docs-state"><Warning size={20} /><span>{error}</span></div></div>;
+  if (!manifest) return <div className="docs-shell"><div className="docs-state"><SpinnerGap className="spin" size={20} /><span>Loading docs…</span></div></div>;
+
+  return (
+    <div className="docs-shell">
+      <aside className="docs-nav">
+        <div className="docs-nav-head">
+          <p className="eyebrow">v{manifest.version}</p>
+          <h2>CLI reference</h2>
+          <div className="docs-search">
+            <MagnifyingGlass size={14} />
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search commands…" />
+            {search && <button onClick={() => setSearch("")}><X size={12} /></button>}
+          </div>
+        </div>
+        <nav>
+          {(query ? filtered : manifest.sections)?.map((section) => (
+            <button key={section.title}
+              className={activeSection === section.title && !query ? "active" : ""}
+              onClick={() => { setActiveSection(section.title); setSearch(""); }}>
+              {section.title}
+            </button>
+          ))}
+          {!query && <button className={activeSection === "__flags__" ? "active" : ""}
+            onClick={() => { setActiveSection("__flags__"); setSearch(""); }}>
+            Global Flags
+          </button>}
+        </nav>
+      </aside>
+
+      <div className="docs-body">
+        {query ? (
+          <>
+            <div className="docs-section-head"><h2>Results for "{search}"</h2></div>
+            {filtered?.length === 0 && <p className="docs-no-results">No commands match.</p>}
+            {filtered?.map((section) => (
+              <div key={section.title} className="docs-section">
+                <p className="docs-section-label">{section.title}</p>
+                {section.commands.map((cmd) => <DocsCommand key={cmd.usage} cmd={cmd} query={query} />)}
+              </div>
+            ))}
+          </>
+        ) : activeSection === "__flags__" ? (
+          <>
+            <div className="docs-section-head"><h2>Global Flags</h2><p>Apply to any command or bare turn.</p></div>
+            <div className="docs-flags-table">
+              {manifest.flags.map((f) => (
+                <div key={f.flag} className="docs-flag-row">
+                  <code>{f.flag}</code><span>{f.description}</span>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          manifest.sections.filter((s) => s.title === activeSection).map((section) => (
+            <div key={section.title}>
+              <div className="docs-section-head"><h2>{section.title}</h2></div>
+              {section.commands.map((cmd) => <DocsCommand key={cmd.usage} cmd={cmd} />)}
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DocsCommand({ cmd, query = "" }) {
+  const highlight = (text) => {
+    if (!query) return text;
+    const idx = text.toLowerCase().indexOf(query);
+    if (idx === -1) return text;
+    return <>{text.slice(0, idx)}<mark>{text.slice(idx, idx + query.length)}</mark>{text.slice(idx + query.length)}</>;
+  };
+  return (
+    <div className="docs-command">
+      <div className="docs-command-usage"><code>{highlight(cmd.usage)}</code></div>
+      <p className="docs-command-desc">{highlight(cmd.description)}</p>
+      {cmd.options?.length > 0 && (
+        <div className="docs-command-options">
+          {cmd.options.map((opt) => (
+            <div key={opt.flag}><code>{opt.flag}</code><span>{opt.description}</span></div>
+          ))}
+        </div>
+      )}
+      {cmd.examples?.length > 0 && (
+        <div className="docs-command-examples">
+          {cmd.examples.map((ex) => <pre key={ex}>{highlight(ex)}</pre>)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BriefPage({ workspace, model }) {
+  const [docs, setDocs] = useState(null);
+  const [activeFile, setActiveFile] = useState(null);
+  const [content, setContent] = useState("");
+  const [preview, setPreview] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [newDocName, setNewDocName] = useState("");
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState("");
+  const [running, setRunning] = useState(false);
+  const [sessionId, setSessionId] = useState(null);
+  const [menuFile, setMenuFile] = useState(null);
+  const [renaming, setRenaming] = useState(null);
+  const [renameValue, setRenameValue] = useState("");
+  const saveTimer = useRef(null);
+  const feedRef = useRef(null);
+  const textareaRef = useRef(null);
+
+  const load = useCallback(async () => {
+    if (!workspace) return;
+    const r = await fetch(`/switchbay-api/v1/canvas?workspace=${encodeURIComponent(workspace)}`);
+    if (!r.ok) return;
+    const data = await r.json();
+    setDocs(data.docs || []);
+  }, [workspace]);
+
+  useEffect(() => { load(); }, [load]);
+
+  useLayoutEffect(() => {
+    if (feedRef.current) feedRef.current.scrollTop = feedRef.current.scrollHeight;
+  }, [messages, running]);
+
+  const openDoc = async (file) => {
+    setActiveFile(file);
+    setPreview(false);
+    const r = await fetch(`/switchbay-api/v1/canvas/${encodeURIComponent(file)}?workspace=${encodeURIComponent(workspace)}`);
+    if (r.ok) { const data = await r.json(); setContent(data.content || ""); }
+  };
+
+  const saveDoc = useCallback(async (file, text) => {
+    if (!file || !workspace) return;
+    await fetch(`/switchbay-api/v1/canvas/${encodeURIComponent(file)}?workspace=${encodeURIComponent(workspace)}`, {
+      method: "PUT", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ content: text }),
+    });
+  }, [workspace]);
+
+  const handleEdit = (text) => {
+    setContent(text);
+    clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => saveDoc(activeFile, text), 800);
+  };
+
+  const createDoc = async () => {
+    if (!newDocName.trim() || !workspace) return;
+    const r = await fetch(`/switchbay-api/v1/canvas?workspace=${encodeURIComponent(workspace)}`, {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: newDocName.trim() }),
+    });
+    if (r.ok) {
+      const data = await r.json();
+      setCreating(false);
+      setNewDocName("");
+      await load();
+      await openDoc(data.file);
+    }
+  };
+
+  const deleteDoc = async (file) => {
+    await fetch(`/switchbay-api/v1/canvas/${encodeURIComponent(file)}?workspace=${encodeURIComponent(workspace)}`, { method: "DELETE" });
+    setMenuFile(null);
+    if (activeFile === file) { setActiveFile(null); setContent(""); }
+    await load();
+  };
+
+  const startRename = (doc) => {
+    setRenaming(doc.file);
+    setRenameValue(doc.name);
+    setMenuFile(null);
+  };
+
+  const commitRename = async (file) => {
+    if (!renameValue.trim()) { setRenaming(null); return; }
+    const r = await fetch(`/switchbay-api/v1/canvas/${encodeURIComponent(file)}?workspace=${encodeURIComponent(workspace)}`, {
+      method: "PATCH", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: renameValue.trim() }),
+    });
+    if (r.ok) {
+      const data = await r.json();
+      if (activeFile === file) setActiveFile(data.file);
+    }
+    setRenaming(null);
+    await load();
+  };
+
+  const insert = (before, after = "") => {
+    const el = textareaRef.current;
+    if (!el) return;
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    const selected = content.slice(start, end);
+    const next = content.slice(0, start) + before + selected + after + content.slice(end);
+    handleEdit(next);
+    requestAnimationFrame(() => {
+      el.selectionStart = start + before.length;
+      el.selectionEnd = start + before.length + selected.length;
+      el.focus();
+    });
+  };
+
+  const send = async () => {
+    const body = input.trim();
+    if (!body || running || !activeFile) return;
+    setInput("");
+    setMessages((items) => [...items, { id: Date.now(), role: "user", body }]);
+    setRunning(true);
+    const context = activeFile
+      ? `\n\n[Brief document: ${activeFile}]\n\`\`\`\n${content}\n\`\`\`\n\nWhen editing the document use the edit_canvas tool with file="${activeFile}".`
+      : "";
+    try {
+      const r = await fetch("/switchbay-api/v1/turn/stream", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ input: body + context, workspace, clientId: "switchbay-brief", sessionId: sessionId || undefined, newSession: !sessionId }),
+      });
+      if (!r.ok || !r.body) throw new Error("Service unavailable");
+      const replyId = Date.now() + 1;
+      let received = "";
+      let buf = "";
+      setMessages((items) => [...items, { id: replyId, role: "assistant", body: "" }]);
+      const reader = r.body.getReader();
+      const dec = new TextDecoder();
+      while (true) {
+        const { value, done } = await reader.read();
+        buf += dec.decode(value || new Uint8Array(), { stream: !done });
+        const frames = buf.split("\n\n");
+        buf = frames.pop() || "";
+        for (const frame of frames) {
+          const event = frame.match(/^event:\s*(.+)$/m)?.[1];
+          const raw = frame.match(/^data:\s*(.+)$/m)?.[1];
+          if (!raw) continue;
+          const data = JSON.parse(raw);
+          if (event === "token") { received += data.token; setMessages((items) => items.map((item) => item.id === replyId ? { ...item, body: received } : item)); }
+          else if (event === "notice") { setMessages((items) => [...items, { id: Date.now(), role: "notice", body: data.message, noticeType: data.type }]); }
+          else if (event === "done") {
+            if (!received) { received = String(data.content ?? data.output ?? "Done."); setMessages((items) => items.map((item) => item.id === replyId ? { ...item, body: received } : item)); }
+            if (data.sessionId) setSessionId(data.sessionId);
+            // Reload the canvas doc in case the AI edited it
+            if (activeFile) {
+              const dr = await fetch(`/switchbay-api/v1/canvas/${encodeURIComponent(activeFile)}?workspace=${encodeURIComponent(workspace)}`);
+              if (dr.ok) { const dd = await dr.json(); setContent(dd.content || ""); }
+            }
+          }
+          else if (event === "error") throw new Error(data.message || "Turn failed");
+        }
+        if (done) break;
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Turn failed";
+      setMessages((items) => [...items, { id: Date.now(), role: "assistant", body: `**Error:** ${msg}` }]);
+    } finally { setRunning(false); }
+  };
+
+  return (
+    <div className="canvas-shell">
+      {/* Doc list sidebar */}
+      <aside className="canvas-sidebar">
+        <div className="canvas-sidebar-head">
+          <span className="eyebrow">Brief</span>
+          <button className="icon-button" onClick={() => setCreating(true)} title="New document"><Plus size={16} weight="bold" /></button>
+        </div>
+        {creating && (
+          <div className="canvas-new-doc">
+            <input autoFocus value={newDocName} onChange={(e) => setNewDocName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") createDoc(); if (e.key === "Escape") { setCreating(false); setNewDocName(""); } }}
+              placeholder="Document name…" />
+            <button onClick={createDoc} disabled={!newDocName.trim()}>Create</button>
+          </div>
+        )}
+        {!docs ? <div className="canvas-loading"><SpinnerGap className="spin" size={16} /></div> :
+          docs.length === 0 ? <p className="canvas-empty">No documents yet.<br />Create one to start.</p> :
+          <ul className="canvas-doc-list">
+            {docs.map((doc) => (
+              <li key={doc.file} className={menuFile === doc.file ? "menu-open" : ""}>
+                {renaming === doc.file ? (
+                  <div className="canvas-rename-row">
+                    <input autoFocus value={renameValue} onChange={(e) => setRenameValue(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") commitRename(doc.file); if (e.key === "Escape") setRenaming(null); }}
+                      onBlur={() => commitRename(doc.file)} />
+                  </div>
+                ) : (
+                  <>
+                    <button className={activeFile === doc.file ? "active" : ""} onClick={() => { openDoc(doc.file); setMenuFile(null); }}>
+                      <File size={14} /><span>{doc.name}</span>
+                    </button>
+                    <button className="doc-menu-btn" title="More" onClick={(e) => { e.stopPropagation(); setMenuFile(menuFile === doc.file ? null : doc.file); }}>
+                      <DotsThree size={16} weight="bold" />
+                    </button>
+                    {menuFile === doc.file && (
+                      <div className="doc-menu">
+                        <button onClick={() => startRename(doc)}>Rename</button>
+                        <button className="danger" onClick={() => deleteDoc(doc.file)}>Delete</button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </li>
+            ))}
+          </ul>
+        }
+      </aside>
+
+      {/* Editor pane */}
+      <div className="canvas-editor-pane">
+        {!activeFile ? (
+          <div className="canvas-placeholder">
+            <NotePencil size={36} weight="duotone" />
+            <h2>Choose or create a document</h2>
+            <p>Pick a doc from the list, or hit + to start a new one.</p>
+          </div>
+        ) : (
+          <>
+            <div className="canvas-toolbar">
+              <div className="canvas-format-btns">
+                <button title="Bold" onClick={() => insert("**", "**")}><strong>B</strong></button>
+                <button title="Italic" onClick={() => insert("_", "_")}><em>I</em></button>
+                <button title="H1" onClick={() => insert("\n# ", "")}><span>H1</span></button>
+                <button title="H2" onClick={() => insert("\n## ", "")}><span>H2</span></button>
+                <button title="H3" onClick={() => insert("\n### ", "")}><span>H3</span></button>
+                <button title="Bullet" onClick={() => insert("\n- ", "")}>•</button>
+                <button title="Numbered list" onClick={() => insert("\n1. ", "")}>1.</button>
+                <button title="Quote" onClick={() => insert("\n> ", "")}>❝</button>
+              </div>
+              <div className="canvas-toolbar-right">
+                <button className={`canvas-preview-toggle ${preview ? "active" : ""}`} onClick={() => setPreview((v) => !v)}>
+                  <TextAa size={15} />{preview ? "Edit" : "Preview"}
+                </button>
+              </div>
+            </div>
+            <div className="canvas-body">
+              {preview ? (
+                <div className="canvas-preview"><ReactMarkdown>{content}</ReactMarkdown></div>
+              ) : (
+                <textarea ref={textareaRef} className="canvas-textarea" value={content} disabled={running}
+                  onChange={(e) => handleEdit(e.target.value)} placeholder="Start writing…" spellCheck />
+              )}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* AI chat pane */}
+      <div className="canvas-chat-pane">
+        <div className="canvas-chat-head">
+          <Sparkle size={14} weight="fill" /><span>{model.label}</span>
+        </div>
+        <div className="canvas-feed" ref={feedRef}>
+          {!messages.length && (
+            <div className="canvas-chat-empty">
+              <p>Ask the model to draft, expand, revise, or restructure the document.</p>
+              {activeFile && <>
+                <button onClick={() => setInput("Write an introduction section for this document.")}>Draft intro</button>
+                <button onClick={() => setInput("Review this document and suggest improvements.")}>Review & suggest</button>
+                <button onClick={() => setInput("Expand the existing content with more detail.")}>Expand content</button>
+              </>}
+            </div>
+          )}
+          {messages.map((m) => (
+            m.role === "notice"
+              ? <div key={m.id} className={`notice-message notice-${m.noticeType ?? "info"}`}><Warning size={14} weight="fill" /><span>{m.body}</span></div>
+              : <div key={m.id} className={`canvas-message ${m.role}`}><ReactMarkdown>{m.body}</ReactMarkdown></div>
+          ))}
+          {running && <div className="canvas-thinking"><SpinnerGap className="spin" size={15} /><span>Working…</span></div>}
+        </div>
+        <div className="canvas-composer">
+          <textarea value={input} rows={2} disabled={running || !activeFile}
+            placeholder={activeFile ? "Ask the model about this document…" : "Open a document first"}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} />
+          <button onClick={send} disabled={!input.trim() || running || !activeFile}>
+            {running ? <SpinnerGap className="spin" size={16} /> : <ArrowUp size={16} weight="bold" />}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function TraceView({ trace }) {
   if (!trace) return <EmptyState label="No completed trace exists yet." />;
@@ -470,6 +880,7 @@ function relativeTime(value) { const delta = Date.now() - Number(value); if (del
 
 function Message({ message }) {
   if (message.role === "progress") return <div className="progress-message"><span className="progress-orbit"><Sparkle size={13} weight="fill" /></span><div><p>{message.body}</p><span>{message.meta}</span></div></div>;
+  if (message.role === "notice") return <div className={`notice-message notice-${message.noticeType ?? "info"}`}><Warning size={14} weight="fill" /><span>{message.body}</span></div>;
   const assistant = message.role === "assistant";
   return <article className={`message ${assistant ? "assistant" : "user"}`}>
     <div className="message-avatar">{assistant ? <Sparkle size={16} weight="fill" /> : "C"}</div>

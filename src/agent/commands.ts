@@ -21,8 +21,8 @@ import { extractAssistantText } from "./loop";
 import type { RuntimeLane, ToolMode } from "../config/env";
 import { addDailyTask, clearDailyBoard, completeDailyTask, describeDailyBoard } from "../operator/daily-board";
 import { describeEngines, loadEngineRegistry } from "../engines/registry";
-import { describeEngineBay, loadEngineBayInventory } from "../engines/hub";
-import { describeToolbox, loadToolboxInventory, readToolboxSkill } from "../toolbox/hub";
+import { describeEngineBay, loadEngineBayInventory, syncEngineBayRepo, syncEngineBayWithDiff } from "../engines/hub";
+import { describeToolbox, loadToolboxInventory, readToolboxSkill, syncToolboxWithDiff } from "../toolbox/hub";
 import { createDefaultSwitchbayMcpConfig, describeSwitchbayMcpConfig, loadSwitchbayMcpConfig, saveSwitchbayMcpConfig } from "../runtime/mcp-config";
 import { describeTrustedMcpCatalog } from "../runtime/mcp-catalog";
 import {
@@ -298,6 +298,10 @@ export async function tryLocalCommand(
 
   if (trimmed === "/mcp" || trimmed.startsWith("/mcp ")) {
     return handleMcpCommand(trimmed, options);
+  }
+
+  if (trimmed === "/sync") {
+    return handleSyncCommand();
   }
 
   if (trimmed === "/engines") {
@@ -870,7 +874,9 @@ function looksLikeWorkspaceReference(rawQuery: string, query: string): boolean {
 }
 
 function splitFollowUpIntent(input: string): { primary: string; followUp?: string } {
-  const match = input.match(/\s*(?:,|;)?\s+(?:and\s+)?then\s+(.+)$/i);
+  // Only split on "then" when preceded by an explicit structural separator (comma or semicolon).
+  // Bare "and then" without punctuation is too ambiguous and fires on normal conversational text.
+  const match = input.match(/\s*[,;]\s+(?:and\s+)?then\s+(.+)$/i);
   if (!match?.index || !match[1]?.trim()) return { primary: input };
   return {
     primary: input.slice(0, match.index).replace(/[.!?;,]+$/g, "").trim(),
@@ -1335,11 +1341,36 @@ async function handleWebCommand(options: LocalCommandOptions): Promise<LocalComm
   };
 }
 
+async function handleSyncCommand(): Promise<LocalCommandResult> {
+  try {
+    const [engineResult, skillResult] = await Promise.allSettled([
+      syncEngineBayWithDiff(),
+      syncToolboxWithDiff(),
+    ]);
+    const engineOk = engineResult.status === "fulfilled";
+    const skillOk = skillResult.status === "fulfilled";
+    const engineDiff = engineOk ? (engineResult as PromiseFulfilledResult<any>).value : null;
+    const skillDiff = skillOk ? (skillResult as PromiseFulfilledResult<any>).value : null;
+    const engineMsg = engineOk
+      ? `${engineDiff.after} engines${engineDiff.added > 0 ? ` (+${engineDiff.added} new)` : ", up to date"}`
+      : `Failed: ${(engineResult as PromiseRejectedResult).reason?.message ?? "unknown"}`;
+    const skillMsg = skillOk
+      ? `${skillDiff.after} skills${skillDiff.added > 0 ? ` (+${skillDiff.added} new)` : ", up to date"}`
+      : `Failed: ${(skillResult as PromiseRejectedResult).reason?.message ?? "unknown"}`;
+    const status = engineOk && skillOk ? "All libraries synchronized." : "Sync completed with errors.";
+    return { handled: true, assistantMessage: `${status}\n\n**Engines:** ${engineMsg}\n**Skills:** ${skillMsg}` };
+  } catch (e: any) {
+    return { handled: true, assistantMessage: `Sync failed: ${e.message}` };
+  }
+}
+
 async function handleEngineBayCommand(trimmed: string): Promise<LocalCommandResult> {
   const action = trimmed.slice("/engine-bay".length).trim();
   try {
     if (action === "sync") {
-      return { handled: true, assistantMessage: await describeEngineBay(true) };
+      const diff = await syncEngineBayWithDiff();
+      const detail = diff.added > 0 ? `+${diff.added} new` : "up to date";
+      return { handled: true, assistantMessage: `Engine Bay synchronized — ${diff.after} engines (${detail}).` };
     }
 
     const inventory = await loadEngineBayInventory();
@@ -1377,7 +1408,9 @@ async function handleToolboxCommand(trimmed: string, displayCommand = "/skills")
   const action = parts[0] ?? "status";
   try {
     if (action === "sync") {
-      return { handled: true, assistantMessage: await describeToolbox(true) };
+      const diff = await syncToolboxWithDiff();
+      const detail = diff.added > 0 ? `+${diff.added} new` : "up to date";
+      return { handled: true, assistantMessage: `Skill Library synchronized — ${diff.after} skills (${detail}).` };
     }
 
     const inventory = await loadToolboxInventory();

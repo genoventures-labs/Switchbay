@@ -147,6 +147,14 @@ export function removeCloudModel(id: string, provider?: CloudProviderId | null):
   return { catalog, removed: true };
 }
 
+export function removeCloudModelsByProvider(provider: CloudProviderId): { removed: number } {
+  const existing = loadCloudModelCatalog();
+  const before = existing.models.length;
+  const models = existing.models.filter((m) => m.provider !== provider);
+  saveCloudModelCatalog({ models });
+  return { removed: before - models.length };
+}
+
 export function clearCloudModelCatalog(): { removed: number } {
   const existing = loadCloudModelCatalog();
   const removed = existing.models.length;

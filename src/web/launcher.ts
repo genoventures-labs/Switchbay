@@ -3,7 +3,7 @@ import { cliPage } from "../cli/presentation";
 const WEB_URL = "http://127.0.0.1:4173";
 const API_HEALTH = "http://127.0.0.1:7349/health";
 
-export async function openSwitchbayWorkspace(): Promise<string> {
+export async function openSwitchbayWorkspace(page?: string): Promise<string> {
   await ensureApi();
   if (!(await isReady(WEB_URL))) {
     const child = Bun.spawn(relaunchCommand("web-serve"), { stdin: "ignore", stdout: "ignore", stderr: "ignore" });
@@ -11,7 +11,10 @@ export async function openSwitchbayWorkspace(): Promise<string> {
     await waitFor(`${WEB_URL}/switchbay-health`, "visual workspace");
   }
   const cwd = process.cwd();
-  const url = cwd ? `${WEB_URL}?workspace=${encodeURIComponent(cwd)}` : WEB_URL;
+  const params = new URLSearchParams();
+  if (cwd) params.set("workspace", cwd);
+  if (page) params.set("page", page);
+  const url = `${WEB_URL}?${params}`;
   openBrowser(url);
   return cliPage({ title: "Switchbay Workspace", state: "Online", body: `Opened ${WEB_URL}\nThe local API and visual workspace are ready.` });
 }

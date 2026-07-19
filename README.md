@@ -4,9 +4,9 @@
 [![Runtime](https://img.shields.io/badge/runtime-Bun-000000?logo=bun)](https://bun.sh)
 [![License](https://img.shields.io/badge/license-MIT-0f766e)](#license)
 
-**One persistent AI agent. Every model. Your terminal.**
+**Switchbay is a model management system for working across local and cloud AI runtimes.**
 
-Switchbay is not a wrapper. It's an agent that reasons, plans, uses tools, and remembers — across sessions, projects, and providers. Swap models mid-session without losing context. Run fully local. Extend it with a JSON file.
+Add models from any provider, switch between runtimes mid-session, benchmark and trust-grade your pool, and run the same agent against whichever model fits the task — without reconfiguring anything.
 
 ```bash
 brew tap genoventures-labs/tap
@@ -18,85 +18,81 @@ switchbay
 
 ---
 
-## What it does
+## Models
 
-**Routes across every model without breaking your flow.**
-
-Cloud auto-routes between OpenAI, Anthropic, and Google by task type. Apple Intelligence runs on-device via AFM, escalating to Private Cloud Compute only when the task needs it. Local Ollama, llama.cpp, and MLX work the same way — just point Switchbay at a running server. Switch lanes mid-session with a single word.
-
-```
-Claude, audit this PR
-GPT, give me a second opinion
-Auto, pick the best model for what's next
-```
-
-<img src="assets/screenshots/models.svg" width="100%" alt="switchbay models list --all"/>
-
-**Remembers everything that matters.**
-
-Sessions carry forward. Memory persists across repos. Knowledge is indexed locally. Every turn produces a durable trace you can query, replay, or hand off to the next session.
-
-**Extends without touching the core.**
-
-Drop a JSON manifest into `.switchbay/engines/` and new tools are live immediately — no restarts, no code changes. Bundle agents, skills, and engines into a plugin. Share it with your team.
+Switchbay keeps a central catalog of the models you've added. No presets — only models you explicitly register.
 
 ```bash
-switchbay "find the auth bug"          # one-shot
-switchbay --resume                     # pick up where you left off
-switchbay --agent security "review PR" # activate a specialist
-switchbay model pull llama3.2 -y       # install a local model
-switchbay local-mode set offline       # go fully air-gapped
+switchbay model add claude-opus-4-8       # add to cloud catalog
+switchbay model add gemini-2.5-pro        # works with any configured provider
+switchbay model pull llama3.2 -y          # pull local model via Ollama
+switchbay models                          # browse your catalog
+switchbay models --provider anthropic     # filter by provider
+switchbay model remove --lane openai      # bulk remove a provider's models
+switchbay models clear                    # clear all
 ```
+
+<img src="assets/screenshots/models.svg" width="100%" alt="switchbay models"/>
 
 ---
 
-## For developers
+## Runtimes
 
-**Local API**
-
-```bash
-switchbay serve
-
-curl -s http://127.0.0.1:7349/v1/turn \
-  -H 'content-type: application/json' \
-  -d '{"input":"Review the auth flow","workspace":"/path/to/project"}'
-```
-
-```ts
-import { Switchbay } from "@genoventures/switchbay";
-const bay = new Switchbay({ token: process.env.SWITCHBAY_API_TOKEN, workspace: "/path/to/project" });
-const turn = await bay.turn({ input: "Review the auth flow." });
-```
-
-**Engine Bay** — drop-in tools via JSON manifest
-
-```json
-{
-  "id": "my-engine",
-  "tools": [{
-    "name": "run_tests",
-    "description": "Run the test suite and return results.",
-    "command": "bun test --reporter json",
-    "parameters": {}
-  }]
-}
-```
-
-Place in `.switchbay/engines/` — live on next turn. Community engines via `switchbay engines sync`.
-
-**Model lanes**
+Switch between cloud and local inference without touching your session or context.
 
 | Lane | Providers |
 |---|---|
-| `cloud` | OpenAI · Anthropic · Google (auto-routed) |
-| `apple` | AFM 3 Core · Core Advanced · Cloud · Cloud Pro (PCC) |
+| `cloud` | OpenAI · Anthropic · Google — auto-routed or pinned |
 | `local` | Ollama · llama.cpp · MLX |
-| `openrouter` | 200+ models |
+| `apple` | AFM 3 Core · Core Advanced · Cloud · Cloud Pro (PCC) |
+| `openrouter` | OpenRouter |
 | `huggingface` | HF Inference Providers |
 
-Set via `SWITCHBAY_LANE` env var, `--lane` flag, or `/lane` mid-session.
+```bash
+switchbay --lane local "summarise this file"    # route to local
+switchbay --lane cloud "review this PR"         # route to cloud
+```
 
-Full docs: [docs/](docs/)
+Lane flags, env vars, or `/lane` mid-session — all work the same way.
+
+---
+
+## Benchmarking
+
+Run a pre-bench across your entire model catalog to grade each model before you rely on it. Grades are stored and shown alongside your model list.
+
+```bash
+switchbay benchmark --pre          # grade all models (A+ → F)
+switchbay models --trusted         # show only A/B models
+switchbay benchmark <model-id>     # full 10-test suite on one model
+```
+
+Grades are based on coherence, instruction-following, JSON output, tool calls, safety, and more. Failed due to auth or network errors are flagged separately from genuine low scores.
+
+---
+
+## Agent workspace
+
+Switchbay runs a persistent agent with tools, memory, and context that carries across sessions.
+
+```bash
+switchbay                              # open the terminal workspace
+switchbay "find the auth bug"          # one-shot request
+switchbay --resume                     # continue your last session
+switchbay open                         # open the visual web workspace
+switchbay serve                        # start the local API server
+```
+
+The agent extends through **engines** (JSON tool manifests), **skills** (working methods), and **agents** (specialist personas) — none of which require touching core code.
+
+```bash
+switchbay sync                         # sync engines and skills from remote
+switchbay engines list
+switchbay skills list
+switchbay agents list
+```
+
+Full reference: [docs/](docs/)
 
 ---
 

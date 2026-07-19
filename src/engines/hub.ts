@@ -44,6 +44,15 @@ export async function syncEngineBayRepo(): Promise<string> {
   return clone.stdout || clone.stderr || `Cloned ${repo}`;
 }
 
+export type SyncDiff = { before: number; after: number; added: number };
+
+export async function syncEngineBayWithDiff(): Promise<SyncDiff> {
+  const before = (await loadEngineBayInventory()).manifests.length;
+  await syncEngineBayRepo();
+  const after = (await loadEngineBayInventory()).manifests.length;
+  return { before, after, added: Math.max(0, after - before) };
+}
+
 export async function loadEngineBayInventory(): Promise<EngineBayInventory> {
   const cachePath = engineBayCachePath();
   const exists = existsSync(cachePath);

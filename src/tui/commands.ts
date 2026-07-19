@@ -512,6 +512,12 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     category: "skills",
+    command: "/sync",
+    description: "Sync both engines and skills libraries in one shot.",
+    example: "/sync",
+  },
+  {
+    category: "skills",
     command: "/skills sync",
     description: "Sync the GitHub-backed skills repo.",
     example: "/skills sync",

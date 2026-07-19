@@ -28,6 +28,7 @@ import {
   runInNativeEnvironment,
 } from "../environment/native-environment";
 import { formatUsage, listTraceRecords } from "../telemetry/usage";
+import { createCanvasDoc, editCanvasDoc, listCanvasDocs } from "../tools/canvas";
 
 // Commands that still require approval in the private-tool lane because they
 // are destructive, privileged, publishing, or have broad external impact.
@@ -433,7 +434,7 @@ export const AGENT_TOOLS: ToolDefinition[] = [
           old_str: { type: "string", description: "Unique text to replace." },
           new_str: { type: "string", description: "Replacement or inserted text." },
           insert_line: { type: "number", description: "Zero-based line after which to insert." },
-          view_range: { type: "array", description: "Optional [start,end] one-based line range." },
+          view_range: { type: "array", description: "Optional [start,end] one-based line range.", items: { type: "number" } },
         },
         required: ["command", "path"],
       },
@@ -447,7 +448,7 @@ export const AGENT_TOOLS: ToolDefinition[] = [
       parameters: {
         type: "object",
         properties: {
-          paths: { type: "array", description: "Workspace-relative file paths to copy from the isolated snapshot into the real repository." },
+          paths: { type: "array", description: "Workspace-relative file paths to copy from the isolated snapshot into the real repository.", items: { type: "string" } },
         },
         required: ["paths"],
       },
@@ -623,6 +624,46 @@ export const AGENT_TOOLS: ToolDefinition[] = [
       name: "memory_facts",
       description: "List structured workspace memory facts.",
       parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "list_canvas_docs",
+      description: "List canvas documents available in this workspace.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "create_canvas_doc",
+      description: "Create a new canvas document with an optional initial body.",
+      parameters: {
+        type: "object",
+        properties: {
+          name: { type: "string", description: "Human-readable document title." },
+          content: { type: "string", description: "Initial markdown content (optional)." },
+        },
+        required: ["name"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "edit_canvas",
+      description: "Edit an existing canvas document. Use replace_all to set the full content, append/prepend to add sections, or insert_after to place content after an anchor string.",
+      parameters: {
+        type: "object",
+        properties: {
+          file: { type: "string", description: "Canvas filename (e.g. project-brief.md)." },
+          op: { type: "string", description: "Edit operation: replace_all | append | prepend | insert_after." },
+          content: { type: "string", description: "Markdown content to write." },
+          anchor: { type: "string", description: "For insert_after: unique text in the document to insert after." },
+        },
+        required: ["file", "op", "content"],
+      },
     },
   },
   {
@@ -1837,6 +1878,35 @@ export async function executeToolCall(
           throw new Error("gumroad_refund_sale amount must be a positive number when provided.");
         }
         return executeGumOpsTool(name, ["refund_sale", "gum_refund_sale"], { sale_id: saleId, amount }, cwd);
+      }
+
+      case "list_canvas_docs": {
+        const docs = await listCanvasDocs(cwd);
+        return {
+          tool: name,
+          ok: true,
+          summary: `${docs.length} canvas document${docs.length === 1 ? "" : "s"}`,
+          body: docs.length ? docs.map((d) => `${d.file} — ${d.name} (${d.size} bytes, updated ${d.updatedAt.slice(0, 10)})`).join("\n") : "No canvas documents yet. Use create_canvas_doc to start one.",
+        };
+      }
+
+      case "create_canvas_doc": {
+        const docName = String(args.content !== undefined ? args.name : args.name || "").trim();
+        if (!docName) throw new Error("create_canvas_doc requires a name.");
+        const initialContent = typeof args.content === "string" ? args.content : "";
+        const file = await createCanvasDoc(cwd, docName, initialContent);
+        return { tool: name, ok: true, summary: `Created ${file}`, body: `Canvas document created: ${file}` };
+      }
+
+      case "edit_canvas": {
+        const file = String(args.file || "").trim();
+        const op = String(args.op || "").trim() as import("../tools/canvas").CanvasEditOp;
+        const content = String(args.content ?? "");
+        const anchor = typeof args.anchor === "string" ? args.anchor : undefined;
+        if (!file) throw new Error("edit_canvas requires a file.");
+        if (!["replace_all", "append", "prepend", "insert_after"].includes(op)) throw new Error("edit_canvas op must be replace_all, append, prepend, or insert_after.");
+        await editCanvasDoc(cwd, file, op, content, anchor);
+        return { tool: name, ok: true, summary: `Updated ${file} (${op})`, body: `Canvas document updated: ${file}` };
       }
 
       default: {

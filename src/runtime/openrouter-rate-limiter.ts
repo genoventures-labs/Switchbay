@@ -105,6 +105,12 @@ export function recordOpenRouterRequest(): void {
   save(next);
 }
 
+/** Returns true when usage is at or above the given threshold (0–1) for either window. */
+export function isOpenRouterNearLimit(threshold = 0.8): boolean {
+  const s = getOpenRouterRateStatus();
+  return (s.minuteUsed / s.minuteLimit >= threshold) || (s.dayUsed / s.dayLimit >= threshold);
+}
+
 export function resetOpenRouterRateState(): void {
   cached = null;
   try { fs.unlinkSync(statePath()); } catch { /* already gone */ }

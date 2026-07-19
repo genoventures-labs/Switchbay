@@ -22,25 +22,6 @@ export type RuntimeModelList = {
   notice?: string;
 };
 
-const OPENAI_PRESETS: RuntimeModelOption[] = [
-  { id: "gpt-5.6-sol", label: "GPT-5.6 Sol", lane: "cloud", provider: "openai", source: "preset" },
-  { id: "gpt-5.6-terra", label: "GPT-5.6 Terra", lane: "cloud", provider: "openai", source: "preset" },
-  { id: "gpt-5.6-luna", label: "GPT-5.6 Luna", lane: "cloud", provider: "openai", source: "preset" },
-  { id: "gpt-5.5", label: "GPT-5.5", lane: "cloud", provider: "openai", source: "preset" },
-];
-
-const ANTHROPIC_PRESETS: RuntimeModelOption[] = [
-  { id: "claude-opus-4-1", label: "Claude Opus 4.1", lane: "cloud", provider: "anthropic", source: "preset" },
-  { id: "claude-sonnet-4-5", label: "Claude Sonnet 4.5", lane: "cloud", provider: "anthropic", source: "preset" },
-  { id: "claude-haiku-4-5", label: "Claude Haiku 4.5", lane: "cloud", provider: "anthropic", source: "preset" },
-];
-
-const GOOGLE_PRESETS: RuntimeModelOption[] = [
-  { id: "gemini-3.5-pro", label: "Gemini 3.5 Pro", lane: "cloud", provider: "google", source: "preset" },
-  { id: "gemini-3.5-flash", label: "Gemini 3.5 Flash", lane: "cloud", provider: "google", source: "preset" },
-  { id: "gemini-3.5-flash-lite", label: "Gemini 3.5 Flash-Lite", lane: "cloud", provider: "google", source: "preset" },
-];
-
 type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 
 export function getCloudModelPresets(): RuntimeModelOption[] {
@@ -48,8 +29,7 @@ export function getCloudModelPresets(): RuntimeModelOption[] {
 }
 
 export function getCloudModelPresetsForLane(lane: Extract<RuntimeLane, "cloud" | "cloud-mcp">): RuntimeModelOption[] {
-  const available = scanAvailableProviders();
-  // Custom-added models are always included — user explicitly added them.
+  // Only return models the user has explicitly added — no hardcoded presets.
   const customModels = loadCloudModelCatalog().models.map((model) => ({
     id: model.id,
     label: model.label ?? model.id,
@@ -57,13 +37,7 @@ export function getCloudModelPresetsForLane(lane: Extract<RuntimeLane, "cloud" |
     provider: model.provider,
     source: "custom" as const,
   }));
-  // Presets are only included when the provider's key is present.
-  const presets = [
-    ...(available.has("openai")    ? OPENAI_PRESETS    : []),
-    ...(available.has("anthropic") ? ANTHROPIC_PRESETS : []),
-    ...(available.has("google")    ? GOOGLE_PRESETS    : []),
-  ].map((model) => ({ ...model, lane }));
-  return uniqueModels([...customModels, ...presets]);
+  return uniqueModels(customModels);
 }
 
 export async function listRuntimeModels(lane: RuntimeLane, localProvider = getActiveLocalProvider()): Promise<RuntimeModelList> {
@@ -223,8 +197,8 @@ export async function listOllamaModels(fetchImpl: FetchLike = fetch, provider: "
       models: uniqueModels(models),
       notice: models.length ? undefined : `${config.label} returned no models from ${config.apiBase}/tags.`,
     };
-  } catch (error: any) {
-    return { models: [], notice: `Could not reach ${config.label} at ${config.apiBase}: ${error.message}` };
+  } catch {
+    return { models: [], notice: "Not connected" };
   }
 }
 
@@ -260,11 +234,8 @@ export async function listOpenAiCompatLocalModels(
   }
 }
 
-function serverNotRunningNotice(provider: "llama-cpp" | "mlx", label: string, apiBase: string): string {
-  const startCmd = provider === "llama-cpp"
-    ? "llama-server --model <path/to/model.gguf> --port 8080"
-    : "mlx_lm.server --model <hf-repo-or-path> --port 8080";
-  return `${label} server not reachable at ${apiBase}. Start it with: ${startCmd}`;
+function serverNotRunningNotice(_provider: "llama-cpp" | "mlx", _label: string, _apiBase: string): string {
+  return "Not connected";
 }
 
 export function normalizeOllamaHuggingFaceModel(target: string, quantization?: string | null): string {

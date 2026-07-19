@@ -40,6 +40,7 @@ import { confirm } from "./src/cli/confirm";
 import { createCanvasDoc, editCanvasDoc, listCanvasDocs } from "./src/tools/canvas";
 import { runBenchmark, runPreBench, type BenchmarkResult } from "./src/benchmark/runner";
 import { getAllGrades, getModelGrade, isTrusted, saveModelGrade } from "./src/benchmark/grades";
+import { addImageToStore, listImages, formatImageSize } from "./src/runtime/image-store";
 
 // Ensure config is initialized on first boot
 loadSwitchbayConfig();
@@ -250,6 +251,16 @@ async function boot() {
   if (options.subcommand === "docs") {
     const { openSwitchbayWorkspace } = await import("./src/web/launcher");
     console.log(await openSwitchbayWorkspace("Docs"));
+    return;
+  }
+
+  if (options.subcommand === "inspect") {
+    await runInspectCommand(options.inspectImagePath ?? null, options.inspectQuestion ?? null, options.inspectTask ?? null, options.lane);
+    return;
+  }
+
+  if (options.subcommand === "images") {
+    await runImagesCommand();
     return;
   }
 
@@ -1923,6 +1934,66 @@ async function runOllamaCliFallback(model: string) {
 
 function shellQuote(value: string): string {
   return /^[A-Za-z0-9_./:=@-]+$/.test(value) ? value : JSON.stringify(value);
+}
+
+async function runInspectCommand(imagePath: string | null, question: string | null, task: string | null, lane: string | null) {
+  if (!imagePath) {
+    console.error(cliFailure("Inspect", "An image path is required.", ["switchbay inspect <path> [--question \"...\"] [--task ui|document|chart|code]"]));
+    process.exit(1);
+  }
+
+  try {
+    const result = await addImageToStore(imagePath);
+    const { entry, isNew } = result;
+    if (isNew) {
+      process.stdout.write(`  ${CLR.muted}└ saved ${entry.id} · ${formatImageSize(entry.size)}${CLR.reset}\n`);
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(cliFailure("Inspect", msg, []));
+    process.exit(1);
+  }
+
+  const { runSwitchbayTurn } = await import("./src/api/service");
+  const { modelSpeakerLabel } = await import("./src/runtime/model-identity");
+
+  const taskHint = task ? ` Treat this as a ${task} analysis.` : "";
+  const userQuestion = question ?? "Describe what you see in this image. Be specific and thorough.";
+  const prompt = `${userQuestion}${taskHint}\n\n${imagePath}`;
+
+  process.stdout.write(`\n${CLR.accent}⏺${CLR.reset} ${CLR.muted}(thinking...)${CLR.reset}\n`);
+  const turnResult = await runSwitchbayTurn({
+    input: prompt,
+    lane,
+    mode: options.mode,
+    profile: options.profile,
+    surface: options.surface,
+    workspace: process.cwd(),
+  }, {
+    onStep: (title: string) => process.stdout.write(`  ${CLR.muted}└ ${title}${CLR.reset}\n`),
+  });
+
+  const speaker = modelSpeakerLabel(turnResult.route);
+  process.stdout.write(`\n${CLR.accent}⏺${CLR.reset} ${CLR.text}${CLR.bold}${speaker}${CLR.reset}\n`);
+  if (turnResult.route?.using) process.stdout.write(`  ${CLR.muted}└ ${CLR.reset}Using: ${turnResult.route.using}\n`);
+  process.stdout.write(`\n${turnResult.content}\n`);
+}
+
+async function runImagesCommand() {
+  const entries = await listImages();
+  if (!entries.length) {
+    process.stdout.write(`${CLR.muted}No images in store. Use: switchbay inspect <path>${CLR.reset}\n`);
+    return;
+  }
+  process.stdout.write(`\n${CLR.bold}Image Store${CLR.reset}  ${CLR.muted}(${entries.length} image${entries.length === 1 ? "" : "s"})${CLR.reset}\n\n`);
+  for (const e of entries) {
+    const date = new Date(e.addedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    const fmt = e.format ? `.${e.format}` : "";
+    process.stdout.write(`  ${CLR.accent}${e.id}${CLR.reset}  ${CLR.muted}${fmt}  ${formatImageSize(e.size)}  ${date}${CLR.reset}\n`);
+    process.stdout.write(`         ${e.path}\n`);
+    if (e.note) process.stdout.write(`         ${CLR.muted}${e.note}${CLR.reset}\n`);
+  }
+  process.stdout.write("\n");
 }
 
 async function runCliMode(options: any, resumeId: string | null) {

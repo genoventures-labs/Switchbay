@@ -13,7 +13,10 @@ export type CliOptions = {
   purge: string | null;
   visionPath?: string | null;
   detach?: boolean;
-  subcommand: "run" | "open" | "web-serve" | "serve" | "service" | "update" | "version" | "help" | "engines" | "skills" | "toolbox" | "plugins" | "agents" | "memory" | "knowledge" | "trace" | "usage" | "graph" | "radar" | "handoff" | "mcp" | "models" | "model" | "local-provider" | "cloud-provider" | "local-mode" | "agenda" | "task" | "brief" | "docs" | "sync" | "benchmark";
+  subcommand: "run" | "open" | "web-serve" | "serve" | "service" | "update" | "version" | "help" | "engines" | "skills" | "toolbox" | "plugins" | "agents" | "memory" | "knowledge" | "trace" | "usage" | "graph" | "radar" | "handoff" | "mcp" | "models" | "model" | "local-provider" | "cloud-provider" | "local-mode" | "agenda" | "task" | "brief" | "docs" | "sync" | "benchmark" | "inspect" | "images";
+  inspectImagePath?: string | null;
+  inspectQuestion?: string | null;
+  inspectTask?: string | null;
   benchmarkModel?: string | null;
   benchmarkLane?: string | null;
   benchmarkPre?: boolean;
@@ -373,6 +376,28 @@ export function parseCliArgs(argv: string[]): CliOptions {
         taskId: parsedTask.id,
         modelTarget: null,
         modelLane: null,
+      };
+    } else if (arg === "inspect" || arg === "vision") {
+      const imagePath = args[i + 1] && !args[i + 1]!.startsWith("-") ? args[i + 1]! : null;
+      const rest = args.slice(imagePath ? i + 2 : i + 1);
+      const questionIdx = rest.findIndex((a) => a === "--question" || a === "-q");
+      const inspectQuestion = questionIdx >= 0 ? rest[questionIdx + 1] ?? null : null;
+      const taskIdx = rest.findIndex((a) => a === "--task");
+      const inspectTask = taskIdx >= 0 ? rest[taskIdx + 1] ?? null : null;
+      return {
+        surface, profile, mode, lane, initialQuery: "", hop, resume, newSession, purge,
+        subcommand: "inspect", inspectImagePath: imagePath, inspectQuestion, inspectTask,
+        engineAction: "status", toolboxAction: "status", toolboxSkill: null,
+        memoryAction: "status", memoryNote: null, knowledgeAction: "status", knowledgeQuery: null,
+        traceAction: "last", mcpAction: "status", modelTarget: null, modelLane: null,
+      };
+    } else if (arg === "images" || arg === "image-store") {
+      return {
+        surface, profile, mode, lane, initialQuery: "", hop, resume, newSession, purge,
+        subcommand: "images",
+        engineAction: "status", toolboxAction: "status", toolboxSkill: null,
+        memoryAction: "status", memoryNote: null, knowledgeAction: "status", knowledgeQuery: null,
+        traceAction: "last", mcpAction: "status", modelTarget: null, modelLane: null,
       };
     } else if (arg === "benchmark" || arg === "bench") {
       // switchbay benchmark [model] [--lane <lane>]

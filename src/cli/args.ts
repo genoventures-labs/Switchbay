@@ -23,8 +23,9 @@ export type CliOptions = {
   benchmarkTrusted?: boolean;
   graphAction?: "trace";
   serviceAction?: "install" | "status" | "restart" | "uninstall";
-  engineAction: "status" | "sync" | "list" | "templates";
-  toolboxAction: "status" | "sync" | "list" | "templates" | "read";
+  engineAction: "status" | "sync" | "list" | "templates" | "health";
+  engineFix?: boolean;
+  toolboxAction: "status" | "sync" | "list" | "templates" | "read" | "health";
   toolboxSkill: string | null;
   pluginAction?: "status" | "list" | "inspect";
   pluginId?: string | null;
@@ -48,7 +49,7 @@ export type CliOptions = {
   taskAction?: "status" | "add" | "done" | "clear";
   taskText?: string | null;
   taskId?: number | null;
-  modelsAction?: "list" | "clear";
+  modelsAction?: "list" | "clear" | "verify";
   modelsAll?: boolean;
   modelsTrusted?: boolean;
   modelsProvider?: string | null;
@@ -170,10 +171,11 @@ export function parseCliArgs(argv: string[]): CliOptions {
         return { surface, profile, mode, lane, initialQuery: "", hop, resume, newSession, purge, subcommand: "help", helpContext: "engines", engineAction: "status", toolboxAction: "status", toolboxSkill: null, memoryAction: "status", memoryNote: null, knowledgeAction: "status", knowledgeQuery: null, traceAction: "last", mcpAction: "status", modelTarget: null, modelLane: null };
       }
       const action = args[i + 1];
-      assertCliAction("engines", action, ["sync", "list", "templates", "status"]);
-      const engineAction = action === "sync" || action === "list" || action === "templates" || action === "status"
+      assertCliAction("engines", action, ["sync", "list", "templates", "status", "health"]);
+      const engineAction = action === "sync" || action === "list" || action === "templates" || action === "status" || action === "health"
         ? action
         : "status";
+      const engineFix = args.slice(i + 1).includes("--fix");
       return {
         surface,
         profile,
@@ -186,6 +188,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
         purge,
         subcommand: "engines",
         engineAction,
+        engineFix,
         toolboxAction: "status",
         toolboxSkill: null,
         memoryAction: "status",
@@ -202,8 +205,8 @@ export function parseCliArgs(argv: string[]): CliOptions {
         return { surface, profile, mode, lane, initialQuery: "", hop, resume, newSession, purge, subcommand: "help", helpContext: "skills", engineAction: "status", toolboxAction: "status", toolboxSkill: null, memoryAction: "status", memoryNote: null, knowledgeAction: "status", knowledgeQuery: null, traceAction: "last", mcpAction: "status", modelTarget: null, modelLane: null };
       }
       const action = args[i + 1];
-      assertCliAction(arg, action, ["sync", "list", "templates", "read", "status"]);
-      const toolboxAction = action === "sync" || action === "list" || action === "templates" || action === "read" || action === "status"
+      assertCliAction(arg, action, ["sync", "list", "templates", "read", "status", "health"]);
+      const toolboxAction = action === "sync" || action === "list" || action === "templates" || action === "read" || action === "status" || action === "health"
         ? action
         : "status";
       return {
@@ -692,7 +695,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
         const sub = rest[0] === "list" || rest[0] === "clear" ? `models ${rest[0]}` : "models";
         return { surface, profile, mode, lane, initialQuery: "", hop, resume, newSession, purge, subcommand: "help", helpContext: sub, engineAction: "status", toolboxAction: "status", toolboxSkill: null, memoryAction: "status", memoryNote: null, knowledgeAction: "status", knowledgeQuery: null, traceAction: "last", mcpAction: "status", modelTarget: null, modelLane: null };
       }
-      const modelsAction: "list" | "clear" = rest[0] === "clear" ? "clear" : "list";
+      const modelsAction: "list" | "clear" | "verify" = rest[0] === "clear" ? "clear" : rest[0] === "verify" ? "verify" : "list";
       const modelsAll = rest.includes("--all");
       const modelsTrusted = rest.includes("--trusted");
       const modelsProvider = readProviderFlag(modelsAction === "clear" ? rest.slice(1) : rest);

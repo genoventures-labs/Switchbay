@@ -12,6 +12,7 @@ import { listSessions, purgeSessions, loadPersistedSession, savePersistedSession
 import { buildTurn, executeTurn, extractAssistantText, refreshWorkspace, synthesizeAssistantFallback } from "./src/agent/loop";
 import { tryLocalCommand } from "./src/agent/commands";
 import { describeEngineBay, loadEngineBayInventory, syncEngineBayRepo, syncEngineBayWithDiff } from "./src/engines/hub";
+import { healthCheckEngines, fixEngines } from "./src/engines/health";
 import { describeToolbox, loadToolboxInventory, readToolboxSkill, syncToolboxWithDiff } from "./src/toolbox/hub";
 import { addMemoryNote, describeMemory, listMemoryNotes, readMemoryFacts, refreshMemory } from "./src/memory/store";
 import { describeKnowledgeIndex, formatKnowledgeSearchResults, refreshKnowledgeIndex, searchKnowledgeIndex } from "./src/knowledge/store";
@@ -169,7 +170,7 @@ async function boot() {
   }
 
   if (options.subcommand === "engines") {
-    await runEngineCommand(options.engineAction);
+    await runEngineCommand(options.engineAction, options.engineFix ?? false);
     return;
   }
 
@@ -538,7 +539,7 @@ async function runSyncCommand() {
   }
 }
 
-async function runEngineCommand(action: "status" | "sync" | "list" | "templates") {
+async function runEngineCommand(action: "status" | "sync" | "list" | "templates" | "health", fix = false) {
   try {
     if (action === "sync") {
       const diff = await syncEngineBayWithDiff();
@@ -555,6 +556,69 @@ async function runEngineCommand(action: "status" | "sync" | "list" | "templates"
         rows: inventory.templates.map((path) => ({ path })),
         empty: "No Engine Bay templates found.", hint: "Refresh: switchbay engines sync",
       }));
+      return;
+    }
+    if (action === "health") {
+      const results = await healthCheckEngines(process.cwd());
+      if (!results.length) {
+        process.stdout.write(`${CLR.muted}No registered engines. Sync Engine Bay or add a workspace manifest.${CLR.reset}\n`);
+        return;
+      }
+      process.stdout.write(`\n${CLR.bold}Engine Health${CLR.reset}\n\n`);
+      for (const engine of results) {
+        const icon = engine.status === "ok" ? `${CLR.accent}✓${CLR.reset}` : engine.status === "warn" ? `${CLR.muted}⚠${CLR.reset}` : `\x1b[31m✗\x1b[0m`;
+        const toolLabel = `${engine.toolCount} tool${engine.toolCount === 1 ? "" : "s"}`;
+        process.stdout.write(`  ${icon}  ${engine.name}  ${CLR.muted}${engine.id} · ${toolLabel}${CLR.reset}\n`);
+
+        // Deduplicate missing executables — group by path, show count if > 1
+        const missing = engine.tools.filter((t) => t.status === "missing");
+        const missingByExec = new Map<string, number>();
+        for (const t of missing) {
+          const key = t.executable ?? t.name;
+          missingByExec.set(key, (missingByExec.get(key) ?? 0) + 1);
+        }
+        for (const [exec, count] of missingByExec) {
+          const suffix = count > 1 ? ` ${CLR.muted}(${count} tools)${CLR.reset}` : "";
+          process.stdout.write(`       \x1b[31m✗\x1b[0m ${CLR.muted}${exec} not found${CLR.reset}${suffix}\n`);
+        }
+
+        if (engine.doctorLines.length > 0) {
+          for (const line of engine.doctorLines) {
+            process.stdout.write(`       ${CLR.muted}${line}${CLR.reset}\n`);
+          }
+        } else if (engine.doctorOk === false) {
+          process.stdout.write(`       \x1b[31m✗\x1b[0m ${CLR.muted}doctor failed${CLR.reset}\n`);
+        }
+      }
+      const ok = results.filter((r) => r.status === "ok").length;
+      const fail = results.filter((r) => r.status === "fail").length;
+      process.stdout.write(`\n  ${CLR.muted}${ok}/${results.length} healthy${fail > 0 ? ` · ${fail} broken` : ""}${CLR.reset}\n\n`);
+
+      if (fix) {
+        const broken = results.filter((r) => r.status !== "ok");
+        if (!broken.length) {
+          process.stdout.write(`${CLR.muted}Nothing to fix.${CLR.reset}\n\n`);
+          return;
+        }
+        process.stdout.write(`${CLR.bold}Fixing${CLR.reset}  ${CLR.muted}${broken.length} engine${broken.length === 1 ? "" : "s"}${CLR.reset}\n\n`);
+        const fixes = await fixEngines(results, process.cwd());
+        for (const fix of fixes) {
+          process.stdout.write(`  ${fix.name}\n`);
+          if (!fix.steps.length) {
+            process.stdout.write(`     ${CLR.muted}No automatic fix available${CLR.reset}\n`);
+          }
+          for (const step of fix.steps) {
+            const icon = step.ok ? `${CLR.accent}✓${CLR.reset}` : `\x1b[31m✗\x1b[0m`;
+            process.stdout.write(`     ${icon}  ${step.label}\n`);
+            if (step.output) process.stdout.write(`        ${CLR.muted}${step.output}${CLR.reset}\n`);
+          }
+        }
+        // Re-run health to show updated state
+        process.stdout.write(`\n${CLR.muted}Re-checking...${CLR.reset}\n\n`);
+        const recheck = await healthCheckEngines(process.cwd());
+        const nowOk = recheck.filter((r) => r.status === "ok").length;
+        process.stdout.write(`  ${CLR.muted}${nowOk}/${recheck.length} healthy after fix${CLR.reset}\n\n`);
+      }
       return;
     }
     if (action === "list") {
@@ -597,7 +661,7 @@ async function runEngineCommand(action: "status" | "sync" | "list" | "templates"
 }
 
 async function runToolboxCommand(
-  action: "status" | "sync" | "list" | "templates" | "read",
+  action: "status" | "sync" | "list" | "templates" | "read" | "health",
   skillId: string | null,
   commandName: "skills" | "toolbox" = "skills",
 ) {
@@ -611,6 +675,33 @@ async function runToolboxCommand(
     }
 
     const inventory = await loadToolboxInventory();
+    if (action === "health") {
+      const skills = inventory.skills;
+      if (!skills.length) {
+        process.stdout.write(`${CLR.muted}No skills found. Sync the Toolbox first: switchbay skills sync${CLR.reset}\n`);
+        return;
+      }
+      process.stdout.write(`\n${CLR.bold}Skill Health${CLR.reset}\n\n`);
+      let ok = 0;
+      let broken = 0;
+      for (const skill of skills) {
+        const fileOk = await Bun.file(skill.path).exists();
+        const hasBody = skill.body.trim().length > 0;
+        const healthy = fileOk && hasBody;
+        healthy ? ok++ : broken++;
+        if (!healthy) {
+          const icon = `\x1b[31m✗\x1b[0m`;
+          const reason = !fileOk ? "file missing" : "empty body";
+          process.stdout.write(`  ${icon}  ${CLR.bold}${skill.id}${CLR.reset}  ${CLR.muted}${reason}${CLR.reset}\n`);
+          process.stdout.write(`         ${skill.path}\n`);
+        }
+      }
+      if (broken === 0) {
+        process.stdout.write(`  ${CLR.accent}✓${CLR.reset}  All ${ok} skill${ok === 1 ? "" : "s"} healthy\n`);
+      }
+      process.stdout.write(`\n  ${CLR.muted}${ok}/${skills.length} healthy${broken > 0 ? ` · ${broken} broken` : ""}${CLR.reset}\n\n`);
+      return;
+    }
     if (action === "templates") {
       console.log(renderCliList({
         title: "Skill Templates", count: inventory.templates.length, noun: "template",
@@ -1306,7 +1397,39 @@ async function runModelsAllCommand() {
   console.log("");
 }
 
-async function runModelsCommand(rawLane: string | null, action: "list" | "clear" = "list", all = false, trustedOnly = false, providerFilter: string | null = null) {
+async function runModelsCommand(rawLane: string | null, action: "list" | "clear" | "verify" = "list", all = false, trustedOnly = false, providerFilter: string | null = null) {
+  if (action === "verify") {
+    const catalog = loadCloudModelCatalog();
+    const models = catalog.models;
+    if (!models.length) {
+      process.stdout.write(`${CLR.muted}Cloud model catalog is empty. Add a model: switchbay model add <id>${CLR.reset}\n`);
+      return;
+    }
+    process.stdout.write(`\n${CLR.bold}Model Verify${CLR.reset}  ${CLR.muted}${models.length} model${models.length === 1 ? "" : "s"}${CLR.reset}\n\n`);
+    let verified = 0;
+    let failed = 0;
+    for (const model of models) {
+      const label = `${model.provider}/${model.id}`;
+      process.stdout.write(`  ${CLR.muted}·${CLR.reset}  ${label}\n`);
+      try {
+        const result = await reverifyCloudModel(model.id, model.provider);
+        if (result.verified) {
+          process.stdout.write(`\x1b[1A\x1b[2K  ${CLR.accent}✓${CLR.reset}  ${label}\n`);
+          verified++;
+        } else {
+          const notice = result.notice ? `  ${CLR.muted}${result.notice}${CLR.reset}` : "";
+          process.stdout.write(`\x1b[1A\x1b[2K  \x1b[31m✗\x1b[0m  ${label}${notice}\n`);
+          failed++;
+        }
+      } catch (err: any) {
+        const msg = err.message ?? String(err);
+        process.stdout.write(`\x1b[1A\x1b[2K  \x1b[31m✗\x1b[0m  ${label}  ${CLR.muted}${msg}${CLR.reset}\n`);
+        failed++;
+      }
+    }
+    process.stdout.write(`\n  ${CLR.muted}${verified}/${models.length} verified${failed > 0 ? ` · ${failed} failed` : ""}${CLR.reset}\n\n`);
+    return;
+  }
   if (action === "list" && all) {
     await runModelsAllCommand();
     return;
@@ -1954,29 +2077,64 @@ async function runInspectCommand(imagePath: string | null, question: string | nu
     process.exit(1);
   }
 
-  const { runSwitchbayTurn } = await import("./src/api/service");
-  const { modelSpeakerLabel } = await import("./src/runtime/model-identity");
+  const { prepareOpenAiVisionMessages } = await import("./src/runtime/image-inputs");
+  const { hasCloudProviderKey, getCloudProviderConfig } = await import("./src/runtime/cloud-providers");
+  const { AnthropicClient } = await import("./src/runtime/anthropic-client");
+  const { GeminiClient } = await import("./src/runtime/gemini-client");
+  const { OpenAiClient } = await import("./src/runtime/openai-client");
 
   const taskHint = task ? ` Treat this as a ${task} analysis.` : "";
   const userQuestion = question ?? "Describe what you see in this image. Be specific and thorough.";
-  const prompt = `${userQuestion}${taskHint}\n\n${imagePath}`;
 
-  process.stdout.write(`\n${CLR.accent}⏺${CLR.reset} ${CLR.muted}(thinking...)${CLR.reset}\n`);
-  const turnResult = await runSwitchbayTurn({
-    input: prompt,
-    lane,
-    mode: options.mode,
-    profile: options.profile,
-    surface: options.surface,
-    workspace: process.cwd(),
-  }, {
-    onStep: (title: string) => process.stdout.write(`  ${CLR.muted}└ ${title}${CLR.reset}\n`),
-  });
+  // Build messages with image encoded as content parts
+  const rawMessages = [{ role: "user" as const, content: `${userQuestion}${taskHint}\n\n${imagePath}` }];
+  const messages = await prepareOpenAiVisionMessages(rawMessages, process.cwd());
 
-  const speaker = modelSpeakerLabel(turnResult.route);
-  process.stdout.write(`\n${CLR.accent}⏺${CLR.reset} ${CLR.text}${CLR.bold}${speaker}${CLR.reset}\n`);
-  if (turnResult.route?.using) process.stdout.write(`  ${CLR.muted}└ ${CLR.reset}Using: ${turnResult.route.using}\n`);
-  process.stdout.write(`\n${turnResult.content}\n`);
+  // Pick the first vision-capable provider that has a key configured
+  type VisionProvider = "openai" | "google" | "anthropic";
+  const visionProviders: VisionProvider[] = lane
+    ? ([lane].filter((p): p is VisionProvider => ["openai", "google", "anthropic"].includes(p)))
+    : (["openai", "google", "anthropic"] as VisionProvider[]);
+
+  const chosenProvider = visionProviders.find((p) => hasCloudProviderKey(p));
+  if (!chosenProvider) {
+    console.error(cliFailure("Inspect", "No vision-capable provider configured. Set OPENAI_API_KEY, GOOGLE_API_KEY, or ANTHROPIC_API_KEY.", []));
+    process.exit(1);
+  }
+
+  const providerLabel = getCloudProviderConfig(chosenProvider).label;
+  const providerModel = getCloudProviderConfig(chosenProvider).model;
+
+  process.stdout.write(`\n${CLR.accent}⏺${CLR.reset} ${CLR.muted}${providerLabel} · ${providerModel} (thinking...)${CLR.reset}\n`);
+
+  const visionClient = chosenProvider === "anthropic"
+    ? new AnthropicClient()
+    : chosenProvider === "google"
+      ? new GeminiClient()
+      : new OpenAiClient();
+
+  const TIMEOUT_MS = 60_000;
+  const timeoutErr = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error(`Vision request timed out after ${TIMEOUT_MS / 1000}s`)), TIMEOUT_MS),
+  );
+
+  let response;
+  try {
+    response = await Promise.race([
+      visionClient.createChatCompletion("inspect", { messages, model: providerModel }),
+      timeoutErr,
+    ]);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(cliFailure("Inspect", msg, []));
+    process.exit(1);
+  }
+
+  const content = typeof response.choices?.[0]?.message?.content === "string"
+    ? response.choices[0].message.content
+    : "";
+
+  process.stdout.write(`\n${content}\n`);
 }
 
 async function runImagesCommand() {

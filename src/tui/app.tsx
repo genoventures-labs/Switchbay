@@ -332,7 +332,7 @@ export function SwitchbayApp({
     setComposerMode("model_picker");
     setSelectedModelIndex(0);
     setAvailableModels([]);
-    setModelDrawerNotice(targetLane === "local" ? "Checking local models..." : null);
+    setModelDrawerNotice(targetLane === "local" || targetLane === "litert" ? "Checking local models..." : null);
     try {
       const result = await listRuntimeModels(targetLane, providerOverride);
       setAvailableModels(result.models);
@@ -1114,13 +1114,21 @@ export function SwitchbayApp({
         switchRuntimeLane("local", "ollama-cloud");
         return;
       }
+      if (requested === "edge" || requested === "litert" || requested === "litert-lm" || requested === "google-edge") {
+        switchRuntimeLane("litert");
+        return;
+      }
+      if (requested === "apple" || requested === "apple-intelligence" || requested === "on-device") {
+        switchRuntimeLane("apple");
+        return;
+      }
       if (requested === "mcp" || requested === "switchbay-mcp" || requested === "bridge") {
         switchToolMode("switchbay-mcp");
         return;
       }
       dispatch({
         type: "assistant/appended",
-        message: `Unknown lane \`${requested}\`. Use \`/lane cloud\`, \`/lane openai\`, \`/lane anthropic\`, \`/lane gemini\`, \`/lane huggingface\`, \`/lane openrouter\`, \`/lane local\`, \`/lane ollama\`, \`/lane ollama-cloud\`, \`/lane mcp\`, or \`/lane\` to toggle.`,
+        message: `Unknown lane \`${requested}\`. Use \`/lane cloud\`, \`/lane openai\`, \`/lane anthropic\`, \`/lane gemini\`, \`/lane huggingface\`, \`/lane openrouter\`, \`/lane local\`, \`/lane ollama\`, \`/lane ollama-cloud\`, \`/lane edge\`, \`/lane apple\`, \`/lane mcp\`, or \`/lane\` to toggle.`,
       });
       setQuerySync("");
       return;
@@ -1196,6 +1204,16 @@ export function SwitchbayApp({
         void openModelDrawer("local", "ollama-cloud");
         return;
       }
+      if (requested === "edge" || requested === "litert" || requested === "litert-lm" || requested === "google-edge") {
+        void openModelDrawer("litert");
+        setQuerySync("");
+        return;
+      }
+      if (requested === "apple" || requested === "apple-intelligence" || requested === "on-device") {
+        void openModelDrawer("apple");
+        setQuerySync("");
+        return;
+      }
       if (requested === "mcp" || requested === "switchbay-mcp" || requested === "bridge") {
         setToolMode("switchbay-mcp");
         void openModelDrawer(runtimeLane);
@@ -1204,7 +1222,7 @@ export function SwitchbayApp({
       }
       dispatch({
         type: "assistant/appended",
-        message: `Unknown model lane \`${requested}\`. Use \`/model\`, \`/model cloud\`, \`/model cloud-mcp\`, \`/model local\`, \`/model ollama\`, or \`/model mcp\`.`,
+        message: `Unknown model lane \`${requested}\`. Use \`/model\`, \`/model cloud\`, \`/model cloud-mcp\`, \`/model local\`, \`/model ollama\`, \`/model edge\`, or \`/model mcp\`.`,
       });
       setQuerySync("");
       return;

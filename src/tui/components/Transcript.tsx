@@ -137,9 +137,6 @@ export function Transcript({
         </Box>
       )}
 
-      {activePlan && (
-        <PlanPanel plan={activePlan} />
-      )}
 
       {pendingApproval?.kind === "shell_command" && (
         <Box flexDirection="column" marginTop={1} borderStyle="round" borderColor={brandColor} paddingX={2} paddingY={1} backgroundColor={TUI_COLORS.baseDeep}>

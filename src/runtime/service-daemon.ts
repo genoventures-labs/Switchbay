@@ -54,15 +54,17 @@ export async function startDaemon(
     if (stat.size > 512 * 1024) await fs.truncate(log, 0);
   } catch { /* no existing log */ }
 
-  const logFile = Bun.file(log);
-  const logWriter = logFile.writer();
+  // Open log file for appending — pass the fd so both stdout and stderr go there
+  const logFd = await fs.open(log, "a");
 
   const proc = Bun.spawn([cmd, ...args], {
     cwd: opts.cwd ?? process.cwd(),
     env: { ...process.env, ...(opts.env ?? {}) },
-    stdio: ["ignore", logWriter as unknown as "pipe", logWriter as unknown as "pipe"],
+    stdio: ["ignore", logFd.fd, logFd.fd],
     detached: true,
   });
+
+  await logFd.close();
 
   proc.unref();
 

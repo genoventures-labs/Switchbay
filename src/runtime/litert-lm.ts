@@ -62,6 +62,11 @@ export async function liteRtImport(hfRepo: string, filename: string, localId: st
   return { ok: result.ok, output: (result.stdout + result.stderr).trim() };
 }
 
+export async function liteRtImportLocal(filePath: string, localId: string): Promise<{ ok: boolean; output: string }> {
+  const result = await runCommand(["litert-lm", "import", filePath, localId], process.cwd());
+  return { ok: result.ok, output: (result.stdout + result.stderr).trim() };
+}
+
 export async function liteRtLocalList(): Promise<{ ok: boolean; output: string }> {
   const result = await runCommand(["litert-lm", "list"], process.cwd());
   return { ok: result.ok, output: (result.stdout + result.stderr).trim() };

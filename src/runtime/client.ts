@@ -222,6 +222,7 @@ export function getRuntimeLaneLabel(lane: RuntimeLane = getRuntimeLane()): strin
   if (lane === "openrouter") return "OpenRouter";
   if (lane === "huggingface") return "Hugging Face";
   if (lane === "apple") return "Apple Intelligence";
+  if (lane === "litert") return "LiteRT-LM (Edge)";
   return "Cloud";
 }
 

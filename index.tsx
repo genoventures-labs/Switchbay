@@ -160,7 +160,7 @@ async function boot() {
     if (options.benchmarkPre) {
       await runPreBenchCommand();
     } else {
-      await runBenchmarkCommand(options.benchmarkModel ?? null, options.benchmarkLane ?? null);
+      await runBenchmarkCommand(options.benchmarkModel ?? null, options.benchmarkLane ?? null, options.benchmarkVerbose ?? false);
     }
     return;
   }
@@ -486,7 +486,7 @@ async function runPreBenchCommand() {
   console.log();
 }
 
-async function runBenchmarkCommand(model: string | null, lane: string | null) {
+async function runBenchmarkCommand(model: string | null, lane: string | null, verbose = false) {
   const color = cliColorEnabled();
   const ANSI = {
     reset: "[0m", bold: "[1m",
@@ -514,6 +514,13 @@ async function runBenchmarkCommand(model: string | null, lane: string | null) {
       const ms = paint(`${result.latencyMs}ms`, ANSI.muted);
       const detail = paint(result.detail.slice(0, 40), ANSI.muted);
       console.log(`  ${icon}  ${cat}  ${name}  ${pct}  ${ms}  ${detail}`);
+      if (verbose && result.rawText) {
+        const lines = result.rawText.trim().split("\n");
+        for (const line of lines) {
+          console.log(`       ${paint(line, ANSI.muted)}`);
+        }
+        console.log();
+      }
     });
 
     const gradeColor = report.grade.startsWith("A") ? ANSI.green : report.grade === "B" ? ANSI.cyan : report.grade === "C" ? ANSI.yellow : ANSI.red;
@@ -1395,6 +1402,7 @@ async function runModelsAllCommand() {
     { rawLane: "local",       label: "Local (Ollama)" },
     { rawLane: "local",       label: "Local (llama.cpp)", localProvider: "llama-cpp" },
     { rawLane: "local",       label: "Local (MLX)",       localProvider: "mlx" },
+    { rawLane: "litert",      label: "LiteRT-LM (Google Edge)" },
     { rawLane: "openrouter",  label: "OpenRouter" },
     { rawLane: "huggingface", label: "Hugging Face" },
   ];
@@ -1411,6 +1419,26 @@ async function runModelsAllCommand() {
     let models: RuntimeModelOption[] = [];
     let notice: string | undefined;
     try {
+      if (rawLane === "litert") {
+        const { liteRtServerModels, isLiteRtServerRunning, LITERT_PORT } = await import("./src/runtime/litert-lm");
+        console.log(`  ── ${label} ${"─".repeat(Math.max(0, 50 - label.length - 4))}`);
+        const running = await isLiteRtServerRunning();
+        if (!running) {
+          console.log(`     Not connected`);
+        } else {
+          const serverModels = await liteRtServerModels();
+          if (serverModels.length === 0) {
+            console.log(`     Not connected`);
+          } else {
+            for (const m of serverModels.slice(0, 6)) {
+              console.log(`     ${m.id.padEnd(36)} litert-lm`);
+            }
+            if (serverModels.length > 6) console.log(`     … and ${serverModels.length - 6} more`);
+          }
+        }
+        console.log("");
+        continue;
+      }
       if (rawLane === "cloud") {
         const pool = listAutoModelPool();
         console.log(`  ── ${label} ${"─".repeat(Math.max(0, 50 - label.length - 4))}`);
@@ -1513,6 +1541,38 @@ async function runModelsCommand(rawLane: string | null, action: "list" | "clear"
     }
     return;
   }
+  // Edge / LiteRT provider — intercept before generic lane resolution
+  const isLiteRtRequest = (rawLane && /^(litert|litert-lm|edge|google-edge)$/i.test(rawLane))
+    || (providerFilter && /^(litert|litert-lm|edge|google-edge)$/i.test(providerFilter));
+  if (isLiteRtRequest) {
+    const { liteRtServerModels, isLiteRtServerRunning, liteRtLocalList, LITERT_PORT, KNOWN_LITERT_MODELS } = await import("./src/runtime/litert-lm");
+    const running = await isLiteRtServerRunning();
+    const serverModels = running ? await liteRtServerModels() : [];
+    const { ok, output } = await liteRtLocalList();
+    const localLines = ok ? output.trim().split("\n").filter(Boolean) : [];
+    const rows: [string, string][] = [];
+    if (serverModels.length) {
+      for (const m of serverModels) rows.push(["loaded", m.id]);
+    }
+    if (localLines.length) {
+      for (const l of localLines) rows.push(["local", l]);
+    }
+    if (!rows.length) {
+      for (const m of KNOWN_LITERT_MODELS) rows.push(["catalog", `${m.id}  ·  ${m.description}`]);
+    }
+    const state = running ? `Server on :${LITERT_PORT}` : "Server not running";
+    console.log(cliPage({
+      title: "LiteRT-LM (Google Edge)",
+      state,
+      summary: running
+        ? `${serverModels.length} model${serverModels.length === 1 ? "" : "s"} loaded · use switchbay litert list for local registry`
+        : "Start server: switchbay litert serve · import a model: switchbay litert import",
+      rows,
+      next: running ? "switchbay litert stop" : "switchbay litert serve",
+    }));
+    return;
+  }
+
   const lane = normalizeRuntimeLane(rawLane);
   const localProvider = normalizeLocalProvider(rawLane) ?? undefined;
   try {
@@ -2236,7 +2296,7 @@ async function runExtensionCommand(action: string) {
 async function runLiteRtCommand(options: any) {
   const {
     startLiteRtServer, stopLiteRtServer, liteRtStatus, liteRtLogs,
-    liteRtServerModels, liteRtLocalList, liteRtImport, liteRtDelete,
+    liteRtServerModels, liteRtLocalList, liteRtImport, liteRtImportLocal, liteRtDelete,
     isLiteRtAvailable, LITERT_PORT, KNOWN_LITERT_MODELS,
   } = await import("./src/runtime/litert-lm");
 
@@ -2254,12 +2314,12 @@ async function runLiteRtCommand(options: any) {
     const backend = options.liteRtBackend ?? undefined;
     const { pid, alreadyRunning, logPath } = await startLiteRtServer({ backend });
     if (alreadyRunning) {
-      console.log(cliReceipt("LiteRT-LM", `Already running on port ${LITERT_PORT}`, [`pid ${pid}`], "switchbay litert stop"));
+      console.log(cliReceipt("LiteRT-LM", `Already running on port ${LITERT_PORT}`, [["pid", String(pid)]], "switchbay litert stop"));
     } else {
       console.log(cliReceipt("LiteRT-LM", `Server started on port ${LITERT_PORT}`, [
-        `pid ${pid}`,
-        `log ${logPath}`,
-        backend ? `backend ${backend}` : "backend cpu (default)",
+        ["pid", String(pid)],
+        ["log", logPath],
+        ["backend", backend ?? "cpu (default)"],
       ], "switchbay litert stop"));
     }
     return;
@@ -2313,11 +2373,28 @@ async function runLiteRtCommand(options: any) {
   }
 
   if (action === "import") {
+    const localPath = options.liteRtImportLocalPath;
+    const id = options.liteRtImportId;
+
+    if (localPath) {
+      if (!id) {
+        process.stdout.write(`Usage: switchbay litert import --local <path/to/model.litertlm> <local-id>\n\nExample:\n  switchbay litert import --local ~/Downloads/gemma-4-E2B-it.litertlm gemma4-e2b\n`);
+        return;
+      }
+      process.stdout.write(`${CLR.muted}Registering ${localPath} as "${id}"…${CLR.reset}\n`);
+      const { ok, output } = await liteRtImportLocal(localPath, id);
+      if (ok) {
+        console.log(cliReceipt("LiteRT-LM", `Registered as "${id}"`, [["path", localPath]], "switchbay litert list"));
+      } else {
+        console.error(cliFailure("LiteRT-LM", "Import failed", [output]));
+      }
+      return;
+    }
+
     const repo = options.liteRtImportRepo;
     const file = options.liteRtImportFile;
-    const id   = options.liteRtImportId;
     if (!repo || !file || !id) {
-      process.stdout.write(`Usage: switchbay litert import <hf-repo> <filename> <local-id>\n\nExample:\n  switchbay litert import litert-community/gemma-4-E2B-it-litert-lm gemma-4-E2B-it.litertlm gemma4-e2b\n\nSee available models: switchbay litert models\n`);
+      process.stdout.write(`Usage: switchbay litert import <hf-repo> <filename> <local-id>\n       switchbay litert import --local <path/to/model.litertlm> <local-id>\n\nExample:\n  switchbay litert import litert-community/gemma-4-E2B-it-litert-lm gemma-4-E2B-it.litertlm gemma4-e2b\n  switchbay litert import --local ~/Downloads/gemma-4-E2B-it.litertlm gemma4-e2b\n\nSee available models: switchbay litert models\n`);
       return;
     }
     process.stdout.write(`${CLR.muted}Importing ${file} from ${repo}…${CLR.reset}\n`);

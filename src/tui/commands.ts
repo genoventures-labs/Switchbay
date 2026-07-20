@@ -134,6 +134,18 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     category: "runtime",
+    command: "/lane edge",
+    description: "Switch to LiteRT-LM (Google Edge on-device inference).",
+    example: "/lane edge",
+  },
+  {
+    category: "runtime",
+    command: "/lane apple",
+    description: "Switch to Apple Intelligence (on-device).",
+    example: "/lane apple",
+  },
+  {
+    category: "runtime",
     command: "/lane mcp",
     description: "Enable Switchbay MCP bridge for the active model lane.",
     example: "/lane mcp",
@@ -143,6 +155,12 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     command: "/model",
     description: "Open the model picker for the active runtime lane.",
     example: "/model",
+  },
+  {
+    category: "runtime",
+    command: "/model edge",
+    description: "Pick a LiteRT-LM model loaded on the local edge server.",
+    example: "/model edge",
   },
   {
     category: "runtime",

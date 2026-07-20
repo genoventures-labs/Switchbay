@@ -21,6 +21,7 @@ export type CliOptions = {
   benchmarkLane?: string | null;
   benchmarkPre?: boolean;
   benchmarkTrusted?: boolean;
+  benchmarkVerbose?: boolean;
   graphAction?: "trace";
   serviceAction?: "install" | "status" | "restart" | "uninstall";
   engineAction: "status" | "sync" | "list" | "templates" | "health";
@@ -71,6 +72,7 @@ export type CliOptions = {
   liteRtImportRepo?: string | null;
   liteRtImportFile?: string | null;
   liteRtImportId?: string | null;
+  liteRtImportLocalPath?: string | null;
   liteRtDeleteId?: string | null;
   liteRtBackend?: "gpu" | "cpu" | null;
 };
@@ -410,7 +412,8 @@ export function parseCliArgs(argv: string[]): CliOptions {
         traceAction: "last", mcpAction: "status", modelTarget: null, modelLane: null,
       };
     } else if (arg === "extension" || arg === "ext") {
-      const action = rest[0] ?? "serve";
+      const extRest = args.slice(i + 1).filter((a) => !a.startsWith("-"));
+      const action = extRest[0] ?? "serve";
       return {
         surface, profile, mode, lane, initialQuery: "", hop, resume, newSession, purge,
         subcommand: "extension",
@@ -420,18 +423,21 @@ export function parseCliArgs(argv: string[]): CliOptions {
         traceAction: "last", mcpAction: "status", modelTarget: null, modelLane: null,
       };
     } else if (arg === "litert" || arg === "litert-lm" || arg === "edge") {
-      const action = rest[0] ?? "status";
-      // litert import <hf-repo> <filename> <id>
-      const liteRtImportRepo = action === "import" ? (rest[1] ?? null) : null;
-      const liteRtImportFile = action === "import" ? (rest[2] ?? null) : null;
-      const liteRtImportId   = action === "import" ? (rest[3] ?? null) : null;
-      const liteRtDeleteId   = action === "delete" || action === "remove" ? (rest[1] ?? null) : null;
+      const lrRest = args.slice(i + 1).filter((a) => !a.startsWith("-"));
+      const action = lrRest[0] ?? "status";
+      const isLocalImport = action === "import" && args.includes("--local");
+      // litert import <hf-repo> <filename> <id>  OR  litert import --local <path> <id>
+      const liteRtImportLocalPath = isLocalImport ? (lrRest[1] ?? null) : null;
+      const liteRtImportRepo = (!isLocalImport && action === "import") ? (lrRest[1] ?? null) : null;
+      const liteRtImportFile = (!isLocalImport && action === "import") ? (lrRest[2] ?? null) : null;
+      const liteRtImportId   = action === "import" ? (isLocalImport ? (lrRest[2] ?? null) : (lrRest[3] ?? null)) : null;
+      const liteRtDeleteId   = action === "delete" || action === "remove" ? (lrRest[1] ?? null) : null;
       const liteRtBackend    = args.includes("--gpu") ? "gpu" : args.includes("--cpu") ? "cpu" : null;
       return {
         surface, profile, mode, lane, initialQuery: "", hop, resume, newSession, purge,
         subcommand: "litert",
         liteRtAction: (["serve", "stop", "status", "logs", "list", "models", "import", "delete"].includes(action) ? action : "status") as "serve" | "stop" | "status" | "logs" | "list" | "models" | "import" | "delete",
-        liteRtImportRepo, liteRtImportFile, liteRtImportId, liteRtDeleteId,
+        liteRtImportRepo, liteRtImportFile, liteRtImportId, liteRtImportLocalPath, liteRtDeleteId,
         liteRtBackend: liteRtBackend as "gpu" | "cpu" | null,
         engineAction: "status", toolboxAction: "status", toolboxSkill: null,
         memoryAction: "status", memoryNote: null, knowledgeAction: "status", knowledgeQuery: null,
@@ -443,17 +449,19 @@ export function parseCliArgs(argv: string[]): CliOptions {
       let benchmarkLane: string | null = lane;
       let benchmarkPre = false;
       let benchmarkTrusted = false;
+      let benchmarkVerbose = false;
       while (i + 1 < args.length) {
         const next = args[i + 1]!;
         if (next === "--lane" && args[i + 2]) { benchmarkLane = args[i + 2]!; i += 2; }
         else if (next === "--pre") { benchmarkPre = true; i++; }
         else if (next === "--trusted") { benchmarkTrusted = true; i++; }
+        else if (next === "--verbose" || next === "-v") { benchmarkVerbose = true; i++; }
         else if (!next.startsWith("-")) { benchmarkModel = next; i++; }
         else break;
       }
       return {
         surface, profile, mode, lane, initialQuery: "", hop, resume, newSession, purge,
-        subcommand: "benchmark", benchmarkModel, benchmarkLane, benchmarkPre, benchmarkTrusted,
+        subcommand: "benchmark", benchmarkModel, benchmarkLane, benchmarkPre, benchmarkTrusted, benchmarkVerbose,
         engineAction: "status", toolboxAction: "status", toolboxSkill: null,
         memoryAction: "status", memoryNote: null,
         knowledgeAction: "status", knowledgeQuery: null,

@@ -61,11 +61,31 @@ export async function listRuntimeModels(lane: RuntimeLane, localProvider = getAc
     return listHuggingFaceModels();
   }
   if (lane === "apple") return listAppleFmModels();
+  if (lane === "litert") return listLiteRtModels();
 
   if (localProvider === "apple-fm") return listAppleFmModels();
   if (localProvider === "llama-cpp") return listOpenAiCompatLocalModels("llama-cpp");
   if (localProvider === "mlx") return listOpenAiCompatLocalModels("mlx");
   return listOllamaModels(undefined, localProvider as "ollama" | "ollama-cloud");
+}
+
+export async function listLiteRtModels(): Promise<RuntimeModelList> {
+  try {
+    const { liteRtServerModels, isLiteRtServerRunning } = await import("./litert-lm");
+    const running = await isLiteRtServerRunning();
+    if (!running) return { models: [], notice: "Not connected — run: switchbay litert serve" };
+    const serverModels = await liteRtServerModels();
+    const models: RuntimeModelOption[] = serverModels.map((m) => ({
+      id: m.id,
+      label: m.id,
+      lane: "litert" as const,
+      provider: "litert-lm" as any,
+      source: "litert-lm" as any,
+    }));
+    return { models, notice: models.length ? undefined : "Server running but no models loaded — import one: switchbay litert import" };
+  } catch {
+    return { models: [], notice: "Not connected" };
+  }
 }
 
 export async function listAppleFmModels(): Promise<RuntimeModelList> {
@@ -195,7 +215,7 @@ export async function listOllamaModels(fetchImpl: FetchLike = fetch, provider: "
       });
     return {
       models: uniqueModels(models),
-      notice: models.length ? undefined : `${config.label} returned no models from ${config.apiBase}/tags.`,
+      notice: models.length ? undefined : "Not connected",
     };
   } catch {
     return { models: [], notice: "Not connected" };

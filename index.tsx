@@ -42,6 +42,7 @@ import { createCanvasDoc, editCanvasDoc, listCanvasDocs } from "./src/tools/canv
 import { runBenchmark, runPreBench, type BenchmarkResult } from "./src/benchmark/runner";
 import { getAllGrades, getModelGrade, isTrusted, saveModelGrade } from "./src/benchmark/grades";
 import { addImageToStore, listImages, formatImageSize } from "./src/runtime/image-store";
+import { clearSessionSkills } from "./src/toolbox/hub";
 
 // Ensure config is initialized on first boot
 loadSwitchbayConfig();
@@ -262,6 +263,23 @@ async function boot() {
 
   if (options.subcommand === "images") {
     await runImagesCommand();
+    return;
+  }
+
+  if (options.subcommand === "extension") {
+    await runExtensionCommand(options.extensionAction ?? "serve");
+    return;
+  }
+
+  if (options.subcommand === "litert") {
+    await runLiteRtCommand(options);
+    return;
+  }
+
+  // Internal flag: foreground extension server (called by the daemon child)
+  if (process.argv.includes("--extension-serve-fg")) {
+    const { startExtensionServer } = await import("./src/extension/server");
+    startExtensionServer();
     return;
   }
 
@@ -523,14 +541,30 @@ async function runSyncCommand() {
     const skillOk = skillResult.status === "fulfilled";
     const engineDiff = engineOk ? (engineResult as PromiseFulfilledResult<any>).value : null;
     const skillDiff = skillOk ? (skillResult as PromiseFulfilledResult<any>).value : null;
-    const engineMsg = engineOk ? `${engineDiff.after} engines${engineDiff.added > 0 ? ` (+${engineDiff.added} new)` : ", up to date"}` : `Failed: ${(engineResult as PromiseRejectedResult).reason?.message ?? "unknown error"}`;
-    const skillMsg = skillOk ? `${skillDiff.after} skills${skillDiff.added > 0 ? ` (+${skillDiff.added} new)` : ", up to date"}` : `Failed: ${(skillResult as PromiseRejectedResult).reason?.message ?? "unknown error"}`;
+    const engineBlocked = engineOk && engineDiff.blocked > 0 ? ` · ${engineDiff.blocked} blocked` : "";
+    const skillBlocked = skillOk && skillDiff.blocked > 0 ? ` · ${skillDiff.blocked} blocked` : "";
+    const engineMsg = engineOk ? `${engineDiff.after} engines${engineDiff.added > 0 ? ` (+${engineDiff.added} new)` : ", up to date"}${engineBlocked}` : `Failed: ${(engineResult as PromiseRejectedResult).reason?.message ?? "unknown error"}`;
+    const skillMsg = skillOk ? `${skillDiff.after} skills${skillDiff.added > 0 ? ` (+${skillDiff.added} new)` : ", up to date"}${skillBlocked}` : `Failed: ${(skillResult as PromiseRejectedResult).reason?.message ?? "unknown error"}`;
     console.log(cliReceipt(
       "Sync",
       engineOk && skillOk ? "All libraries synchronized" : "Sync completed with errors",
       [["Engines", engineMsg], ["Skills", skillMsg]],
       "switchbay engines list · switchbay skills list",
     ));
+    const allBlocked = [
+      ...(engineOk ? engineDiff.blockDetails : []),
+      ...(skillOk ? skillDiff.blockDetails : []),
+    ];
+    if (allBlocked.length > 0) {
+      process.stdout.write(`\n${CLR.bold}Security Rejections${CLR.reset}\n\n`);
+      for (const item of allBlocked) {
+        process.stdout.write(`  \x1b[31m✗\x1b[0m  ${item.name}\n`);
+        for (const line of item.findings.split("\n")) {
+          process.stdout.write(`     ${CLR.muted}${line}${CLR.reset}\n`);
+        }
+      }
+      process.stdout.write("\n");
+    }
     if (!engineOk || !skillOk) process.exit(1);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -544,7 +578,19 @@ async function runEngineCommand(action: "status" | "sync" | "list" | "templates"
     if (action === "sync") {
       const diff = await syncEngineBayWithDiff();
       const detail = diff.added > 0 ? `+${diff.added} new` : "up to date";
-      console.log(cliReceipt("Engine Bay", `Library synchronized — ${diff.after} engines (${detail})`, [], "switchbay engines list"));
+      const notes: string[] = [];
+      if (diff.blocked > 0) notes.push(`${diff.blocked} blocked by security scan`);
+      console.log(cliReceipt("Engine Bay", `Library synchronized — ${diff.after} engines (${detail})`, notes, "switchbay engines list"));
+      if (diff.blockDetails.length > 0) {
+        process.stdout.write(`\n${CLR.bold}Security Rejections${CLR.reset}\n\n`);
+        for (const item of diff.blockDetails) {
+          process.stdout.write(`  \x1b[31m✗\x1b[0m  ${item.name}\n`);
+          for (const line of item.findings.split("\n")) {
+            process.stdout.write(`     ${CLR.muted}${line}${CLR.reset}\n`);
+          }
+        }
+        process.stdout.write("\n");
+      }
       return;
     }
 
@@ -670,7 +716,19 @@ async function runToolboxCommand(
     if (action === "sync") {
       const diff = await syncToolboxWithDiff();
       const detail = diff.added > 0 ? `+${diff.added} new` : "up to date";
-      console.log(cliReceipt("Skill Library", `Library synchronized — ${diff.after} skills (${detail})`, [], `${command} list`));
+      const notes: string[] = [];
+      if (diff.blocked > 0) notes.push(`${diff.blocked} blocked by security scan`);
+      console.log(cliReceipt("Skill Library", `Library synchronized — ${diff.after} skills (${detail})`, notes, `${command} list`));
+      if (diff.blockDetails.length > 0) {
+        process.stdout.write(`\n${CLR.bold}Security Rejections${CLR.reset}\n\n`);
+        for (const item of diff.blockDetails) {
+          process.stdout.write(`  \x1b[31m✗\x1b[0m  ${item.name}\n`);
+          for (const line of item.findings.split("\n")) {
+            process.stdout.write(`     ${CLR.muted}${line}${CLR.reset}\n`);
+          }
+        }
+        process.stdout.write("\n");
+      }
       return;
     }
 
@@ -2137,6 +2195,157 @@ async function runInspectCommand(imagePath: string | null, question: string | nu
   process.stdout.write(`\n${content}\n`);
 }
 
+async function runExtensionCommand(action: string) {
+  const { startExtensionDaemon, stopExtensionDaemon, extensionDaemonStatus, extensionDaemonLogs, EXTENSION_PORT } = await import("./src/extension/server");
+
+  if (action === "stop") {
+    const result = await stopExtensionDaemon();
+    if (result.stopped) {
+      console.log(cliReceipt("Extension", `Server stopped (pid ${result.pid})`, [], "switchbay extension serve"));
+    } else {
+      process.stdout.write(`${CLR.muted}Extension server is not running.${CLR.reset}\n`);
+    }
+    return;
+  }
+
+  if (action === "status") {
+    const { running, info } = await extensionDaemonStatus();
+    const state = running ? `Running  pid ${info!.pid}` : "Stopped";
+    const rows: [string, string][] = running
+      ? [["PID", String(info!.pid)], ["Port", String(EXTENSION_PORT)], ["Started", info!.startedAt], ["Log", info!.logPath]]
+      : [["Port", String(EXTENSION_PORT)]];
+    console.log(cliPage({ title: "Extension Server", state, summary: "Browser extension backend.", rows, next: running ? "switchbay extension stop" : "switchbay extension serve" }));
+    return;
+  }
+
+  if (action === "logs") {
+    const logs = await extensionDaemonLogs(60);
+    process.stdout.write(`\n${logs}\n\n`);
+    return;
+  }
+
+  // serve (default)
+  const { pid, alreadyRunning, logPath } = await startExtensionDaemon();
+  if (alreadyRunning) {
+    console.log(cliReceipt("Extension", `Already running on port ${EXTENSION_PORT}`, [`pid ${pid}`], "switchbay extension stop"));
+  } else {
+    console.log(cliReceipt("Extension", `Server started on port ${EXTENSION_PORT}`, [`pid ${pid}`, `log ${logPath}`], "switchbay extension stop"));
+  }
+}
+
+async function runLiteRtCommand(options: any) {
+  const {
+    startLiteRtServer, stopLiteRtServer, liteRtStatus, liteRtLogs,
+    liteRtServerModels, liteRtLocalList, liteRtImport, liteRtDelete,
+    isLiteRtAvailable, LITERT_PORT, KNOWN_LITERT_MODELS,
+  } = await import("./src/runtime/litert-lm");
+
+  const action = options.liteRtAction ?? "status";
+
+  if (!(await isLiteRtAvailable()) && !["status", "logs", "stop"].includes(action)) {
+    console.error(cliFailure("LiteRT-LM", "litert-lm is not installed.", [
+      "Install: pip install litert-lm",
+      "Or: uvx litert-lm (no install needed)",
+    ]));
+    process.exit(1);
+  }
+
+  if (action === "serve") {
+    const backend = options.liteRtBackend ?? undefined;
+    const { pid, alreadyRunning, logPath } = await startLiteRtServer({ backend });
+    if (alreadyRunning) {
+      console.log(cliReceipt("LiteRT-LM", `Already running on port ${LITERT_PORT}`, [`pid ${pid}`], "switchbay litert stop"));
+    } else {
+      console.log(cliReceipt("LiteRT-LM", `Server started on port ${LITERT_PORT}`, [
+        `pid ${pid}`,
+        `log ${logPath}`,
+        backend ? `backend ${backend}` : "backend cpu (default)",
+      ], "switchbay litert stop"));
+    }
+    return;
+  }
+
+  if (action === "stop") {
+    const result = await stopLiteRtServer();
+    if (result.stopped) {
+      console.log(cliReceipt("LiteRT-LM", `Server stopped (pid ${result.pid})`, [], "switchbay litert serve"));
+    } else {
+      process.stdout.write(`${CLR.muted}LiteRT-LM server is not running.${CLR.reset}\n`);
+    }
+    return;
+  }
+
+  if (action === "logs") {
+    const logs = await liteRtLogs(60);
+    process.stdout.write(`\n${logs}\n\n`);
+    return;
+  }
+
+  if (action === "status") {
+    const { running, info } = await liteRtStatus();
+    const serverModels = running ? await liteRtServerModels() : [];
+    const modelList = serverModels.map((m) => m.id).join(", ") || "none loaded";
+    const rows: [string, string][] = running
+      ? [["PID", String(info!.pid)], ["Port", String(LITERT_PORT)], ["Started", info!.startedAt], ["Models", modelList], ["Log", info!.logPath]]
+      : [["Port", String(LITERT_PORT)], ["Install", "pip install litert-lm"]];
+    console.log(cliPage({ title: "LiteRT-LM", state: running ? "Running" : "Stopped", summary: "Google on-device inference — LiteRT edge runtime.", rows, next: running ? "switchbay litert stop" : "switchbay litert serve" }));
+    return;
+  }
+
+  if (action === "models") {
+    process.stdout.write(`\n${CLR.bold}LiteRT-LM  Available Models${CLR.reset}\n\n`);
+    for (const m of KNOWN_LITERT_MODELS) {
+      process.stdout.write(`  ${CLR.accent}${m.id.padEnd(18)}${CLR.reset} ${m.size.padEnd(10)} ${m.description}\n`);
+      process.stdout.write(`  ${CLR.muted}${"".padEnd(18)} ${m.hfRepo}${CLR.reset}\n\n`);
+    }
+    process.stdout.write(`${CLR.muted}Import a model:  switchbay litert import <hf-repo> <filename> <local-id>${CLR.reset}\n\n`);
+    return;
+  }
+
+  if (action === "list") {
+    const { ok, output } = await liteRtLocalList();
+    if (!ok || !output) {
+      process.stdout.write(`${CLR.muted}No models in local registry. Run: switchbay litert models${CLR.reset}\n`);
+      return;
+    }
+    process.stdout.write(`\n${CLR.bold}LiteRT-LM  Local Registry${CLR.reset}\n\n${output}\n\n`);
+    return;
+  }
+
+  if (action === "import") {
+    const repo = options.liteRtImportRepo;
+    const file = options.liteRtImportFile;
+    const id   = options.liteRtImportId;
+    if (!repo || !file || !id) {
+      process.stdout.write(`Usage: switchbay litert import <hf-repo> <filename> <local-id>\n\nExample:\n  switchbay litert import litert-community/gemma-4-E2B-it-litert-lm gemma-4-E2B-it.litertlm gemma4-e2b\n\nSee available models: switchbay litert models\n`);
+      return;
+    }
+    process.stdout.write(`${CLR.muted}Importing ${file} from ${repo}…${CLR.reset}\n`);
+    const { ok, output } = await liteRtImport(repo, file, id);
+    if (ok) {
+      console.log(cliReceipt("LiteRT-LM", `Imported as "${id}"`, [output.split("\n").pop() ?? ""], "switchbay litert list"));
+    } else {
+      console.error(cliFailure("LiteRT-LM", "Import failed", [output]));
+    }
+    return;
+  }
+
+  if (action === "delete") {
+    const id = options.liteRtDeleteId;
+    if (!id) {
+      process.stdout.write(`Usage: switchbay litert delete <local-id>\n`);
+      return;
+    }
+    const { ok, output } = await liteRtDelete(id);
+    if (ok) {
+      console.log(cliReceipt("LiteRT-LM", `Deleted "${id}"`, [], "switchbay litert list"));
+    } else {
+      console.error(cliFailure("LiteRT-LM", "Delete failed", [output]));
+    }
+    return;
+  }
+}
+
 async function runImagesCommand() {
   const entries = await listImages();
   if (!entries.length) {
@@ -2159,6 +2368,8 @@ async function runCliMode(options: any, resumeId: string | null) {
   const { modelSpeakerLabel, parseModelAddress } = await import("./src/runtime/model-identity");
   let sessionId = resumeId;
   if (resumeId === "latest") sessionId = (await listSessions())[0]?.id ?? null;
+  // Clear JIT session skills from any prior session (new session = clean slate)
+  if (!resumeId) await clearSessionSkills().catch(() => {});
   const addressed = parseModelAddress(options.initialQuery);
   process.stdout.write(`\n${CLR.accent}⏺${CLR.reset} ${CLR.text}${CLR.bold}${addressed?.speaker ?? "Auto"}${CLR.reset} ${CLR.muted}(thinking...)${CLR.reset}\n`);
   try {

@@ -4,6 +4,7 @@ import fs from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { runCommand } from "../tools/shell";
 import { sharedAssetRoot } from "../config/authoring-paths";
+import { scanEngineManifest, formatScanFindings } from "../security/scanner";
 
 export const DEFAULT_ENGINE_BAY_REPO = "https://github.com/genoventures-labs/Switchbay-Engines.git";
 
@@ -44,13 +45,35 @@ export async function syncEngineBayRepo(): Promise<string> {
   return clone.stdout || clone.stderr || `Cloned ${repo}`;
 }
 
-export type SyncDiff = { before: number; after: number; added: number };
+export type BlockDetail = { name: string; findings: string };
+export type SyncDiff = { before: number; after: number; added: number; blocked: number; blockDetails: BlockDetail[] };
 
 export async function syncEngineBayWithDiff(): Promise<SyncDiff> {
   const before = (await loadEngineBayInventory()).manifests.length;
   await syncEngineBayRepo();
-  const after = (await loadEngineBayInventory()).manifests.length;
-  return { before, after, added: Math.max(0, after - before) };
+  const inventory = await loadEngineBayInventory();
+  const after = inventory.manifests.length;
+
+  // Scan every manifest from the synced repo for security issues
+  const blockDetails: BlockDetail[] = [];
+  await Promise.all(
+    inventory.manifests.map(async (relPath) => {
+      const absPath = path.join(inventory.path, relPath);
+      try {
+        const raw = await fs.readFile(absPath, "utf-8");
+        const manifest = JSON.parse(raw);
+        const scan = scanEngineManifest(manifest);
+        if (!scan.safe) {
+          blockDetails.push({
+            name: manifest.name ?? relPath,
+            findings: formatScanFindings(scan.findings),
+          });
+        }
+      } catch { /* skip unreadable manifests */ }
+    }),
+  );
+
+  return { before, after, added: Math.max(0, after - before), blocked: blockDetails.length, blockDetails };
 }
 
 export async function loadEngineBayInventory(): Promise<EngineBayInventory> {

@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Switchbay</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #111113;
+      --surface: #1a1a1e;
+      --border: #2a2a30;
+      --text: #e8e8ec;
+      --muted: #6b6b7a;
+      --accent: #7c6af7;
+      --accent-hover: #9080ff;
+      --ok: #4caf80;
+      --warn: #f09040;
+      --err: #e05555;
+      --radius: 8px;
+      --font-mono: "SF Mono", "Fira Code", "Cascadia Code", "Consolas", monospace;
+      --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #f4f4f8;
+        --surface: #ffffff;
+        --border: #d8d8e0;
+        --text: #18181c;
+        --muted: #7a7a88;
+        --accent: #6055e0;
+        --accent-hover: #7060f0;
+      }
+    }
+
+    body {
+      width: 380px;
+      min-height: 200px;
+      max-height: 600px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-ui);
+      font-size: 13px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Header ── */
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 14px 10px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .logo {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      color: var(--accent);
+    }
+
+    .page-title {
+      flex: 1;
+      color: var(--muted);
+      font-size: 11px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--muted);
+      flex-shrink: 0;
+      transition: background 0.3s;
+    }
+    .status-dot.ok { background: var(--ok); }
+    .status-dot.err { background: var(--err); }
+
+    /* ── Selection banner ── */
+    .selection-banner {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      background: color-mix(in srgb, var(--accent) 12%, transparent);
+      border-bottom: 1px solid var(--border);
+      font-size: 11px;
+      color: var(--muted);
+      flex-shrink: 0;
+    }
+    .selection-banner.visible { display: flex; }
+    .selection-text {
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: var(--text);
+      font-style: italic;
+    }
+    .selection-clear {
+      cursor: pointer;
+      color: var(--muted);
+      background: none;
+      border: none;
+      font-size: 14px;
+      line-height: 1;
+      padding: 0 2px;
+    }
+    .selection-clear:hover { color: var(--text); }
+
+    /* ── Quick actions ── */
+    .actions {
+      display: flex;
+      gap: 6px;
+      padding: 10px 14px;
+      flex-shrink: 0;
+    }
+
+    .btn {
+      flex: 1;
+      padding: 7px 0;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: var(--text);
+      font-size: 11px;
+      font-family: var(--font-ui);
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+      white-space: nowrap;
+    }
+    .btn:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--surface)); }
+    .btn:active { background: color-mix(in srgb, var(--accent) 15%, var(--surface)); }
+    .btn:disabled { opacity: 0.4; cursor: default; }
+
+    /* ── Input row ── */
+    .input-row {
+      display: flex;
+      gap: 6px;
+      padding: 0 14px 10px;
+      flex-shrink: 0;
+    }
+
+    .question-input {
+      flex: 1;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: var(--text);
+      font-size: 12px;
+      font-family: var(--font-ui);
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .question-input::placeholder { color: var(--muted); }
+    .question-input:focus { border-color: var(--accent); }
+
+    .send-btn {
+      padding: 8px 12px;
+      border: none;
+      border-radius: var(--radius);
+      background: var(--accent);
+      color: #fff;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background 0.15s;
+      flex-shrink: 0;
+    }
+    .send-btn:hover { background: var(--accent-hover); }
+    .send-btn:disabled { opacity: 0.4; cursor: default; }
+
+    /* ── Response area ── */
+    .response-area {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0 14px 14px;
+      min-height: 0;
+    }
+
+    .response-area:empty { display: none; }
+
+    .divider {
+      height: 1px;
+      background: var(--border);
+      margin: 0 14px 12px;
+      flex-shrink: 0;
+    }
+    .divider.hidden { display: none; }
+
+    .response-text {
+      line-height: 1.6;
+      color: var(--text);
+      white-space: pre-wrap;
+      font-size: 12.5px;
+    }
+
+    .response-text strong { font-weight: 600; }
+
+    .response-text ul {
+      padding-left: 16px;
+      margin: 4px 0;
+    }
+
+    .loading {
+      color: var(--muted);
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .spinner {
+      width: 12px;
+      height: 12px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      flex-shrink: 0;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .error-text { color: var(--err); font-size: 12px; }
+
+    .server-hint {
+      color: var(--muted);
+      font-size: 11px;
+      font-family: var(--font-mono);
+      line-height: 1.5;
+    }
+
+    .copy-btn {
+      display: inline-block;
+      margin-top: 10px;
+      padding: 4px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: none;
+      color: var(--muted);
+      font-size: 11px;
+      cursor: pointer;
+      font-family: var(--font-ui);
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .copy-btn:hover { color: var(--text); border-color: var(--accent); }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <span class="logo">SWITCHBAY</span>
+  <span class="page-title" id="pageTitle">Loading…</span>
+  <span class="status-dot" id="statusDot" title="Server status"></span>
+</div>
+
+<div class="selection-banner" id="selectionBanner">
+  <span style="color:var(--muted);flex-shrink:0">Selection:</span>
+  <span class="selection-text" id="selectionText"></span>
+  <button class="selection-clear" id="clearSelection" title="Clear selection">×</button>
+</div>
+
+<div class="actions">
+  <button class="btn" data-action="summarize">Summarize</button>
+  <button class="btn" data-action="keypoints">Key Points</button>
+  <button class="btn" data-action="simplify">Simplify</button>
+</div>
+
+<div class="input-row">
+  <input class="question-input" id="questionInput" type="text" placeholder="Ask anything about this page…" />
+  <button class="send-btn" id="sendBtn">↑</button>
+</div>
+
+<div class="divider hidden" id="divider"></div>
+<div class="response-area" id="responseArea"></div>
+
+<script src="popup.js"></script>
+</body>
+</html>

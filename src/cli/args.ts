@@ -13,7 +13,7 @@ export type CliOptions = {
   purge: string | null;
   visionPath?: string | null;
   detach?: boolean;
-  subcommand: "run" | "open" | "web-serve" | "serve" | "service" | "update" | "version" | "help" | "engines" | "skills" | "toolbox" | "plugins" | "agents" | "memory" | "knowledge" | "trace" | "usage" | "graph" | "radar" | "handoff" | "mcp" | "models" | "model" | "local-provider" | "cloud-provider" | "local-mode" | "agenda" | "task" | "brief" | "docs" | "sync" | "benchmark" | "inspect" | "images";
+  subcommand: "run" | "open" | "web-serve" | "serve" | "service" | "update" | "version" | "help" | "engines" | "skills" | "toolbox" | "plugins" | "agents" | "memory" | "knowledge" | "trace" | "usage" | "graph" | "radar" | "handoff" | "mcp" | "models" | "model" | "local-provider" | "cloud-provider" | "local-mode" | "agenda" | "task" | "brief" | "docs" | "sync" | "benchmark" | "inspect" | "images" | "extension" | "litert";
   inspectImagePath?: string | null;
   inspectQuestion?: string | null;
   inspectTask?: string | null;
@@ -66,6 +66,13 @@ export type CliOptions = {
   briefAction?: "list" | "create" | "draft";
   briefName?: string | null;
   briefPrompt?: string | null;
+  extensionAction?: "serve" | "stop" | "status" | "logs";
+  liteRtAction?: "serve" | "stop" | "status" | "logs" | "list" | "models" | "import" | "delete";
+  liteRtImportRepo?: string | null;
+  liteRtImportFile?: string | null;
+  liteRtImportId?: string | null;
+  liteRtDeleteId?: string | null;
+  liteRtBackend?: "gpu" | "cpu" | null;
 };
 
 export function parseCliArgs(argv: string[]): CliOptions {
@@ -398,6 +405,34 @@ export function parseCliArgs(argv: string[]): CliOptions {
       return {
         surface, profile, mode, lane, initialQuery: "", hop, resume, newSession, purge,
         subcommand: "images",
+        engineAction: "status", toolboxAction: "status", toolboxSkill: null,
+        memoryAction: "status", memoryNote: null, knowledgeAction: "status", knowledgeQuery: null,
+        traceAction: "last", mcpAction: "status", modelTarget: null, modelLane: null,
+      };
+    } else if (arg === "extension" || arg === "ext") {
+      const action = rest[0] ?? "serve";
+      return {
+        surface, profile, mode, lane, initialQuery: "", hop, resume, newSession, purge,
+        subcommand: "extension",
+        extensionAction: action === "stop" || action === "status" || action === "logs" ? action : "serve",
+        engineAction: "status", toolboxAction: "status", toolboxSkill: null,
+        memoryAction: "status", memoryNote: null, knowledgeAction: "status", knowledgeQuery: null,
+        traceAction: "last", mcpAction: "status", modelTarget: null, modelLane: null,
+      };
+    } else if (arg === "litert" || arg === "litert-lm" || arg === "edge") {
+      const action = rest[0] ?? "status";
+      // litert import <hf-repo> <filename> <id>
+      const liteRtImportRepo = action === "import" ? (rest[1] ?? null) : null;
+      const liteRtImportFile = action === "import" ? (rest[2] ?? null) : null;
+      const liteRtImportId   = action === "import" ? (rest[3] ?? null) : null;
+      const liteRtDeleteId   = action === "delete" || action === "remove" ? (rest[1] ?? null) : null;
+      const liteRtBackend    = args.includes("--gpu") ? "gpu" : args.includes("--cpu") ? "cpu" : null;
+      return {
+        surface, profile, mode, lane, initialQuery: "", hop, resume, newSession, purge,
+        subcommand: "litert",
+        liteRtAction: (["serve", "stop", "status", "logs", "list", "models", "import", "delete"].includes(action) ? action : "status") as "serve" | "stop" | "status" | "logs" | "list" | "models" | "import" | "delete",
+        liteRtImportRepo, liteRtImportFile, liteRtImportId, liteRtDeleteId,
+        liteRtBackend: liteRtBackend as "gpu" | "cpu" | null,
         engineAction: "status", toolboxAction: "status", toolboxSkill: null,
         memoryAction: "status", memoryNote: null, knowledgeAction: "status", knowledgeQuery: null,
         traceAction: "last", mcpAction: "status", modelTarget: null, modelLane: null,
@@ -1004,5 +1039,9 @@ function isLaneAlias(value: string | null): boolean {
     value === "mlx" ||
     value === "mlx-lm" ||
     value === "mlxlm" ||
-    value === "apple-mlx";
+    value === "apple-mlx" ||
+    value === "litert" ||
+    value === "litert-lm" ||
+    value === "edge" ||
+    value === "google-edge";
 }

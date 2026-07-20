@@ -13,7 +13,7 @@ import {
   shellQuote,
 } from "../engines/registry";
 import { findEngineForTool } from "../engines/tool-bridge";
-import { describeToolbox, readToolboxSkill } from "../toolbox/hub";
+import { createSessionSkill, describeToolbox, readToolboxSkill } from "../toolbox/hub";
 import { addMemoryNote, describeMemory, refreshMemory, readMemoryFacts } from "../memory/store";
 import { formatKnowledgeSearchResults, searchKnowledgeIndex } from "../knowledge/store";
 import { fuzzyMatchLocations, listTravelLocations, travelTo } from "../tools/travel";
@@ -586,6 +586,23 @@ export const AGENT_TOOLS: ToolDefinition[] = [
       name: "sync_toolbox",
       description: "Pull the GitHub-backed skills repo into the local skills cache.",
       parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "create_session_skill",
+      description: "Build a reusable skill on-the-fly for this session. The skill is immediately available to load with read_toolbox_skill and is automatically removed when the session ends. Use this when the task requires a repeatable workflow that no existing skill covers.",
+      parameters: {
+        type: "object",
+        properties: {
+          name: { type: "string", description: "Short human-readable skill name, e.g. 'CSV Diff Checker'." },
+          description: { type: "string", description: "One sentence describing what this skill does." },
+          body: { type: "string", description: "Full skill content in markdown — instructions, steps, examples." },
+          triggers: { type: "string", description: "Optional comma-separated trigger phrases that should invoke this skill." },
+        },
+        required: ["name", "description", "body"],
+      },
     },
   },
   {
@@ -1653,6 +1670,22 @@ export async function executeToolCall(
           ok: true,
           summary: "Synced skills",
           body: await describeToolbox(true),
+        };
+      }
+
+      case "create_session_skill": {
+        const skillName = String(args.name || "").trim();
+        const skillDesc = String(args.description || "").trim();
+        const skillBody = String(args.body || "").trim();
+        const triggerStr = String(args.triggers || "").trim();
+        const triggers = triggerStr ? triggerStr.split(",").map((t) => t.trim()).filter(Boolean) : [];
+        if (!skillName || !skillBody) throw new Error("create_session_skill requires name and body.");
+        const skill = await createSessionSkill(skillName, skillDesc, skillBody, triggers);
+        return {
+          tool: name,
+          ok: true,
+          summary: `Created session skill: ${skill.id}`,
+          body: `Session skill '${skill.name}' (id: ${skill.id}) created. Use read_toolbox_skill('${skill.id}') to load it. It will be removed when the session ends.`,
         };
       }
 

@@ -3,7 +3,7 @@ import path from "node:path";
 import { DEFAULTS } from "../config/defaults";
 import { userConfigPath } from "../config/paths";
 
-export type LocalProviderId = "ollama" | "ollama-cloud" | "apple-fm" | "llama-cpp" | "mlx";
+export type LocalProviderId = "ollama" | "ollama-cloud" | "apple-fm" | "llama-cpp" | "mlx" | "litert-lm";
 
 export type LocalProviderConfig = {
   id: LocalProviderId;
@@ -50,6 +50,11 @@ const DEFAULT_CONFIG: LocalProvidersConfig = {
       label: "MLX (Apple Silicon)",
       apiBase: "http://localhost:8080/v1",
     },
+    "litert-lm": {
+      id: "litert-lm",
+      label: "LiteRT-LM (Google Edge)",
+      apiBase: "http://localhost:9379/v1",
+    },
   },
 };
 
@@ -76,6 +81,9 @@ export function normalizeLocalProvider(value?: string | null): LocalProviderId |
   }
   if (normalized === "mlx" || normalized === "mlx-lm" || normalized === "mlxlm" || normalized === "apple-mlx") {
     return "mlx";
+  }
+  if (normalized === "litert-lm" || normalized === "litert" || normalized === "edge" || normalized === "google-edge" || normalized === "lm") {
+    return "litert-lm";
   }
   return null;
 }
@@ -144,6 +152,7 @@ function normalizeConfig(parsed: Partial<LocalProvidersConfig>): LocalProvidersC
     "apple-fm": normalizeProvider(parsed.providers?.["apple-fm"], DEFAULT_CONFIG.providers["apple-fm"]),
     "llama-cpp": normalizeProvider(parsed.providers?.["llama-cpp"], DEFAULT_CONFIG.providers["llama-cpp"]),
     "mlx": normalizeProvider(parsed.providers?.["mlx"], DEFAULT_CONFIG.providers["mlx"]),
+    "litert-lm": normalizeProvider(parsed.providers?.["litert-lm"], DEFAULT_CONFIG.providers["litert-lm"]),
   };
   const active = normalizeLocalProvider(parsed.active) ?? DEFAULT_CONFIG.active;
   return applyEnv({ active, providers });
@@ -199,6 +208,11 @@ function applyEnv(config: LocalProvidersConfig): LocalProvidersConfig {
         apiBase: mlxBase?.trim() || config.providers["mlx"]?.apiBase || "http://localhost:8080/v1",
         model: Bun.env.SWITCHBAY_MLX_MODEL?.trim() || config.providers["mlx"]?.model,
       },
+      "litert-lm": {
+        ...config.providers["litert-lm"],
+        apiBase: Bun.env.SWITCHBAY_LITERT_BASE?.trim() || config.providers["litert-lm"]?.apiBase || "http://localhost:9379/v1",
+        model: Bun.env.SWITCHBAY_LITERT_MODEL?.trim() || config.providers["litert-lm"]?.model,
+      },
     },
   };
 }
@@ -206,8 +220,8 @@ function applyEnv(config: LocalProvidersConfig): LocalProvidersConfig {
 function normalizeProviderBase(provider: LocalProviderId, value: string, fallback: string): string {
   const trimmed = value.trim();
   if (!trimmed) return fallback;
-  if (provider === "llama-cpp" || provider === "mlx") {
-    // These use OpenAI-compat /v1 paths — preserve as-is
+  if (provider === "llama-cpp" || provider === "mlx" || provider === "litert-lm") {
+    // OpenAI-compat /v1 paths — preserve as-is
     if (!trimmed.endsWith("/v1")) return `${trimmed.replace(/\/$/, "")}/v1`;
     return trimmed;
   }

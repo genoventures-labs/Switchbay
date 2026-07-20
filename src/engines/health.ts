@@ -59,18 +59,37 @@ async function fixEngine(result: EngineHealthResult, engineCwd: string): Promise
   const steps: FixStep[] = [];
   const isMac = platform() === "darwin";
 
-  // Venv-based engines (.venv/bin/python missing) — create venv first, then pip into it
+  // Venv-based engines — executable contains a .venv/ path segment.
+  // The venv may live in a subdirectory (e.g. engines/Python/Gumroad/.venv),
+  // so we extract the full venv path from the first missing tool's executable
+  // and resolve everything relative to that subdirectory.
   const venvTools = result.tools.filter((t) => t.status === "missing" && t.executable?.includes(".venv/"));
   if (venvTools.length > 0) {
-    const venvStep = await runFix(["python3", "-m", "venv", ".venv"], engineCwd, "python3 -m venv .venv");
+    // Extract the venv root: everything up to and including ".venv"
+    const sampleExec = venvTools[0]!.executable!;
+    const venvSegment = sampleExec.slice(0, sampleExec.indexOf(".venv") + ".venv".length);
+    const venvAbs = venvSegment.startsWith("/") ? venvSegment : join(engineCwd, venvSegment);
+    const installDir = join(venvAbs, ".."); // sibling directory containing requirements.txt
+
+    const venvRel = venvSegment.startsWith("/") ? venvAbs : venvSegment;
+    const venvStep = await runFix(["python3", "-m", "venv", venvRel], engineCwd, `python3 -m venv ${venvRel}`);
     steps.push(venvStep);
+
     if (venvStep.ok) {
-      const reqPath = join(engineCwd, "requirements.txt");
-      if (await Bun.file(reqPath).exists()) {
-        steps.push(await runFix([".venv/bin/pip", "install", "-r", "requirements.txt"], engineCwd, ".venv/bin/pip install -r requirements.txt"));
+      const pipBin = join(venvAbs, "bin", "pip");
+      // Look for requirements.txt in the install dir, then fall back to engineCwd
+      const reqCandidates = [join(installDir, "requirements.txt"), join(engineCwd, "requirements.txt")];
+      const reqPath = reqCandidates.find((p) => Bun.file(p).size > 0) ?? null;
+
+      if (reqPath) {
+        const pipLabel = `${join(venvRel, "bin", "pip")} install -r requirements.txt`;
+        const pipStep = await runFix([pipBin, "install", "-r", reqPath], engineCwd, pipLabel);
+        steps.push(pipStep);
+      } else {
+        steps.push({ label: "requirements.txt not found — skipped pip install", ok: false });
       }
     }
-    // Don't fall through to system tool check for venv paths
+
     return { id: result.id, name: result.name, steps, fixed: steps.length > 0 && steps.every((s) => s.ok) };
   }
 

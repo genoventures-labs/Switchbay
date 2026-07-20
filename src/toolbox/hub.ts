@@ -6,9 +6,45 @@ import { workspaceStorageDir } from "../config/paths";
 import { runCommand } from "../tools/shell";
 import { pluginAssetPaths } from "../plugins/registry";
 import { sharedAssetRoot } from "../config/authoring-paths";
-import { scanMarkdownContent } from "../security/scanner";
+import { scanMarkdownContent, formatScanFindings } from "../security/scanner";
 
 export const DEFAULT_TOOLBOX_REPO = "https://github.com/genoventures-labs/Engine-Toolboxes.git";
+
+export function sessionSkillsPath(): string {
+  return path.join(os.homedir(), ".switchbay", "session-skills");
+}
+
+export async function clearSessionSkills(): Promise<void> {
+  const dir = sessionSkillsPath();
+  await fs.rm(dir, { recursive: true, force: true });
+}
+
+export async function createSessionSkill(
+  name: string,
+  description: string,
+  body: string,
+  triggers: string[] = [],
+): Promise<ToolboxSkill> {
+  const dir = sessionSkillsPath();
+  await fs.mkdir(dir, { recursive: true });
+  const id = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  const triggerLine = triggers.length ? `triggers: [${triggers.join(", ")}]` : "";
+  const content = `---\nid: ${id}\nname: ${name}\ndescription: ${description}${triggerLine ? `\n${triggerLine}` : ""}\nsource: session\n---\n\n${body.trim()}\n`;
+  const filePath = path.join(dir, `${id}.skill.md`);
+  await Bun.write(filePath, content);
+  return {
+    id,
+    name,
+    description,
+    languages: ["any"],
+    agents: ["any"],
+    tags: [],
+    triggers,
+    path: filePath,
+    source: "session",
+    body: body.trim(),
+  };
+}
 
 export type ToolboxSkill = {
   id: string;
@@ -19,7 +55,7 @@ export type ToolboxSkill = {
   tags: string[];
   triggers: string[];
   path: string;
-  source: "builtin" | "synced" | "workspace" | "global" | "plugin";
+  source: "builtin" | "synced" | "workspace" | "global" | "plugin" | "session";
   body: string;
 };
 
@@ -63,13 +99,34 @@ export async function syncToolboxRepo(): Promise<string> {
   return clone.stdout || clone.stderr || `Cloned ${repo}`;
 }
 
-export type SyncDiff = { before: number; after: number; added: number };
+export type BlockDetail = { name: string; findings: string };
+export type SyncDiff = { before: number; after: number; added: number; blocked: number; blockDetails: BlockDetail[] };
 
 export async function syncToolboxWithDiff(cwd = process.cwd()): Promise<SyncDiff> {
   const before = (await loadToolboxInventory(cwd)).skills.length;
   await syncToolboxRepo();
   const after = (await loadToolboxInventory(cwd)).skills.length;
-  return { before, after, added: Math.max(0, after - before) };
+
+  // Scan all synced skills for prompt injection and security issues
+  const blockDetails: BlockDetail[] = [];
+  const cachePath = toolboxCachePath();
+  if (existsSync(cachePath)) {
+    const files = await findRelativeFiles(cachePath, isSkillFile);
+    await Promise.all(
+      files.map(async (file) => {
+        try {
+          const content = await fs.readFile(path.join(cachePath, file), "utf-8");
+          const scan = scanMarkdownContent(content);
+          if (!scan.safe) {
+            const name = path.basename(file, ".skill.md").replace(/\.md$/i, "");
+            blockDetails.push({ name, findings: formatScanFindings(scan.findings) });
+          }
+        } catch { /* skip */ }
+      }),
+    );
+  }
+
+  return { before, after, added: Math.max(0, after - before), blocked: blockDetails.length, blockDetails };
 }
 
 export async function loadToolboxInventory(cwd = process.cwd()): Promise<ToolboxInventory> {
@@ -79,18 +136,20 @@ export async function loadToolboxInventory(cwd = process.cwd()): Promise<Toolbox
   const workspacePath = path.join(workspaceStorageDir(cwd), "toolbox");
   const authoringPath = sharedAssetRoot("skill", cwd);
   const engineAuthoringEnginesPath = path.join(sharedAssetRoot("engine", cwd), "engines");
-  const [builtinSkills, authoringSkills, engineAuthoringSkills, syncedSkills, workspaceSkills, pluginSkills, templates, head] = await Promise.all([
+  const sessionPath = sessionSkillsPath();
+  const [builtinSkills, authoringSkills, engineAuthoringSkills, syncedSkills, workspaceSkills, pluginSkills, sessionSkills, templates, head] = await Promise.all([
     loadSkillsFromRoot(builtinPath, "builtin"),
     loadSkillsFromRoot(authoringPath, "workspace"),
     loadSkillsFromRoot(engineAuthoringEnginesPath, "workspace"),
     exists ? loadSkillsFromRoot(cachePath, "synced") : Promise.resolve([]),
     loadSkillsFromRoot(workspacePath, "workspace"),
     loadPluginSkills(cwd),
+    loadSkillsFromRoot(sessionPath, "session"),
     exists ? findRelativeFiles(cachePath, isTemplateFile) : Promise.resolve([]),
     exists ? readHead(cachePath) : Promise.resolve(null),
   ]);
 
-  const merged = mergeSkills([...authoringSkills, ...engineAuthoringSkills, ...builtinSkills, ...syncedSkills, ...workspaceSkills, ...pluginSkills]);
+  const merged = mergeSkills([...sessionSkills, ...authoringSkills, ...engineAuthoringSkills, ...builtinSkills, ...syncedSkills, ...workspaceSkills, ...pluginSkills]);
   return {
     path: cachePath,
     repo: toolboxRepoUrl(),

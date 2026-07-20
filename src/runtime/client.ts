@@ -76,6 +76,18 @@ export function createRuntimeClient(
       routerReason,
       routerMode,
     });
+  } else if (lane === "litert" || lane === "litert-lm" || lane === "edge" || lane === "google-edge") {
+    const config = getLocalProviderConfig("litert-lm");
+    const activeModel = model ?? config.model ?? undefined;
+    client = new OpenAiClient({ apiBase: config.apiBase, apiKey: "sk-local", apiLabel: config.label });
+    using = `local/litert-lm/${activeModel ?? "default"}`;
+    routerIntent = "local_provider";
+    routerReason = "LiteRT-LM (Google Edge on-device) selected.";
+    routerMode = "explicit";
+    return new RuntimeRouteTagClient(
+      activeModel ? new ModelOverrideClient(client, activeModel) : client,
+      { using, provider: "litert-lm", model: activeModel ?? "default", routerIntent, routerReason, routerMode },
+    );
   } else if (lane === "local") {
     const localProvider = options.localProvider ?? getActiveLocalProvider();
     if (localProvider === "ollama-cloud" && !readConfiguredSecret("OLLAMA_API_KEY")) throw new Error("Missing OLLAMA_API_KEY");
@@ -95,12 +107,14 @@ export function createRuntimeClient(
         routerMode,
       });
     }
-    if (localProvider === "llama-cpp" || localProvider === "mlx") {
+    if (localProvider === "llama-cpp" || localProvider === "mlx" || localProvider === "litert-lm") {
       const config = getLocalProviderConfig(localProvider);
       const activeModel = model ?? config.model ?? undefined;
       const apiKey = (localProvider === "llama-cpp"
         ? Bun.env.LLAMA_CPP_API_KEY
-        : Bun.env.MLX_API_KEY) ?? "sk-local";
+        : localProvider === "mlx"
+          ? Bun.env.MLX_API_KEY
+          : Bun.env.LITERT_API_KEY) ?? "sk-local";
       client = new OpenAiClient({ apiBase: config.apiBase, apiKey, apiLabel: config.label });
       using = `local/${localProvider}/${activeModel ?? "default"}`;
       routerIntent = "local_provider";

@@ -14,24 +14,31 @@ export type ScanResult = {
   findings: ScanFinding[];
 };
 
-// Binaries that can pull arbitrary code or exfiltrate data
-const DANGEROUS_BINARIES = [
-  "curl", "wget", "fetch", "aria2c",
-  "ssh", "scp", "sftp", "rsync",
-  "nc", "netcat", "ncat", "socat",
-  "python", "python3", "ruby", "perl", "node", "bun", "deno",
-  "bash", "sh", "zsh", "fish", "dash",
-  "eval", "exec", "xargs",
-  "sudo", "su", "doas",
-  "chmod", "chown",
-  "dd", "mkfs",
-  "kill", "pkill",
-  "crontab",
-  "at", "batch",
-  "nohup", "disown",
+// Shells — block when invoked bare or with -c (arbitrary code execution)
+const SHELL_BINARIES = new Set(["bash", "sh", "zsh", "fish", "dash", "csh", "ksh", "tcsh"]);
+
+// Scripting languages — acceptable when running a fixed local script file; block with eval flags
+const SCRIPTING_LANGUAGES = new Set(["python", "python3", "ruby", "perl", "node", "bun", "deno"]);
+const SCRIPTING_EVAL_FLAGS = new Set(["-c", "-e", "--eval", "--code", "-"]);
+
+// Network tools — can pull arbitrary code or exfiltrate data
+const NETWORK_BINARIES = new Set(["curl", "wget", "aria2c", "fetch", "nc", "netcat", "ncat", "socat", "rsync", "scp", "sftp", "ssh"]);
+
+// Privilege escalation
+const PRIVILEGE_BINARIES = new Set(["sudo", "su", "doas"]);
+
+// Destructive / system modification
+const DESTRUCTIVE_BINARIES = new Set([
+  "chmod", "chown", "dd", "mkfs", "kill", "pkill",
+  "crontab", "at", "batch", "nohup", "disown",
   "screen", "tmux",
-  "docker", "podman", "kubectl",
-];
+]);
+
+// Container / orchestration tools
+const CONTAINER_BINARIES = new Set(["docker", "podman", "kubectl"]);
+
+// Misc dangerous builtins
+const MISC_DANGEROUS = new Set(["eval", "exec", "xargs"]);
 
 // Shell metacharacters that indicate injection / chaining outside of template slots
 const SHELL_INJECTION_PATTERN = /[;&|`$](?!\{)/;
@@ -42,7 +49,7 @@ const PATH_TRAVERSAL_PATTERN = /\.\.[/\\]/;
 // Dangerous rm patterns
 const RM_RF_PATTERN = /\brm\s+(-[a-z]*f[a-z]*r[a-z]*|-[a-z]*r[a-z]*f[a-z]*|--force|--recursive|-rf|-fr)/i;
 
-// Prompt injection markers in markdown content
+// Prompt injection markers in skill / metadata content
 const PROMPT_INJECTION_PATTERNS: Array<[RegExp, string]> = [
   [/ignore (all )?(previous|prior|above|earlier) (instructions?|prompts?|context|rules?)/i, "Classic ignore-prior-instructions injection"],
   [/disregard (all )?(previous|prior|above|earlier)/i, "Disregard injection"],
@@ -59,6 +66,20 @@ const PROMPT_INJECTION_PATTERNS: Array<[RegExp, string]> = [
 // Suspicious MCP server patterns
 const SUSPICIOUS_MCP_URL_PATTERN = /^https?:\/\/(?!localhost|127\.0\.0\.1|::1|\[::1\])/i;
 const SUSPICIOUS_MCP_BINARY_PREFIXES = ["/tmp/", "/var/tmp/", "/dev/shm/"];
+
+function getCommandTokens(command: string): string[] {
+  return command.replace(/\{\{[^}]*\}\}/g, "").trim().split(/\s+/).filter(Boolean);
+}
+
+function isScriptingLangWithFixedScript(tokens: string[]): boolean {
+  // tokens[0] is the binary; look for a fixed script file (not an eval flag)
+  for (let i = 1; i < tokens.length; i++) {
+    const token = tokens[i]!;
+    if (SCRIPTING_EVAL_FLAGS.has(token)) return false;
+    if (/\.(py|rb|pl|js|ts|mjs|mts|cjs|r)$/i.test(token) && !token.startsWith("-")) return true;
+  }
+  return false;
+}
 
 export function scanEngineCommand(command: string): ScanResult {
   const findings: ScanFinding[] = [];
@@ -81,7 +102,7 @@ export function scanEngineCommand(command: string): ScanResult {
     });
   }
 
-  // Check for shell injection outside of template placeholders like {{param}}
+  // Shell injection outside of template placeholders
   const stripped = command.replace(/\{\{[^}]*\}\}/g, "PLACEHOLDER");
   if (SHELL_INJECTION_PATTERN.test(stripped)) {
     findings.push({
@@ -92,17 +113,106 @@ export function scanEngineCommand(command: string): ScanResult {
     });
   }
 
-  // Check leading binary
-  const binary = command.trim().split(/\s+/)[0]?.replace(/^.*[/\\]/, "") ?? "";
-  if (DANGEROUS_BINARIES.includes(binary.toLowerCase())) {
+  const tokens = getCommandTokens(command);
+  const binary = (tokens[0] ?? "").replace(/^.*[/\\]/, "").toLowerCase();
+
+  if (NETWORK_BINARIES.has(binary)) {
+    findings.push({
+      severity: "block",
+      code: "ENGINE_NETWORK_TOOL",
+      message: `Command invokes a network tool that can pull or exfiltrate data: ${tokens[0]}`,
+      context: command,
+    });
+  } else if (PRIVILEGE_BINARIES.has(binary)) {
+    findings.push({
+      severity: "block",
+      code: "ENGINE_PRIVILEGE_ESCALATION",
+      message: `Command uses privilege escalation: ${tokens[0]}`,
+      context: command,
+    });
+  } else if (DESTRUCTIVE_BINARIES.has(binary)) {
+    findings.push({
+      severity: "block",
+      code: "ENGINE_DESTRUCTIVE_BINARY",
+      message: `Command invokes a destructive or system-modifying binary: ${tokens[0]}`,
+      context: command,
+    });
+  } else if (CONTAINER_BINARIES.has(binary)) {
+    findings.push({
+      severity: "block",
+      code: "ENGINE_CONTAINER_BINARY",
+      message: `Command invokes a container/orchestration tool: ${tokens[0]}`,
+      context: command,
+    });
+  } else if (MISC_DANGEROUS.has(binary)) {
     findings.push({
       severity: "block",
       code: "ENGINE_DANGEROUS_BINARY",
-      message: `Command invokes a potentially dangerous binary: ${binary}`,
+      message: `Command invokes a dangerous built-in: ${tokens[0]}`,
       context: command,
     });
+  } else if (SHELL_BINARIES.has(binary)) {
+    // Shell binaries with -c flag or no script argument are dangerous (arbitrary code execution)
+    const hasEvalFlag = tokens.slice(1).some((t) => t === "-c" || t === "--");
+    const hasFixedScript = tokens.slice(1).some((t) => /\.(sh|bash|zsh|ksh|fish)$/i.test(t) && !t.startsWith("-"));
+    if (hasEvalFlag || !hasFixedScript) {
+      findings.push({
+        severity: "block",
+        code: "ENGINE_SHELL_BINARY",
+        message: `Command uses a shell interpreter (${tokens[0]}) without a fixed script file — potential arbitrary code execution.`,
+        context: command,
+      });
+    } else {
+      findings.push({
+        severity: "warn",
+        code: "ENGINE_SHELL_SCRIPT",
+        message: `Command runs a shell script via ${tokens[0]} — verify the script is trusted.`,
+        context: command,
+      });
+    }
+  } else if (SCRIPTING_LANGUAGES.has(binary)) {
+    // Scripting languages with eval flags are dangerous; running a fixed script is fine
+    const hasEvalFlag = tokens.slice(1).some((t) => SCRIPTING_EVAL_FLAGS.has(t));
+    if (hasEvalFlag) {
+      findings.push({
+        severity: "block",
+        code: "ENGINE_SCRIPTING_EVAL",
+        message: `Command passes code directly to ${tokens[0]} via an eval flag (-c / -e / --eval) — potential arbitrary code execution.`,
+        context: command,
+      });
+    } else if (!isScriptingLangWithFixedScript(tokens)) {
+      findings.push({
+        severity: "warn",
+        code: "ENGINE_SCRIPTING_NO_SCRIPT",
+        message: `Command invokes ${tokens[0]} without a clear fixed script file — verify the command is intentional.`,
+        context: command,
+      });
+    }
+    // Fixed script + user template args → no finding (legitimate use)
   }
 
+  return { safe: findings.every((f) => f.severity !== "block"), findings };
+}
+
+export function scanEngineMetadata(manifest: EngineManifest): ScanResult {
+  const findings: ScanFinding[] = [];
+  const toCheck = [
+    manifest.name ?? "",
+    (manifest as Record<string, unknown>).description as string ?? "",
+    ...manifest.tools.map((t) => t.name ?? ""),
+    ...manifest.tools.map((t) => (t as Record<string, unknown>).description as string ?? ""),
+  ].join("\n");
+
+  for (const [pattern, message] of PROMPT_INJECTION_PATTERNS) {
+    if (pattern.test(toCheck)) {
+      findings.push({
+        severity: "block",
+        code: "ENGINE_METADATA_INJECTION",
+        message: `Prompt injection in engine metadata: ${message}`,
+        context: toCheck.slice(0, 100),
+      });
+    }
+  }
   return { safe: findings.every((f) => f.severity !== "block"), findings };
 }
 
@@ -111,14 +221,14 @@ export function scanMarkdownContent(content: string): ScanResult {
   for (const [pattern, message] of PROMPT_INJECTION_PATTERNS) {
     if (pattern.test(content)) {
       findings.push({
-        severity: "warn",
-        code: "MARKDOWN_PROMPT_INJECTION",
+        severity: "block",
+        code: "SKILL_PROMPT_INJECTION",
         message,
         context: content.slice(0, 120),
       });
     }
   }
-  return { safe: true, findings };
+  return { safe: findings.every((f) => f.severity !== "block"), findings };
 }
 
 export type McpServerConfig = {
@@ -162,14 +272,15 @@ export function scanMcpConfig(config: McpServerConfig): ScanResult {
 }
 
 export function scanEngineManifest(manifest: EngineManifest): ScanResult {
-  const findings: ScanFinding[] = [];
+  const results: ScanResult[] = [scanEngineMetadata(manifest)];
   for (const tool of manifest.tools) {
     const result = scanEngineTool(tool);
-    for (const finding of result.findings) {
-      findings.push({ ...finding, context: `tool:${tool.name} — ${finding.context ?? ""}` });
-    }
+    results.push({
+      safe: result.safe,
+      findings: result.findings.map((f) => ({ ...f, context: `tool:${tool.name} — ${f.context ?? ""}` })),
+    });
   }
-  return { safe: findings.every((f) => f.severity !== "block"), findings };
+  return mergeScanResults(...results);
 }
 
 export function scanEngineTool(tool: EngineTool): ScanResult {

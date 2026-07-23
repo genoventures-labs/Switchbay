@@ -529,6 +529,9 @@ export async function buildTurn(input: {
     day: "2-digit",
   }).format(new Date());
 
+  // Edge/small-model lanes get a stripped-down system prompt to avoid context overflow
+  const isEdgeLane = input.runtimeLane === "litert" || input.runtimeLane === "apple";
+
   // Inject project context if it exists.
   let oriMdBlock = "";
   const contextPath = existingProjectContextPath(cwd);
@@ -541,11 +544,11 @@ export async function buildTurn(input: {
 
   const [userContext, workspaceProfileBlock, activePlanBlock, workflowsBlock] = await Promise.all([
     loadUserContext(),
-    buildWorkspaceProfilePromptBlock(cwd),
-    buildActivePlanPromptBlock(cwd),
-    buildWorkflowsPromptBlock(cwd),
+    isEdgeLane ? Promise.resolve("") : buildWorkspaceProfilePromptBlock(cwd),
+    isEdgeLane ? Promise.resolve("") : buildActivePlanPromptBlock(cwd),
+    isEdgeLane ? Promise.resolve("") : buildWorkflowsPromptBlock(cwd),
   ]);
-  const userContextBlock = formatUserContextPromptBlock(userContext);
+  const userContextBlock = isEdgeLane ? "" : formatUserContextPromptBlock(userContext);
   const nativeTools = getNativeToolsConfig();
   const nativeEnvironment = nativeEnvironmentAvailability();
 
@@ -577,8 +580,9 @@ export async function buildTurn(input: {
   }
 
   const toolboxBlock = await buildToolboxPromptBlock();
-  const capabilityDirectoryBlock = await buildCapabilityDirectoryPromptBlock(cwd, input.activeAgentId);
-  const guidesBlock = await buildGuidesPromptBlock(cwd);
+
+  const capabilityDirectoryBlock = isEdgeLane ? "" : await buildCapabilityDirectoryPromptBlock(cwd, input.activeAgentId);
+  const guidesBlock = isEdgeLane ? "" : await buildGuidesPromptBlock(cwd);
   const effectiveToolMode: ToolMode = input.toolMode === "switchbay-mcp" || input.runtimeLane === "cloud-mcp"
     ? "switchbay-mcp"
     : "standard";
@@ -617,34 +621,37 @@ GROUNDING RULES:
 `;
   // Proactively embed live workspace context so the model can answer questions about
   // the project, recent changes, and git state without server-side tool calls.
-  const [statusResult, logResult] = await Promise.all([
+  // Skipped for edge/small-model lanes to avoid context overflow.
+  const [statusResult, logResult] = isEdgeLane ? [{ ok: false, stdout: "" }, { ok: false, stdout: "" }] : await Promise.all([
     runCommand(["git", "status", "--short"], cwd),
     runCommand(["git", "log", "-5", "--oneline"], cwd),
   ]);
 
   const snapshotLines: string[] = [];
 
-  // Top-level file listing lets the model reason about tech stack and project type.
-  try {
-    const entries = readdirSync(cwd, { withFileTypes: true });
-    const names = entries
-      .filter(e => !e.name.startsWith(".") && e.name !== "node_modules")
-      .map(e => e.isDirectory() ? `${e.name}/` : e.name)
-      .slice(0, 40);
-    if (names.length > 0) snapshotLines.push(`Top-level files:\n${names.join("  ")}`);
-  } catch { /* ignore */ }
+  if (!isEdgeLane) {
+    // Top-level file listing lets the model reason about tech stack and project type.
+    try {
+      const entries = readdirSync(cwd, { withFileTypes: true });
+      const names = entries
+        .filter(e => !e.name.startsWith(".") && e.name !== "node_modules")
+        .map(e => e.isDirectory() ? `${e.name}/` : e.name)
+        .slice(0, 40);
+      if (names.length > 0) snapshotLines.push(`Top-level files:\n${names.join("  ")}`);
+    } catch { /* ignore */ }
 
-  // package.json summary — name, description, scripts, deps
-  try {
-    const pkg = JSON.parse(readFileSync(join(cwd, "package.json"), "utf8"));
-    const parts: string[] = [];
-    if (pkg.name) parts.push(`name: ${pkg.name}`);
-    if (pkg.description) parts.push(`description: ${pkg.description}`);
-    if (pkg.scripts) parts.push(`scripts: ${Object.keys(pkg.scripts).join(", ")}`);
-    const deps = Object.keys({ ...pkg.dependencies, ...pkg.devDependencies }).slice(0, 20);
-    if (deps.length) parts.push(`deps: ${deps.join(", ")}`);
-    if (parts.length) snapshotLines.push(`package.json:\n${parts.join("\n")}`);
-  } catch { /* not a node project or no package.json */ }
+    // package.json summary — name, description, scripts, deps
+    try {
+      const pkg = JSON.parse(readFileSync(join(cwd, "package.json"), "utf8"));
+      const parts: string[] = [];
+      if (pkg.name) parts.push(`name: ${pkg.name}`);
+      if (pkg.description) parts.push(`description: ${pkg.description}`);
+      if (pkg.scripts) parts.push(`scripts: ${Object.keys(pkg.scripts).join(", ")}`);
+      const deps = Object.keys({ ...pkg.dependencies, ...pkg.devDependencies }).slice(0, 20);
+      if (deps.length) parts.push(`deps: ${deps.join(", ")}`);
+      if (parts.length) snapshotLines.push(`package.json:\n${parts.join("\n")}`);
+    } catch { /* not a node project or no package.json */ }
+  }
 
   // Git state
   if (statusResult.ok && statusResult.stdout.trim()) {

@@ -2124,9 +2124,12 @@ export function SwitchbayApp({
           message: "Turn completed after local tool work, but the model returned no final assistant text.",
         });
       } else {
+        const isEdge = runtimeLane === "litert" || runtimeLane === "apple";
         dispatch({
           type: "assistant/appended",
-          message: "The model returned no assistant text for this turn.",
+          message: isEdge
+            ? "The model returned no text. Edge models have limited context — try a shorter prompt, or `/lane cloud` to switch."
+            : "The model returned no assistant text for this turn.",
         });
       }
 
